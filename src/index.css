@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+
+/* ===== Palette de couleurs personnalisée ===== */
+/* Ces couleurs sont maintenant disponibles partout avec bg-espresso, text-peony, etc. */
+@theme {
+  --color-espresso:    #3E2723;
+  --color-peony:       #F4C9D6;
+  --color-peony-light: #FBE4EB;
+  --color-cream:       #FFF8F5;
+  --color-accent:      #C4688A;
+
+  /* ===== Animations personnalisées ===== */
+
+  /* fadeSlideUp : l'élément apparaît en montant légèrement depuis le bas */
+  --animate-fade-slide-up: fadeSlideUp 0.5s ease forwards;
+
+  /* float : l'avatar Yuna monte et descend doucement en boucle */
+  --animate-float: float 3s ease-in-out infinite;
+
+  /* pulse-dot : le point de notification pulse en boucle */
+  --animate-pulse-dot: pulseDot 1.8s ease-in-out infinite;
+}
+
+/* ===== Définition des keyframes (étapes de chaque animation) ===== */
+
+/* fadeSlideUp : part de transparent + décalé vers le bas, arrive opaque + à sa place */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;           /* invisible au départ */
+    transform: translateY(16px); /* décalé de 16px vers le bas */
+  }
+  to {
+    opacity: 1;           /* complètement visible à la fin */
+    transform: translateY(0);    /* à sa position normale */
+  }
+}
+
+/* float : monte de 8px puis redescend, en boucle infinie */
+@keyframes float {
+  0%   { transform: translateY(0);   }
+  50%  { transform: translateY(-8px); } /* monte de 8px au milieu */
+  100% { transform: translateY(0);   }
+}
+
+/* pulseDot : grossit légèrement puis revient, en boucle */
+@keyframes pulseDot {
+  0%   { transform: scale(1);    opacity: 1;   }
+  50%  { transform: scale(1.5);  opacity: 0.6; } /* grossit à mi-chemin */
+  100% { transform: scale(1);    opacity: 1;   }
+}
+
+/* ============================================================
+   MODE "RÉDUIRE LES ANIMATIONS"
+   Quand la classe .reduce-motion est sur <html>, on coupe toutes
+   les animations et transitions d'un coup — utile pour l'accessibilité
+   ou si l'app rame sur un vieux PC.
+   ============================================================ */
+.reduce-motion * {
+  animation: none !important;
+  transition: none !important;
+}
