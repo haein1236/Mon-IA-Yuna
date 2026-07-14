@@ -89,16 +89,16 @@ const IconCroix = (props) => (
 )
 
 const imagesInitiales = [
-  { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
-  { id: '2', titre: 'Soirée bougies', mood: 'Cosy', texte: '"Une bougie suffit pour illuminer toute une nuit."', sous: 'Moi · Hier', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4917A, #D4A891)', Icone: IconBougie, url: null },
-  { id: '3', titre: 'Nuit étoilée', mood: 'Nuit', texte: '"Les étoiles brillent pour celles qui osent lever les yeux."', sous: 'Yuna · 20 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #6B4F5E, #9B7A8C)', Icone: IconLune, url: null },
-  { id: '4', titre: 'Nature zen', mood: 'Nature', texte: '"Il y a une magie dans les choses qui poussent doucement."', sous: 'Moi · 19 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #8B9E7A, #A8B894)', Icone: IconFeuille, url: null },
-  { id: '5', titre: 'Portrait Yuna', mood: 'Illustration', texte: '"Chaque intelligence a son âme."', sous: 'Yuna · 17 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #3E2723, #6B4037)', Icone: IconRobot, url: null },
-  { id: '6', titre: 'Nuages doux', mood: 'Dreamy', texte: '"Les nuages n\'ont pas de forme fixe."', sous: 'Yuna · 16 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #B49AAE, #C8B2C4)', Icone: IconNuage, url: null },
-  { id: '7', titre: 'Lumière de novembre', mood: 'Lifestyle', texte: '"Les jours ordinaires sont les plus précieux."', sous: 'Moi · 15 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4A882, #D4B896)', Icone: IconCafe, url: null },
-  { id: '8', titre: 'Coin lecture', mood: 'Aesthetic', texte: '"Un livre, une tisane, et le monde s\'efface."', sous: 'Yuna · 14 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #E8B4C4, #F4C9D6)', Icone: IconLivre, url: null },
-  { id: '9', titre: 'Rituel du soir', mood: 'Calme', texte: '"Le soir appartient à celles qui savent ralentir."', sous: 'Moi · 13 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #9B7A8C, #B49AAE)', Icone: IconHibiscus, url: null },
-  { id: '10', titre: 'Café du matin', mood: 'Lifestyle', texte: '"Un bon café, une bonne journée."', sous: 'Moi · 12 juin', source: 'moi', favori: true, bg: 'linear-gradient(135deg, #C4917A, #B49A7A)', Icone: IconCafe, url: null },
+  // { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
+  // { id: '2', titre: 'Soirée bougies', mood: 'Cosy', texte: '"Une bougie suffit pour illuminer toute une nuit."', sous: 'Moi · Hier', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4917A, #D4A891)', Icone: IconBougie, url: null },
+  // { id: '3', titre: 'Nuit étoilée', mood: 'Nuit', texte: '"Les étoiles brillent pour celles qui osent lever les yeux."', sous: 'Yuna · 20 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #6B4F5E, #9B7A8C)', Icone: IconLune, url: null },
+  // { id: '4', titre: 'Nature zen', mood: 'Nature', texte: '"Il y a une magie dans les choses qui poussent doucement."', sous: 'Moi · 19 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #8B9E7A, #A8B894)', Icone: IconFeuille, url: null },
+  // { id: '5', titre: 'Portrait Yuna', mood: 'Illustration', texte: '"Chaque intelligence a son âme."', sous: 'Yuna · 17 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #3E2723, #6B4037)', Icone: IconRobot, url: null },
+  // { id: '6', titre: 'Nuages doux', mood: 'Dreamy', texte: '"Les nuages n\'ont pas de forme fixe."', sous: 'Yuna · 16 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #B49AAE, #C8B2C4)', Icone: IconNuage, url: null },
+  // { id: '7', titre: 'Lumière de novembre', mood: 'Lifestyle', texte: '"Les jours ordinaires sont les plus précieux."', sous: 'Moi · 15 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4A882, #D4B896)', Icone: IconCafe, url: null },
+  // { id: '8', titre: 'Coin lecture', mood: 'Aesthetic', texte: '"Un livre, une tisane, et le monde s\'efface."', sous: 'Yuna · 14 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #E8B4C4, #F4C9D6)', Icone: IconLivre, url: null },
+  // { id: '9', titre: 'Rituel du soir', mood: 'Calme', texte: '"Le soir appartient à celles qui savent ralentir."', sous: 'Moi · 13 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #9B7A8C, #B49AAE)', Icone: IconHibiscus, url: null },
+  // { id: '10', titre: 'Café du matin', mood: 'Lifestyle', texte: '"Un bon café, une bonne journée."', sous: 'Moi · 12 juin', source: 'moi', favori: true, bg: 'linear-gradient(135deg, #C4917A, #B49A7A)', Icone: IconCafe, url: null },
 ]
 
 const iconeParMood = {
