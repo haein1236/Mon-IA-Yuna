@@ -75,13 +75,15 @@ function HomeScreen({ onChangerEcran }) {
   ]
 
   return (
-    <div className="h-full bg-cream flex overflow-hidden">
+    // FIX : min-h-0 ajouté sur le conteneur racine — sans lui, ce
+    // conteneur "h-full" pouvait grandir plus que l'espace réel
+    // fourni par App.jsx, empêchant tout scroll interne.
+    <div className="h-full min-h-0 bg-cream flex flex-col md:flex-row overflow-hidden">
 
-      {/* ============================================================
-          RESPONSIVE : padding réduit sur mobile (p-4) pour ne pas
-          manger tout l'espace utile sur petit écran, p-7 dès "md:"
-          ============================================================ */}
-      <div className="flex-1 flex flex-col gap-5 md:gap-6 p-4 md:p-7 overflow-y-auto min-w-0">
+      {/* FIX : min-h-0 ajouté ICI aussi — c'est CET élément qui a
+          "overflow-y-auto", donc c'est lui qui a absolument besoin
+          de min-h-0 pour que le scroll se déclenche réellement */}
+      <div className="flex-1 min-h-0 flex flex-col gap-5 md:gap-6 p-4 md:p-7 overflow-y-auto min-w-0">
 
         <TopBar />
 
@@ -95,7 +97,6 @@ function HomeScreen({ onChangerEcran }) {
             <div className="flex-1 h-px bg-espresso/8" />
           </div>
 
-          {/* RESPONSIVE : 2 colonnes sur mobile (déjà prévu), 4 dès "sm:" */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {discussionsAffichees.map((discussion, i) => (
               <div
@@ -148,8 +149,7 @@ function HomeScreen({ onChangerEcran }) {
         </div>
       </div>
 
-      {/* RightPanel se cache tout seul sur mobile désormais (voir composant) */}
-      <RightPanel />
+      <RightPanel onChangerEcran={onChangerEcran} />
     </div>
   )
 }

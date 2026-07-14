@@ -66,3 +66,19 @@ export function genererUrlImageIA(description) {
   // nologo = sans filigrane
   return `https://image.pollinations.ai/prompt/${descriptionEncodee}?width=512&height=512&nologo=true`
 }
+
+// ============================================================
+// AJOUTER/MODIFIER UN COMMENTAIRE PERSONNEL SUR UNE IMAGE
+// Permet d'écrire un petit mot à propos d'une photo (comme une
+// légende Instagram), affiché dans la visionneuse plein écran.
+// ⚠️ Vérifie que CLE_IMAGES correspond bien au nom de la clé
+// utilisée par le reste de ce fichier (chargerImages/sauvegarderImage)
+// ============================================================
+export function ajouterCommentaireImage(id, commentaire) {
+  const images = chargerImages()
+  const imagesMaj = images.map((img) =>
+    img.id === id ? { ...img, commentairePerso: commentaire } : img
+  )
+  localStorage.setItem(CLE_IMAGES, JSON.stringify(imagesMaj))
+  return imagesMaj
+}

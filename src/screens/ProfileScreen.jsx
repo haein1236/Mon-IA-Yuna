@@ -100,12 +100,6 @@ function ProfileScreen({ onChangerEcran }) {
     setImagesGalerie(chargerImages())
   }, [])
 
-  useEffect(() => {
-    document.body.style.margin = '0'
-    document.body.style.backgroundColor = '#FFF8F5'
-    document.documentElement.style.backgroundColor = '#FFF8F5'
-  }, [])
-
   const sauvegarderProfil = () => {
     localStorage.setItem(CLE_PROFIL, JSON.stringify(profil))
     setModeEdition(false)
@@ -131,15 +125,11 @@ function ProfileScreen({ onChangerEcran }) {
   const pourcentageCompletion = Math.round((champsRemplis / 4) * 100)
 
   return (
-    <div className="h-full w-full overflow-y-auto">
+    // FIX : min-h-0 sur le conteneur racine — nécessaire car c'est
+    // ICI que se trouve le "overflow-y-auto" qui doit scroller toute
+    // la page (bannière + colonne gauche + colonne droite ensemble).
+    <div className="h-full min-h-0 w-full overflow-y-auto">
 
-      {/* ============================================================
-          RESPONSIVE : 1 seule colonne empilée sur mobile (grid-cols-1),
-          2 colonnes côte à côte à partir de "md:" comme avant.
-          h-full → min-h-full : sur mobile le contenu empilé dépasse
-          souvent la hauteur d'écran, min-h-full permet de scroller au
-          lieu d'être coupé.
-          ============================================================ */}
       <div
         className="w-full min-h-full grid grid-cols-1 md:grid-cols-[1fr_300px]"
         style={{ boxShadow: '0 20px 50px rgba(62,39,35,0.12)' }}
@@ -165,13 +155,10 @@ function ProfileScreen({ onChangerEcran }) {
             </div>
           </div>
 
-          {/* RESPONSIVE : bannière + boutons empilés verticalement sur mobile,
-              côte à côte à partir de "md:" */}
           <div className="flex flex-col md:flex-row items-stretch gap-3 mb-5">
-
             <div
-              className="relative flex-1 rounded-[24px] overflow-hidden"
-              style={{ height: '220px', backgroundColor: '#3E2723' }}
+              className="relative flex-1 w-full rounded-[24px] overflow-hidden flex-shrink-0"
+              style={{ minHeight: '220px', height: '220px', backgroundColor: '#3E2723' }}
             >
               {profil.photoUrl ? (
                 <>
@@ -204,8 +191,6 @@ function ProfileScreen({ onChangerEcran }) {
               </div>
             </div>
 
-            {/* RESPONSIVE : boutons en ligne horizontale sur mobile (flex-row),
-                en colonne verticale sur desktop (md:flex-col) */}
             <div className="flex flex-row md:flex-col gap-3 justify-center md:pl-1">
               <button
                 onClick={() => setModeEdition(!modeEdition)}
@@ -279,7 +264,6 @@ function ProfileScreen({ onChangerEcran }) {
                 </button>
               </div>
             ) : (
-              // RESPONSIVE : 2 colonnes sur mobile au lieu de 4 (sinon texte trop compressé)
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
                 <div className="bg-white rounded-xl px-3 py-2.5 border border-espresso/10 h-[58px] flex flex-col justify-center">
                   <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Prénom</p>
@@ -327,7 +311,6 @@ function ProfileScreen({ onChangerEcran }) {
           </div>
         </div>
 
-        {/* RESPONSIVE : bordure gauche seulement à partir de "md:" (inutile empilé) */}
         <div className="px-4 md:px-6 py-5 md:py-7 bg-white flex flex-col md:border-l border-espresso/10">
 
           <div className="flex items-center gap-3.5 mb-6">
@@ -363,7 +346,12 @@ function ProfileScreen({ onChangerEcran }) {
           <h2 className="text-espresso/45 text-[10.5px] uppercase tracking-[0.08em] font-medium mb-4">
             Mon histoire
           </h2>
-          <div className="flex flex-col gap-5 mb-2">
+
+          {/* Les 3 blocs (Qui je suis / Ce projet / Aujourd'hui) — mb-8
+              en bas garantit un espace de respiration après le dernier
+              bloc, pour ne jamais coller au bord de l'écran sur mobile
+              (sans ça, "Aujourd'hui" pouvait sembler "coupé") */}
+          <div className="flex flex-col gap-5 mb-8">
             {[
               { titre: 'Qui je suis', texte: profil.bio1 },
               { titre: 'Ce projet',   texte: profil.bio2 },
@@ -397,7 +385,6 @@ function ProfileScreen({ onChangerEcran }) {
               </p>
             )}
 
-            {/* RESPONSIVE : 3 colonnes sur mobile au lieu de 4 */}
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
               {imagesGalerie.filter((img) => img.url).map((img) => (
                 <button

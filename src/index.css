@@ -1,8 +1,44 @@
 @import "tailwindcss";
 
+/* ============================================================
+   FIX ANTI-DÉBORDEMENT HORIZONTAL (inchangé)
+   ============================================================ */
+html, body, #root {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+  background-color: #FFF8F5;
+  /* SUPPRIMÉ : overscroll-behavior-y: none ici — c'était trop
+     agressif et gênait le scroll tactile sur certains navigateurs
+     Android. On gère l'effet de rebond de façon plus ciblée avec
+     .scroll-suave ci-dessous, sur chaque zone scrollable précise. */
+}
 
-/* ===== Palette de couleurs personnalisée ===== */
-/* Ces couleurs sont maintenant disponibles partout avec bg-espresso, text-peony, etc. */
+/* ============================================================
+   NOUVEAU : CLASSE "SCROLL FLUIDE" — à ajouter à CÔTÉ de
+   "overflow-y-auto" sur chaque zone qui doit défiler (Chat, Home,
+   Profil, Paramètres, Galerie...).
+   - -webkit-overflow-scrolling: touch → active le scroll avec
+     inertie (momentum) sur Safari/anciens navigateurs Android,
+     au lieu d'un défilement "en dur" image par image.
+   - overscroll-behavior: contain → empêche le scroll de "remonter"
+     jusqu'à la page entière une fois arrivé en haut/bas de la zone
+     (évite l'effet de rebond qui bloquait le scroll ressenti comme
+     "coincé").
+   - touch-action: pan-y → dit explicitement au navigateur "autorise
+     le geste de defilement vertical ici", certains navigateurs
+     mobiles en ont besoin pour ne pas hésiter sur les zones avec
+     beaucoup d'éléments cliquables (comme la grille Galerie).
+   - scroll-behavior: smooth → anime les sauts de scroll (comme le
+     scroll automatique vers le bas du Chat) au lieu d'un saut brut.
+   ============================================================ */
+.scroll-suave {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scroll-behavior: smooth;
+}
+
 @theme {
   --color-espresso:    #3E2723;
   --color-peony:       #F4C9D6;
@@ -10,53 +46,44 @@
   --color-cream:       #FFF8F5;
   --color-accent:      #C4688A;
 
-  /* ===== Animations personnalisées ===== */
-
-  /* fadeSlideUp : l'élément apparaît en montant légèrement depuis le bas */
   --animate-fade-slide-up: fadeSlideUp 0.5s ease forwards;
-
-  /* float : l'avatar Yuna monte et descend doucement en boucle */
   --animate-float: float 3s ease-in-out infinite;
-
-  /* pulse-dot : le point de notification pulse en boucle */
   --animate-pulse-dot: pulseDot 1.8s ease-in-out infinite;
 }
 
-/* ===== Définition des keyframes (étapes de chaque animation) ===== */
-
-/* fadeSlideUp : part de transparent + décalé vers le bas, arrive opaque + à sa place */
 @keyframes fadeSlideUp {
-  from {
-    opacity: 0;           /* invisible au départ */
-    transform: translateY(16px); /* décalé de 16px vers le bas */
-  }
-  to {
-    opacity: 1;           /* complètement visible à la fin */
-    transform: translateY(0);    /* à sa position normale */
-  }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* float : monte de 8px puis redescend, en boucle infinie */
 @keyframes float {
-  0%   { transform: translateY(0);   }
-  50%  { transform: translateY(-8px); } /* monte de 8px au milieu */
-  100% { transform: translateY(0);   }
+  0%   { transform: translateY(0);    }
+  50%  { transform: translateY(-8px); }
+  100% { transform: translateY(0);    }
 }
 
-/* pulseDot : grossit légèrement puis revient, en boucle */
 @keyframes pulseDot {
-  0%   { transform: scale(1);    opacity: 1;   }
-  50%  { transform: scale(1.5);  opacity: 0.6; } /* grossit à mi-chemin */
-  100% { transform: scale(1);    opacity: 1;   }
+  0%   { transform: scale(1);   opacity: 1;   }
+  50%  { transform: scale(1.5); opacity: 0.6; }
+  100% { transform: scale(1);   opacity: 1;   }
 }
 
-/* ============================================================
-   MODE "RÉDUIRE LES ANIMATIONS"
-   Quand la classe .reduce-motion est sur <html>, on coupe toutes
-   les animations et transitions d'un coup — utile pour l'accessibilité
-   ou si l'app rame sur un vieux PC.
-   ============================================================ */
 .reduce-motion * {
   animation: none !important;
   transition: none !important;
+}
+
+/* ============================================================
+   FIX CLAVIER VIRTUEL — hauteur d'app dynamique
+   Le clavier tactile change la hauteur visible de l'écran sans que
+   "100vh" ne le sache toujours. On utilise "100dvh" (dynamic
+   viewport height), qui se recalcule automatiquement. La variable
+   --app-height sert de filet de sécurité pour les navigateurs plus
+   anciens qui ne comprennent pas encore dvh (calculée en JS, voir
+   src/hooks/useHauteurEcran.js).
+   ============================================================ */
+.hauteur-app {
+  height: 100vh;              /* valeur de repli pour les très vieux navigateurs */
+  height: var(--app-height, 100vh); /* filet de sécurité JS */
+  height: 100dvh;             /* valeur moderne, prioritaire si supportée */
 }

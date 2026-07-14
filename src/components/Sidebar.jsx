@@ -11,33 +11,28 @@ function Sidebar({ ecranActuel, onChangerEcran }) {
 
   return (
     // ============================================================
-    // RESPONSIVE : deux mises en page selon la taille d'écran
-    // - Par défaut (mobile, < 768px) : barre HORIZONTALE collée en BAS
-    //   (w-full, flex-row, fixed bottom-0)
-    // - À partir de "md:" (≥768px, tablette/desktop) : on repasse à la
-    //   sidebar VERTICALE d'origine (md:w-16, md:h-full, md:flex-col)
-    // Tailwind applique les classes "md:" seulement au-delà de 768px,
-    // donc le design mobile est celui par défaut, sans préfixe.
+    // CORRECTION MAJEURE : "fixed bottom-0" SUPPRIMÉ.
+    // AVANT : la barre restait "collée" au bas de l'écran physique
+    // via position fixed — ce qui causait des bugs de repositionnement
+    // quand le clavier virtuel s'ouvrait (comportement inconsistant
+    // entre navigateurs mobiles).
+    // APRÈS : la barre fait partie du flux normal de la page (un
+    // simple élément dans le flex-col de App.jsx). "order-2 md:order-1"
+    // la place en dernier (donc en BAS) sur mobile, et en premier
+    // (donc à GAUCHE) sur desktop — sans jamais utiliser fixed.
+    // Plus aucun conflit possible avec le clavier tactile.
     // ============================================================
-    <div
-      className="
-        fixed bottom-0 left-0 w-full h-16 flex-row justify-around
-        md:static md:w-16 md:h-full md:flex-col md:justify-start md:py-5 md:gap-6
-        bg-peony flex items-center z-20 flex-shrink-0
-      "
-    >
-      {/* Logo accueil — caché sur mobile (déjà dans la barre du bas via l'onglet Home) */}
+    <div className="order-2 md:order-1 w-full h-16 flex-row justify-around md:w-16 md:h-full md:flex-col md:justify-start md:py-5 md:gap-6 bg-peony flex items-center z-20 flex-shrink-0">
+
       <button
         onClick={() => onChangerEcran('accueil')}
-        className={`
-          w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-200 hover:scale-110 active:scale-95
-          ${ecranActuel === 'accueil' ? 'bg-espresso' : 'bg-espresso/40 md:bg-espresso'}
-        `}
+        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-200 hover:scale-110 active:scale-95 ${
+          ecranActuel === 'accueil' ? 'bg-espresso' : 'bg-espresso/40 md:bg-espresso'
+        }`}
       >
         <IconHome className="w-4 h-4 text-peony" />
       </button>
 
-      {/* Séparateur — visible seulement en version desktop verticale */}
       <div className="hidden md:block w-6 h-px bg-espresso/20" />
 
       {onglets.map((onglet) => {
@@ -55,9 +50,6 @@ function Sidebar({ ecranActuel, onChangerEcran }) {
         )
       })}
 
-      {/* Sur desktop : pousse le bouton Paramètres tout en bas avec flex-1.
-          Sur mobile : pas besoin, la barre est horizontale donc pas de "bas" à pousser —
-          on cache ce spacer pour ne pas casser l'alignement horizontal */}
       <div className="hidden md:block md:flex-1" />
 
       <button

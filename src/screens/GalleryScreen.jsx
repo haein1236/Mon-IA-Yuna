@@ -5,13 +5,9 @@ import {
   sauvegarderImage,
   toggleFavoriImage,
   fichierVersBase64,
+  ajouterCommentaireImage,
 } from '../services/images'
 
-// ============================================================
-// ICÔNES SVG — une par "mood" (ambiance) de photo
-// Chacune est un petit composant réutilisable, dessiné à la main
-// en SVG plutôt qu'importé d'une librairie, pour rester léger.
-// ============================================================
 const IconFleur = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
     <circle cx="12" cy="12" r="2.4" fill="currentColor" />
@@ -85,14 +81,13 @@ const IconTulipe = (props) => (
     <rect x="11.3" y="13" width="1.4" height="7" fill="currentColor" opacity="0.7" />
   </svg>
 )
+const IconCroix = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
 
-// ============================================================
-// DONNÉES PAR DÉFAUT (affichées la toute première fois, avant que
-// l'utilisateur ait ajouté ses propres photos)
-// Note : les couleurs "bg" ci-dessous sont VOLONTAIREMENT variées
-// d'une photo à l'autre (identité visuelle propre à chaque image),
-// elles ne suivent pas le thème global de l'app — c'est normal.
-// ============================================================
 const imagesInitiales = [
   { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
   { id: '2', titre: 'Soirée bougies', mood: 'Cosy', texte: '"Une bougie suffit pour illuminer toute une nuit."', sous: 'Moi · Hier', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4917A, #D4A891)', Icone: IconBougie, url: null },
@@ -106,9 +101,6 @@ const imagesInitiales = [
   { id: '10', titre: 'Café du matin', mood: 'Lifestyle', texte: '"Un bon café, une bonne journée."', sous: 'Moi · 12 juin', source: 'moi', favori: true, bg: 'linear-gradient(135deg, #C4917A, #B49A7A)', Icone: IconCafe, url: null },
 ]
 
-// Correspondance mood → icône (nécessaire car les fonctions ne peuvent
-// pas être stockées telles quelles en JSON dans localStorage — on les
-// "rattache" à nouveau après le chargement, à partir du texte "mood")
 const iconeParMood = {
   'Floral': IconFleur, 'Cosy': IconBougie, 'Nuit': IconLune,
   'Nature': IconFeuille, 'Illustration': IconRobot, 'Dreamy': IconNuage,
@@ -116,7 +108,6 @@ const iconeParMood = {
   'Photo': IconFleur,
 }
 
-// Barres de progression décoratives ("ambiance" générale de la galerie)
 const moods = [
   { label: 'Douceur', valeur: 78 },
   { label: 'Inspirant', valeur: 64 },
@@ -124,7 +115,6 @@ const moods = [
   { label: 'Aesthetic', valeur: 90 },
 ]
 
-// Réactions décoratives affichées en bas de page
 const reactions = [
   { texte: 'magnifique !! 😍', date: 'il y a 2h', coeurs: 3 },
   { texte: 'jadore cette ambiance', date: 'il y a 5h', coeurs: 2 },
@@ -133,21 +123,26 @@ const reactions = [
 
 function GalleryScreen() {
 
-  const [filtreActif, setFiltreActif] = useState('tout') // 'tout' | 'favoris' | 'yuna'
+  const [filtreActif, setFiltreActif] = useState('tout')
   const [images, setImages] = useState([])
-  const [heure] = useState(new Date()) // capturée une seule fois au montage, pour l'horloge décorative
+  const [heure] = useState(new Date())
   const inputFichierRef = useRef(null)
+  const [indexOuvert, setIndexOuvert] = useState(null)
+  const [commentaireEnEdition, setCommentaireEnEdition] = useState('')
 
-  // ===== CHARGEMENT AU DÉMARRAGE =====
+  // NOUVEAU : message d'erreur affiché si la sauvegarde du commentaire
+  // échoue (par exemple stockage plein) — avant, l'échec était
+  // totalement silencieux, l'utilisateur ne savait jamais pourquoi
+  const [erreurCommentaire, setErreurCommentaire] = useState('')
+
+  const positionSwipeDebut = useRef(null)
+
   useEffect(() => {
     const imagesSauvegardees = chargerImages()
     if (imagesSauvegardees.length === 0) {
       setImages(imagesInitiales)
     } else {
-      const imagesAvecIcones = imagesSauvegardees.map((img) => ({
-        ...img,
-        Icone: iconeParMood[img.mood] || IconFleur,
-      }))
+      const imagesAvecIcones = imagesSauvegardees.map((img) => ({ ...img, Icone: iconeParMood[img.mood] || IconFleur }))
       setImages(imagesAvecIcones)
     }
   }, [])
@@ -157,6 +152,24 @@ function GalleryScreen() {
     if (filtreActif === 'yuna')    return img.source === 'yuna'
     return true
   })
+
+  useEffect(() => {
+    if (indexOuvert === null) return
+    const gererClavier = (e) => {
+      if (e.key === 'ArrowRight') allerImageSuivante()
+      if (e.key === 'ArrowLeft') allerImagePrecedente()
+      if (e.key === 'Escape') setIndexOuvert(null)
+    }
+    window.addEventListener('keydown', gererClavier)
+    return () => window.removeEventListener('keydown', gererClavier)
+  }, [indexOuvert, imagesFiltrees])
+
+  useEffect(() => {
+    if (indexOuvert === null) return
+    const img = imagesFiltrees[indexOuvert]
+    setCommentaireEnEdition(img?.commentairePerso || '')
+    setErreurCommentaire('')
+  }, [indexOuvert])
 
   const toggleFavori = (id) => {
     const imagesSauvegardees = chargerImages()
@@ -195,6 +208,54 @@ function GalleryScreen() {
     e.target.value = ''
   }
 
+  const allerImageSuivante = () => {
+    if (indexOuvert === null) return
+    setIndexOuvert((i) => (i + 1) % imagesFiltrees.length)
+  }
+
+  const allerImagePrecedente = () => {
+    if (indexOuvert === null) return
+    setIndexOuvert((i) => (i - 1 + imagesFiltrees.length) % imagesFiltrees.length)
+  }
+
+  const gererDebutSwipe = (e) => {
+    positionSwipeDebut.current = e.touches[0].clientX
+  }
+
+  const gererFinSwipe = (e) => {
+    if (positionSwipeDebut.current === null) return
+    const positionFin = e.changedTouches[0].clientX
+    const distance = positionFin - positionSwipeDebut.current
+    if (distance > 50) allerImagePrecedente()
+    else if (distance < -50) allerImageSuivante()
+    positionSwipeDebut.current = null
+  }
+
+  // ============================================================
+  // SAUVEGARDE DU COMMENTAIRE — avec gestion d'erreur visible
+  // AVANT : en cas d'échec (stockage plein, clé introuvable...),
+  // rien ne se passait visuellement, l'utilisateur ne comprenait
+  // pas pourquoi "ça ne marche pas". Le try/catch capture
+  // maintenant l'erreur et l'affiche clairement.
+  // ============================================================
+  const sauvegarderCommentaire = () => {
+    if (indexOuvert === null) return
+    try {
+      const img = imagesFiltrees[indexOuvert]
+      const imagesMaj = ajouterCommentaireImage(img.id, commentaireEnEdition)
+      setImages(imagesMaj.map((i) => ({ ...i, Icone: iconeParMood[i.mood] || IconFleur })))
+      setErreurCommentaire('')
+    } catch (erreur) {
+      console.error('Erreur sauvegarde commentaire :', erreur)
+      // QuotaExceededError = le stockage du navigateur est plein
+      if (erreur.name === 'QuotaExceededError') {
+        setErreurCommentaire("Stockage plein ! Supprime quelques photos dans Paramètres pour libérer de la place.")
+      } else {
+        setErreurCommentaire("Le mot n'a pas pu être enregistré. Réessaie.")
+      }
+    }
+  }
+
   const totalFavoris = images.filter((i) => i.favori).length
   const totalYuna    = images.filter((i) => i.source === 'yuna').length
 
@@ -203,10 +264,9 @@ function GalleryScreen() {
   const s = String(heure.getSeconds()).padStart(2, '0')
 
   return (
-    <div className="h-full w-full overflow-y-auto bg-cream" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <div className="w-full">
 
-        {/* ===== BANNIÈRE (couleurs déjà branchées au thème) ===== */}
         <div
           className="relative w-full overflow-hidden"
           style={{
@@ -229,7 +289,6 @@ function GalleryScreen() {
           </div>
 
           <div className="absolute bottom-10 left-6 md:left-10">
-            {/* RESPONSIVE : titre plus petit sur mobile (text-[26px]), taille normale dès "md:" */}
             <h1 className="text-espresso font-light flex items-center gap-2 text-[26px] md:text-[36px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
               Ma <em className="italic">Galerie</em> <span className="text-xl md:text-2xl">✨</span>
             </h1>
@@ -248,7 +307,6 @@ function GalleryScreen() {
           </div>
         </div>
 
-        {/* RESPONSIVE : padding latéral réduit sur mobile (px-4) */}
         <div className="px-4 md:px-10 pb-14">
 
           <div className="pt-16 pb-7">
@@ -259,11 +317,6 @@ function GalleryScreen() {
             </div>
           </div>
 
-          {/* ============================================================
-              SECTION FEATURED (cercle décoratif + 3 premières photos)
-              RESPONSIVE : empilé verticalement sur mobile (flex-col),
-              côte à côte à partir de "sm:" (flex-row)
-              ============================================================ */}
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6">
             <div
               className="rounded-full flex items-center justify-center flex-shrink-0"
@@ -277,14 +330,13 @@ function GalleryScreen() {
               <IconTulipe style={{ width: '36px', height: '36px' }} className="text-espresso" />
             </div>
 
-            {/* RESPONSIVE : 3 colonnes gardées même sur mobile (images assez petites
-                pour rester lisibles à 3, évite un empilement trop long) */}
             <div className="grid grid-cols-3 gap-2.5 sm:gap-4 flex-1 w-full">
               {images.slice(0, 3).map((img) => (
                 <div
                   key={img.id}
-                  className="relative rounded-2xl overflow-hidden"
+                  className="relative rounded-2xl overflow-hidden cursor-pointer"
                   style={{ height: '90px', background: img.bg, border: '3px solid var(--color-cream)', boxShadow: '0 6px 16px rgba(62,39,35,0.15)' }}
+                  onClick={() => setIndexOuvert(imagesFiltrees.indexOf(img))}
                 >
                   {img.url ? (
                     <img src={img.url} alt={img.titre} className="absolute inset-0 w-full h-full object-cover" />
@@ -302,11 +354,6 @@ function GalleryScreen() {
             </div>
           </div>
 
-          {/* ============================================================
-              WIDGETS HORLOGE + MOOD
-              RESPONSIVE : empilés en 1 colonne sur mobile, 3 colonnes
-              (1 horloge + 2 pour le widget mood) à partir de "sm:"
-              ============================================================ */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
             <div className="rounded-2xl border border-espresso/10 bg-espresso/[0.03] px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
               <span className="text-espresso/45 text-[10.5px] uppercase tracking-[0.08em]">Maintenant</span>
@@ -315,7 +362,6 @@ function GalleryScreen() {
               </span>
             </div>
             <div className="sm:col-span-2 rounded-2xl border border-espresso/10 bg-espresso/[0.03] px-5 sm:px-6 py-4 sm:py-5">
-              {/* RESPONSIVE : 2 colonnes sur mobile au lieu de 4, plus lisible */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-3">
                 {moods.map((mo) => (
                   <div key={mo.label}>
@@ -329,11 +375,6 @@ function GalleryScreen() {
             </div>
           </div>
 
-          {/* ============================================================
-              LIENS RAPIDES (Favoris / Récemment ajoutées / De Yuna)
-              flex-wrap déjà présent → passe naturellement à la ligne sur
-              mobile sans modification nécessaire ici
-              ============================================================ */}
           <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap">
             <button
               onClick={() => setFiltreActif(filtreActif === 'favoris' ? 'tout' : 'favoris')}
@@ -373,7 +414,6 @@ function GalleryScreen() {
             </button>
           </div>
 
-          {/* ===== UPLOAD + FILTRES ===== */}
           <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap">
             <input ref={inputFichierRef} type="file" accept="image/*" multiple onChange={handleUpload} style={{ display: 'none' }} />
 
@@ -415,28 +455,16 @@ function GalleryScreen() {
             </p>
           )}
 
-          {/* ============================================================
-              GRILLE PRINCIPALE DES IMAGES
-              RESPONSIVE (le point le plus important de cet écran) :
-              - mobile (par défaut)  : 2 colonnes
-              - "sm:" (≥640px)       : 3 colonnes
-              - "md:" (≥768px)       : 5 colonnes (comme la version desktop d'origine)
-              On utilise maintenant les classes Tailwind grid-cols-X au lieu
-              d'un style inline "gridTemplateColumns" fixe, car les classes
-              Tailwind savent changer selon la largeur d'écran — un style
-              inline, non.
-              ============================================================ */}
-          <div className="mb-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3.5">
-            {imagesFiltrees.map((img) => (
+          <div className="mb-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+            {imagesFiltrees.map((img, i) => (
               <div
                 key={img.id}
+                onClick={() => setIndexOuvert(i)}
                 className="rounded-2xl overflow-hidden bg-espresso cursor-pointer transition-all duration-300"
                 style={{ boxShadow: '0 4px 16px rgba(62,39,35,0.15)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 22px rgba(62,39,35,0.25)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(62,39,35,0.15)' }}
               >
-                {/* RESPONSIVE : hauteur d'image réduite sur mobile (120px vs 160px)
-                    pour que 2 colonnes tiennent bien sans écran trop long à scroller */}
                 <div className="relative h-[120px] sm:h-[160px]" style={{ background: img.bg }}>
                   {img.url ? (
                     <img src={img.url} alt={img.titre} className="absolute inset-0 w-full h-full" style={{ objectFit: 'cover' }} />
@@ -455,7 +483,7 @@ function GalleryScreen() {
                   )}
 
                   <button
-                    onClick={() => toggleFavori(img.id)}
+                    onClick={(e) => { e.stopPropagation(); toggleFavori(img.id) }}
                     className="absolute top-1.5 right-2 flex items-center justify-center rounded-full transition-transform duration-150 hover:scale-110 active:scale-95"
                     style={{
                       width: '22px', height: '22px',
@@ -474,8 +502,6 @@ function GalleryScreen() {
                     </svg>
                   </button>
 
-                  {/* RESPONSIVE : citation masquée sur mobile (line-clamp évite
-                      un texte tronqué illisible sur les petites cartes 2-colonnes) */}
                   <p className="hidden sm:block absolute bottom-2 left-2.5 right-2.5 text-[9px] text-cream/90 italic leading-snug" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
                     {img.texte}
                   </p>
@@ -492,11 +518,6 @@ function GalleryScreen() {
             ))}
           </div>
 
-          {/* ============================================================
-              RÉACTIONS DÉCORATIVES
-              RESPONSIVE : empilées en 1 colonne sur mobile, 3 colonnes
-              à partir de "sm:"
-              ============================================================ */}
           <div className="rounded-2xl border border-espresso/10 bg-espresso/[0.03] p-5 sm:p-7">
             <div className="flex items-center gap-3 mb-5">
               <div
@@ -544,6 +565,178 @@ function GalleryScreen() {
           </footer>
         </div>
       </div>
+
+      {/* ============================================================
+          VISIONNEUSE PLEIN ÉCRAN — CORRIGÉE
+          CHANGEMENT CLÉ : onTouchStart/onTouchEnd (le swipe) ne sont
+          plus posés sur TOUTE la fenêtre — ils sont maintenant
+          UNIQUEMENT sur la zone image (voir plus bas). La zone
+          commentaire ne capte donc plus jamais ces événements tactiles
+          par erreur, ce qui la rendait inutilisable.
+          Sur mobile, l'image est limitée à 45vh max (max-h-[45vh]) pour
+          GARANTIR que la zone commentaire ait toujours de la place
+          visible en dessous, même sur un petit écran — sur desktop
+          (md:), cette limite est levée (md:max-h-[92vh]).
+          ============================================================ */}
+      {indexOuvert !== null && imagesFiltrees[indexOuvert] && (() => {
+        const imageActuelle = imagesFiltrees[indexOuvert]
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/90"
+            onClick={() => setIndexOuvert(null)}
+            // SUPPRIMÉ ICI : onTouchStart/onTouchEnd — déplacés plus
+            // bas, uniquement sur la zone image
+          >
+            <button
+              onClick={() => setIndexOuvert(null)}
+              className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors duration-200 z-20"
+            >
+              <IconCroix style={{ width: '18px', height: '18px' }} className="text-white" />
+            </button>
+
+            <button
+              onClick={(e) => { e.stopPropagation(); allerImagePrecedente() }}
+              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center transition-colors duration-200 z-20"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+
+            <button
+              onClick={(e) => { e.stopPropagation(); allerImageSuivante() }}
+              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center transition-colors duration-200 z-20"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+
+            <div className="absolute top-4 left-4 md:top-6 md:left-6 text-white/60 text-[11px] font-medium z-20">
+              {indexOuvert + 1} / {imagesFiltrees.length}
+            </div>
+
+            <div
+              className="w-full max-w-[900px] max-h-[92vh] bg-espresso rounded-3xl overflow-hidden flex flex-col md:flex-row"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* ===== Zone image — LE SWIPE EST MAINTENANT ICI, PAS AILLEURS ===== */}
+              <div
+                className="relative w-full md:w-[60%] flex-shrink-0 flex items-center justify-center max-h-[45vh] md:max-h-[92vh]"
+                style={{ background: imageActuelle.bg, minHeight: '200px' }}
+                onTouchStart={gererDebutSwipe}
+                onTouchEnd={gererFinSwipe}
+              >
+                {imageActuelle.url ? (
+                  <img
+                    src={imageActuelle.url}
+                    alt={imageActuelle.titre}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  imageActuelle.Icone && <imageActuelle.Icone style={{ width: '70px', height: '70px' }} className="text-cream/90" />
+                )}
+
+                {imageActuelle.source === 'yuna' && (
+                  <div className="absolute top-4 left-4 rounded-full bg-espresso/80 text-peony text-[10px] font-medium px-3 py-1">
+                    🤖 Yuna
+                  </div>
+                )}
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); allerImagePrecedente() }}
+                  className="md:hidden absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/30 flex items-center justify-center"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); allerImageSuivante() }}
+                  className="md:hidden absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/30 flex items-center justify-center"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* ===== Zone infos + commentaire — LIBRE de tout swipe,
+                  garantie visible grâce à la limite de hauteur de
+                  l'image ci-dessus, avec min-h-0 pour permettre son
+                  propre scroll interne sans être écrasée ===== */}
+              <div className="flex-1 min-h-0 p-5 md:p-7 overflow-y-auto scroll-suave flex flex-col">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[9px] uppercase tracking-[0.1em] text-peony/50 border border-peony/20 rounded-full px-2.5 py-1">
+                    {imageActuelle.mood}
+                  </span>
+                </div>
+
+                <h2 className="text-peony font-semibold mb-3" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px' }}>
+                  {imageActuelle.titre}
+                </h2>
+
+                <p className="italic text-peony/70 text-[13px] leading-relaxed mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                  {imageActuelle.texte}
+                </p>
+
+                <p className="text-[10.5px] text-peony/40 mb-5">{imageActuelle.sous}</p>
+
+                <div className="mb-5">
+                  <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
+                    Ton petit mot sur cette photo
+                  </label>
+                  <textarea
+                    value={commentaireEnEdition}
+                    onChange={(e) => setCommentaireEnEdition(e.target.value)}
+                    placeholder="Écris ce que cette image représente pour toi..."
+                    rows={3}
+                    className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-[12px] text-peony placeholder:text-peony/30 outline-none focus:border-peony/50 transition-colors duration-200 resize-none"
+                  />
+                  <button
+                    onClick={sauvegarderCommentaire}
+                    className="mt-2 text-[10.5px] font-semibold text-espresso bg-peony rounded-full px-4 py-1.5 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                  >
+                    Enregistrer le mot
+                  </button>
+
+                  {/* NOUVEAU : message d'erreur visible si la sauvegarde échoue */}
+                  {erreurCommentaire && (
+                    <p className="text-[10px] text-red-300 mt-2">{erreurCommentaire}</p>
+                  )}
+
+                  {imageActuelle.commentairePerso && !erreurCommentaire && (
+                    <p className="text-[10px] text-peony/50 italic mt-2">
+                      Dernier mot enregistré : "{imageActuelle.commentairePerso}"
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => toggleFavori(imageActuelle.id)}
+                  className="mt-auto flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
+                  style={{
+                    background: imageActuelle.favori ? 'var(--color-accent)' : 'transparent',
+                    border: `1.5px solid var(--color-accent)`,
+                    color: imageActuelle.favori ? '#fff' : 'var(--color-accent)',
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" style={{ width: '14px', height: '14px' }}>
+                    <path
+                      d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z"
+                      fill={imageActuelle.favori ? '#fff' : 'none'}
+                      stroke={imageActuelle.favori ? '#fff' : 'var(--color-accent)'}
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                  {imageActuelle.favori ? 'Dans tes favoris' : 'Ajouter aux favoris'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
