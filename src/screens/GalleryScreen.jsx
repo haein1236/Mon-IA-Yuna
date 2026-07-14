@@ -97,16 +97,16 @@ const IconBulle = (props) => (
 )
 
 const imagesInitiales = [
-  // { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
-  // { id: '2', titre: 'Soirée bougies', mood: 'Cosy', texte: '"Une bougie suffit pour illuminer toute une nuit."', sous: 'Moi · Hier', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4917A, #D4A891)', Icone: IconBougie, url: null },
-  // { id: '3', titre: 'Nuit étoilée', mood: 'Nuit', texte: '"Les étoiles brillent pour celles qui osent lever les yeux."', sous: 'Yuna · 20 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #6B4F5E, #9B7A8C)', Icone: IconLune, url: null },
-  // { id: '4', titre: 'Nature zen', mood: 'Nature', texte: '"Il y a une magie dans les choses qui poussent doucement."', sous: 'Moi · 19 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #8B9E7A, #A8B894)', Icone: IconFeuille, url: null },
-  // { id: '5', titre: 'Portrait Yuna', mood: 'Illustration', texte: '"Chaque intelligence a son âme."', sous: 'Yuna · 17 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #3E2723, #6B4037)', Icone: IconRobot, url: null },
-  // { id: '6', titre: 'Nuages doux', mood: 'Dreamy', texte: '"Les nuages n\'ont pas de forme fixe."', sous: 'Yuna · 16 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #B49AAE, #C8B2C4)', Icone: IconNuage, url: null },
-  // { id: '7', titre: 'Lumière de novembre', mood: 'Lifestyle', texte: '"Les jours ordinaires sont les plus précieux."', sous: 'Moi · 15 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4A882, #D4B896)', Icone: IconCafe, url: null },
-  // { id: '8', titre: 'Coin lecture', mood: 'Aesthetic', texte: '"Un livre, une tisane, et le monde s\'efface."', sous: 'Yuna · 14 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #E8B4C4, #F4C9D6)', Icone: IconLivre, url: null },
-  // { id: '9', titre: 'Rituel du soir', mood: 'Calme', texte: '"Le soir appartient à celles qui savent ralentir."', sous: 'Moi · 13 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #9B7A8C, #B49AAE)', Icone: IconHibiscus, url: null },
-  // { id: '10', titre: 'Café du matin', mood: 'Lifestyle', texte: '"Un bon café, une bonne journée."', sous: 'Moi · 12 juin', source: 'moi', favori: true, bg: 'linear-gradient(135deg, #C4917A, #B49A7A)', Icone: IconCafe, url: null },
+  { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
+  { id: '2', titre: 'Soirée bougies', mood: 'Cosy', texte: '"Une bougie suffit pour illuminer toute une nuit."', sous: 'Moi · Hier', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4917A, #D4A891)', Icone: IconBougie, url: null },
+  { id: '3', titre: 'Nuit étoilée', mood: 'Nuit', texte: '"Les étoiles brillent pour celles qui osent lever les yeux."', sous: 'Yuna · 20 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #6B4F5E, #9B7A8C)', Icone: IconLune, url: null },
+  { id: '4', titre: 'Nature zen', mood: 'Nature', texte: '"Il y a une magie dans les choses qui poussent doucement."', sous: 'Moi · 19 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #8B9E7A, #A8B894)', Icone: IconFeuille, url: null },
+  { id: '5', titre: 'Portrait Yuna', mood: 'Illustration', texte: '"Chaque intelligence a son âme."', sous: 'Yuna · 17 juin', source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #3E2723, #6B4037)', Icone: IconRobot, url: null },
+  { id: '6', titre: 'Nuages doux', mood: 'Dreamy', texte: '"Les nuages n\'ont pas de forme fixe."', sous: 'Yuna · 16 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #B49AAE, #C8B2C4)', Icone: IconNuage, url: null },
+  { id: '7', titre: 'Lumière de novembre', mood: 'Lifestyle', texte: '"Les jours ordinaires sont les plus précieux."', sous: 'Moi · 15 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #C4A882, #D4B896)', Icone: IconCafe, url: null },
+  { id: '8', titre: 'Coin lecture', mood: 'Aesthetic', texte: '"Un livre, une tisane, et le monde s\'efface."', sous: 'Yuna · 14 juin', source: 'yuna', favori: false, bg: 'linear-gradient(135deg, #E8B4C4, #F4C9D6)', Icone: IconLivre, url: null },
+  { id: '9', titre: 'Rituel du soir', mood: 'Calme', texte: '"Le soir appartient à celles qui savent ralentir."', sous: 'Moi · 13 juin', source: 'moi', favori: false, bg: 'linear-gradient(135deg, #9B7A8C, #B49AAE)', Icone: IconHibiscus, url: null },
+  { id: '10', titre: 'Café du matin', mood: 'Lifestyle', texte: '"Un bon café, une bonne journée."', sous: 'Moi · 12 juin', source: 'moi', favori: true, bg: 'linear-gradient(135deg, #C4917A, #B49A7A)', Icone: IconCafe, url: null },
 ]
 
 const iconeParMood = {
@@ -140,10 +140,9 @@ function GalleryScreen() {
   const [erreurCommentaire, setErreurCommentaire] = useState('')
 
   // ============================================================
-  // NOUVEAU : le panneau commentaire/réactions est maintenant replié
-  // par défaut. "panneauOuvert" contrôle son affichage — on l'ouvre
-  // via un bouton dédié plutôt que de toujours l'afficher, ce qui
-  // laisse plus de place à l'image et rend l'interface moins chargée.
+  // Le panneau commentaire/réactions est replié par défaut.
+  // "panneauOuvert" contrôle son affichage — on l'ouvre via un
+  // bouton dédié plutôt que de toujours l'afficher.
   // ============================================================
   const [panneauOuvert, setPanneauOuvert] = useState(false)
 
@@ -198,7 +197,7 @@ function GalleryScreen() {
   }
 
   // ============================================================
-  // NOUVEAU : basculer une réaction (emoji) sur l'image ouverte
+  // Basculer une réaction (emoji) sur l'image ouverte
   // ============================================================
   const toggleReaction = (id, emoji) => {
     try {
@@ -475,19 +474,6 @@ function GalleryScreen() {
             </p>
           )}
 
-          {/* ============================================================
-              GRILLE PRINCIPALE — CORRIGÉE POUR TABLETTE
-              AVANT : "sm:grid-cols-3 lg:grid-cols-5" — sur une tablette
-              (souvent entre 768px et 1024px), on tombait directement à
-              3 colonnes serrées avec des images restées à taille "sm"
-              (160px de haut), ce qui donnait des vignettes ressenties
-              comme trop petites vu l'espace réellement disponible.
-              APRÈS : palier "md" ajouté spécifiquement pour tablette
-              (3 colonnes mais BEAUCOUP plus hautes, 200px), et "xl"
-              repousse le passage à 5 colonnes aux vrais grands écrans
-              desktop — chaque palier a maintenant une taille d'image
-              proportionnée à l'espace réel de l'appareil.
-              ============================================================ */}
           <div className="mb-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3.5 md:gap-4">
             {imagesFiltrees.map((img, i) => (
               <div
@@ -498,9 +484,6 @@ function GalleryScreen() {
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 22px rgba(62,39,35,0.25)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(62,39,35,0.15)' }}
               >
-                {/* Hauteur d'image progressive : 120px mobile → 160px petit
-                    écran → 200px tablette (md) → 180px grand écran (lg+),
-                    où plus de colonnes compensent une hauteur un peu moindre */}
                 <div className="relative h-[120px] sm:h-[160px] md:h-[200px] lg:h-[180px]" style={{ background: img.bg }}>
                   {img.url ? (
                     <img src={img.url} alt={img.titre} className="absolute inset-0 w-full h-full" style={{ objectFit: 'cover' }} />
@@ -538,7 +521,6 @@ function GalleryScreen() {
                     </svg>
                   </button>
 
-                  {/* Aperçu des réactions déjà posées, en bas à droite */}
                   {img.reactions?.length > 0 && (
                     <div className="absolute bottom-2 right-2 bg-espresso/70 rounded-full px-1.5 py-0.5 text-[10px]">
                       {img.reactions.slice(0, 3).join('')}
@@ -611,13 +593,26 @@ function GalleryScreen() {
 
       {/* ============================================================
           VISIONNEUSE PLEIN ÉCRAN — commentaire/réactions en PANNEAU
-          AVANT : la zone commentaire était toujours visible sous
-          l'image, prenant de la place et se retrouvant mal positionnée
-          sur petits écrans.
-          APRÈS : un bouton "💬 Commenter" ouvre/ferme un panneau
-          dédié (comme un tiroir), qui contient à la fois le champ de
-          texte ET la barre de réactions emoji. Fermé par défaut, donc
-          l'image a toute la place à l'ouverture de la visionneuse.
+          FIX MOBILE/TABLETTE : avant, la boîte modale n'avait qu'un
+          "max-height" (pas de hauteur fixe), et la zone image n'avait
+          elle aussi qu'un max-height + minHeight. Résultat : quand une
+          image "grande" (photo importée, format portrait, etc.)
+          s'affichait, elle pouvait pousser la hauteur réelle du bloc
+          au-delà de l'écran avant que le navigateur applique le
+          plafond — et sur téléphone/tablette ça débordait carrément
+          en dehors de l'écran, cachant les boutons "Commenter et
+          réagir" / "Favoris".
+          Maintenant : la boîte modale a une hauteur FIXE sur mobile
+          (h-[92dvh]), la zone image a elle aussi une hauteur FIXE
+          (h-[38dvh]) qui ne dépend plus du contenu — donc quelle que
+          soit la taille de l'image, elle est toujours contenue dans
+          sa zone (object-contain), et la zone infos/commentaires
+          récupère le reste de la hauteur et défile toute seule
+          (overflow-y-auto) sans jamais pousser la fenêtre. On utilise
+          "dvh" plutôt que "vh" pour que ça tienne compte de la barre
+          d'adresse mobile qui apparaît/disparaît.
+          Sur PC (md: et plus), on repasse à un comportement souple
+          (h-auto + max-h) car il y a largement la place.
           ============================================================ */}
       {indexOuvert !== null && imagesFiltrees[indexOuvert] && (() => {
         const imageActuelle = imagesFiltrees[indexOuvert]
@@ -657,14 +652,17 @@ function GalleryScreen() {
               {indexOuvert + 1} / {imagesFiltrees.length}
             </div>
 
+            {/* Boîte modale : hauteur FIXE sur mobile/tablette (92dvh),
+                souple sur PC (h-auto, plafonnée à 92dvh) */}
             <div
-              className="w-full max-w-[900px] max-h-[92vh] bg-espresso rounded-3xl overflow-hidden flex flex-col md:flex-row"
+              className="w-full max-w-[900px] h-[92dvh] md:h-auto md:max-h-[92dvh] bg-espresso rounded-3xl overflow-hidden flex flex-col md:flex-row"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* ===== Zone image — swipe posé uniquement ici ===== */}
+              {/* ===== Zone image — hauteur FIXE sur mobile (38dvh),
+                  ne dépend plus de la taille réelle de l'image ===== */}
               <div
-                className="relative w-full md:w-[62%] flex-shrink-0 flex items-center justify-center max-h-[55vh] md:max-h-[92vh]"
-                style={{ background: imageActuelle.bg, minHeight: '220px' }}
+                className="relative w-full md:w-[62%] flex-shrink-0 h-[38dvh] md:h-auto md:max-h-[92dvh] flex items-center justify-center overflow-hidden"
+                style={{ background: imageActuelle.bg }}
                 onTouchStart={gererDebutSwipe}
                 onTouchEnd={gererFinSwipe}
               >
@@ -702,7 +700,9 @@ function GalleryScreen() {
                 </button>
               </div>
 
-              {/* ===== Zone infos — compacte, avec bouton pour ouvrir le panneau ===== */}
+              {/* ===== Zone infos — récupère tout le reste de la hauteur
+                  et défile toute seule si le contenu (titre, texte,
+                  bouton, panneau ouvert) est trop grand pour l'écran ===== */}
               <div className="flex-1 min-h-0 p-5 md:p-6 overflow-y-auto scroll-suave flex flex-col">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-[9px] uppercase tracking-[0.1em] text-peony/50 border border-peony/20 rounded-full px-2.5 py-1">
@@ -718,15 +718,12 @@ function GalleryScreen() {
                   {imageActuelle.texte}
                 </p>
 
-                {/* Aperçu du dernier commentaire, si présent, même
-                    quand le panneau est fermé */}
                 {imageActuelle.commentairePerso && (
                   <p className="text-[10.5px] text-peony/50 italic mb-4 pb-4 border-b border-peony/10">
                     💬 "{imageActuelle.commentairePerso}"
                   </p>
                 )}
 
-                {/* Aperçu des réactions déjà posées */}
                 {reactionsActives.length > 0 && (
                   <div className="flex items-center gap-1.5 mb-4">
                     {reactionsActives.map((r) => (
@@ -768,10 +765,11 @@ function GalleryScreen() {
 
                 {/* ============================================================
                     PANNEAU COMMENTAIRE + RÉACTIONS — affiché seulement
-                    si panneauOuvert est vrai. Contient le champ de texte
-                    ET la rangée d'emojis de réaction, dans une seule
-                    zone dédiée et bien délimitée (fond légèrement
-                    contrasté pour bien la distinguer du reste).
+                    si panneauOuvert est vrai. La zone parente défile
+                    (overflow-y-auto) donc ce panneau reste toujours
+                    atteignable même sur petit écran avec grande image.
+                    Le champ de texte est en text-base (16px) pour éviter
+                    le zoom automatique de Safari iOS au focus.
                     ============================================================ */}
                 {panneauOuvert && (
                   <div className="mt-3 pt-4 border-t border-peony/15">
@@ -779,7 +777,7 @@ function GalleryScreen() {
                     <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
                       Réagis à cette image
                     </label>
-                    <div className="flex items-center gap-2 mb-5">
+                    <div className="flex items-center gap-2 mb-5 flex-wrap">
                       {REACTIONS_DISPONIBLES.map((emoji) => {
                         const estActive = reactionsActives.includes(emoji)
                         return (
@@ -805,7 +803,7 @@ function GalleryScreen() {
                       onChange={(e) => setCommentaireEnEdition(e.target.value)}
                       placeholder="Écris ce que cette image représente pour toi..."
                       rows={3}
-                      className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-[12px] text-peony placeholder:text-peony/30 outline-none focus:border-peony/50 transition-colors duration-200 resize-none"
+                      className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-base md:text-[12px] text-peony placeholder:text-peony/30 outline-none focus:border-peony/50 transition-colors duration-200 resize-none"
                     />
                     <button
                       onClick={sauvegarderCommentaire}
