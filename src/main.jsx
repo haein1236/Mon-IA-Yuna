@@ -1,13 +1,15 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { registerSW } from 'virtual:pwa-register'
+
 import './index.css'
 import App from './App.jsx'
-import { ThemeProvider } from './context/ThemeContext' // ⬅️ nouveau
+import { ThemeProvider } from './context/ThemeContext'
+
+registerSW({ immediate: true })
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/* ThemeProvider entoure toute l'app pour que le thème
-        soit accessible partout, même dans la Sidebar */}
     <ThemeProvider>
       <App />
     </ThemeProvider>
