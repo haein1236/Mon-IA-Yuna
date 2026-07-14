@@ -87,3 +87,13 @@ html, body, #root {
   height: var(--app-height, 100vh); /* filet de sécurité JS */
   height: 100dvh;             /* valeur moderne, prioritaire si supportée */
 }
+
+.scroll-suave {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* SUPPRIMÉ : touch-action: pan-y — trop restrictif sur certains
+     navigateurs Android/Samsung, pouvait bloquer le scroll au lieu
+     de l'autoriser. On laisse le comportement par défaut du
+     navigateur, qui gère déjà bien le scroll vertical tout seul. */
+  scroll-behavior: smooth;
+}

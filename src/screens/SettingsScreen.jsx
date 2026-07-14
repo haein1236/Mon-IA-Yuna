@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { useTheme, THEMES_DISPONIBLES } from '../context/ThemeContext'
+import { FONDS_CHAT_DISPONIBLES } from '../services/parametres'
+import { fichierVersBase64 } from '../services/images'
+import { usePWAInstall } from '../hooks/usePWAInstall'
 
 const IconCloche = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
@@ -40,10 +43,22 @@ const IconInfo = (props) => (
     <circle cx="12" cy="8" r="1" fill="currentColor" />
   </svg>
 )
-// Petit chevron pour indiquer l'état ouvert/fermé de l'accordéon mobile
 const IconChevron = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
     <polyline points="6 9 12 15 18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+const IconTelephone = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" strokeWidth="1.8" />
+    <line x1="11" y1="18" x2="13" y2="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+)
+const IconImage = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="8.5" cy="9.5" r="1.8" fill="currentColor" />
+    <path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="1.8" />
   </svg>
 )
 
@@ -80,15 +95,9 @@ const VERSION_APP = '1.0.0'
 
 function SettingsScreen({ onChangerEcran }) {
   const { parametres, choisirTheme, appliquerCouleursPersonnalisees, mettreAJourParametres } = useTheme()
+  const { installable, install, dejaInstalle, estIOS } = usePWAInstall()
 
   const [modePerso, setModePerso] = useState(!!parametres.couleursPersonnalisees)
-
-  // ============================================================
-  // NOUVEAU : état de l'accordéon "Thème visuel" pour mobile.
-  // Fermé par défaut (false) sur mobile pour gagner de la place —
-  // sur desktop, la classe "md:block" force son affichage quoi
-  // qu'il arrive, donc cet état n'a d'effet QUE sur mobile/tablette.
-  // ============================================================
   const [themeOuvert, setThemeOuvert] = useState(false)
 
   const [couleursEnEdition, setCouleursEnEdition] = useState(() => {
@@ -104,6 +113,17 @@ function SettingsScreen({ onChangerEcran }) {
 
   const validerCouleursPersonnalisees = () => {
     appliquerCouleursPersonnalisees(couleursEnEdition)
+    afficherConfirmation()
+  }
+
+  // ============================================================
+  // UPLOAD D'UN FOND D'ÉCRAN PERSONNALISÉ POUR LE CHAT
+  // ============================================================
+  const gererUploadFondEcran = async (e) => {
+    const fichier = e.target.files[0]
+    if (!fichier) return
+    const base64 = await fichierVersBase64(fichier)
+    mettreAJourParametres({ fondEcranChat: 'personnalise', fondEcranChatPerso: base64 })
     afficherConfirmation()
   }
 
@@ -129,7 +149,6 @@ function SettingsScreen({ onChangerEcran }) {
   }
 
   return (
-    // FIX : min-h-0 sur le conteneur racine flex-col
     <div className="h-full min-h-0 w-full flex flex-col overflow-hidden bg-[#F0EEEB]">
 
       <div className="flex items-center gap-3 px-4 md:px-7 py-4 md:py-6 flex-shrink-0">
@@ -151,11 +170,9 @@ function SettingsScreen({ onChangerEcran }) {
         )}
       </div>
 
-      {/* FIX : min-h-0 sur cette zone qui scrolle (grid → 1 colonne sur
-          mobile, 2 colonnes côte à côte à partir de "md:") */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[1fr_300px] overflow-y-auto md:overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[1fr_300px] overflow-y-auto scroll-suave md:overflow-hidden">
 
-        <div className="px-4 md:px-7 pb-7 md:overflow-y-auto md:min-h-0">
+        <div className="px-4 md:px-7 pb-7 md:overflow-y-auto md:scroll-suave md:min-h-0">
 
           <SectionParametre titre="Yuna & moi" description="Comment Yuna doit s'adresser à toi">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -170,9 +187,6 @@ function SettingsScreen({ onChangerEcran }) {
                   className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors duration-200" />
               </div>
             </div>
-            {parametres.dateAnniversaire && (
-              <p className="text-[10px] text-espresso/40 italic mt-2">🎂 Yuna t'enverra un message spécial ce jour-là</p>
-            )}
           </SectionParametre>
 
           <SectionParametre titre="Messages spontanés">
@@ -183,7 +197,6 @@ function SettingsScreen({ onChangerEcran }) {
               </div>
               <Interrupteur actif={parametres.messagesActifs} onChange={(val) => mettreAJourParametres({ messagesActifs: val })} />
             </div>
-
             <div className={parametres.messagesActifs ? '' : 'opacity-40 pointer-events-none'}>
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Fréquence</label>
               <select value={parametres.frequence} onChange={(e) => mettreAJourParametres({ frequence: e.target.value })}
@@ -192,7 +205,6 @@ function SettingsScreen({ onChangerEcran }) {
                 <option value="deuxFoisParJour">Deux fois par jour</option>
                 <option value="hebdomadaire">Une fois par semaine</option>
               </select>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Pas avant</label>
@@ -223,6 +235,40 @@ function SettingsScreen({ onChangerEcran }) {
             </div>
           </SectionParametre>
 
+          {/* ===== NOUVELLE SECTION : FOND D'ÉCRAN DU CHAT ===== */}
+          <SectionParametre titre="Fond d'écran du Chat" description="Personnalise l'arrière-plan de tes conversations">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3">
+              {FONDS_CHAT_DISPONIBLES.map((fond) => {
+                const estActif = parametres.fondEcranChat === fond.id
+                return (
+                  <button
+                    key={fond.id}
+                    onClick={() => mettreAJourParametres({ fondEcranChat: fond.id, fondEcranChatPerso: null })}
+                    className="rounded-xl overflow-hidden border-2 transition-all duration-200"
+                    style={{ borderColor: estActif ? 'var(--color-espresso)' : 'transparent', height: '54px' }}
+                  >
+                    <div
+                      className="w-full h-full flex items-end p-1.5"
+                      style={{ background: fond.style || '#FFF8F5' }}
+                    >
+                      <span className="text-[8px] font-medium bg-white/80 px-1.5 py-0.5 rounded-full text-espresso">
+                        {fond.nom}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <label className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-espresso/20 px-4 py-3 cursor-pointer hover:border-espresso/40 transition-colors duration-200">
+              <IconImage style={{ width: '15px', height: '15px' }} className="text-espresso/50" />
+              <span className="text-[11px] text-espresso/60">
+                {parametres.fondEcranChat === 'personnalise' ? 'Changer ma photo de fond' : 'Utiliser ma propre photo'}
+              </span>
+              <input type="file" accept="image/*" onChange={gererUploadFondEcran} className="hidden" />
+            </label>
+          </SectionParametre>
+
           <SectionParametre titre="Notifications & accessibilité">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11.5px] text-espresso font-medium">Notifications activées</p>
@@ -235,6 +281,40 @@ function SettingsScreen({ onChangerEcran }) {
               </div>
               <Interrupteur actif={parametres.reduireAnimations} onChange={(val) => mettreAJourParametres({ reduireAnimations: val })} />
             </div>
+          </SectionParametre>
+
+          {/* ===== NOUVELLE SECTION : INSTALLATION SUR L'APPAREIL ===== */}
+          <SectionParametre titre="Installer l'application" description="Ajoute Yuna directement sur ton écran d'accueil">
+            {dejaInstalle ? (
+              <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 bg-emerald-50 border border-emerald-200">
+                <IconCoche style={{ width: '16px', height: '16px' }} className="text-emerald-600" />
+                <span className="text-[11.5px] text-emerald-700 font-medium">Déjà installée sur cet appareil !</span>
+              </div>
+            ) : estIOS ? (
+              // iOS ne propose aucune installation automatique — instructions manuelles
+              <div className="rounded-xl px-4 py-3 bg-[#F0EEEB] border border-espresso/12">
+                <p className="text-[11px] text-espresso/70 leading-relaxed">
+                  Sur iPhone/iPad, l'installation se fait manuellement :
+                </p>
+                <ol className="text-[10.5px] text-espresso/60 mt-1.5 pl-4 list-decimal space-y-0.5">
+                  <li>Appuie sur le bouton Partager <span className="font-mono">⬆️</span> en bas de Safari</li>
+                  <li>Fais défiler et choisis "Sur l'écran d'accueil"</li>
+                  <li>Confirme — l'icône Yuna apparaîtra chez toi</li>
+                </ol>
+              </div>
+            ) : installable ? (
+              <button
+                onClick={install}
+                className="w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3 bg-espresso text-peony font-semibold text-[11.5px] transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              >
+                <IconTelephone style={{ width: '15px', height: '15px' }} />
+                Installer Yuna sur cet appareil
+              </button>
+            ) : (
+              <p className="text-[10.5px] text-espresso/45 italic">
+                L'option d'installation apparaîtra ici une fois les conditions du navigateur remplies (peut demander un rechargement de la page).
+              </p>
+            )}
           </SectionParametre>
 
           <SectionParametre titre="Données & confidentialité" description="Tes données restent dans ce navigateur, jamais envoyées ailleurs">
@@ -255,8 +335,6 @@ function SettingsScreen({ onChangerEcran }) {
             </div>
           </SectionParametre>
 
-          {/* NOUVEAU : "À propos" déplacé dans la colonne gauche sur
-              mobile (toujours visible, jamais caché dans l'accordéon) */}
           <div className="md:hidden bg-white rounded-2xl p-4 border border-espresso/10">
             <div className="flex items-center gap-2 mb-3">
               <IconInfo style={{ width: '15px', height: '15px' }} className="text-espresso/50" />
@@ -270,23 +348,15 @@ function SettingsScreen({ onChangerEcran }) {
           </div>
         </div>
 
-        {/* ============================================================
-            COLONNE DROITE — Thème visuel
-            "hidden md:block" sur le TITRE de section classique disparaît
-            au profit d'un bouton-accordéon sur mobile uniquement.
-            ============================================================ */}
-        <div className="px-4 md:px-6 py-4 md:py-7 bg-white md:border-l border-espresso/10 md:overflow-y-auto md:min-h-0">
+        <div className="px-4 md:px-6 py-4 md:py-7 bg-white md:border-l border-espresso/10 md:overflow-y-auto md:scroll-suave md:min-h-0">
 
-          {/* ===== Bouton accordéon — visible UNIQUEMENT sur mobile/tablette ===== */}
           <button
             onClick={() => setThemeOuvert(!themeOuvert)}
             className="md:hidden w-full flex items-center justify-between gap-2 mb-2 py-1"
           >
             <div className="flex items-center gap-2">
               <IconPalette style={{ width: '15px', height: '15px' }} className="text-espresso/50" />
-              <span className="text-espresso/70 text-[12px] uppercase tracking-[0.08em] font-semibold">
-                Thème visuel
-              </span>
+              <span className="text-espresso/70 text-[12px] uppercase tracking-[0.08em] font-semibold">Thème visuel</span>
             </div>
             <IconChevron
               style={{ width: '16px', height: '16px', transform: themeOuvert ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
@@ -294,19 +364,11 @@ function SettingsScreen({ onChangerEcran }) {
             />
           </button>
 
-          {/* ===== Titre classique — visible UNIQUEMENT sur desktop ===== */}
           <div className="hidden md:flex items-center gap-2 mb-4">
             <IconPalette style={{ width: '15px', height: '15px' }} className="text-espresso/50" />
             <h2 className="text-espresso/45 text-[10.5px] uppercase tracking-[0.08em] font-medium">Thème visuel</h2>
           </div>
 
-          {/* ============================================================
-              CONTENU DE L'ACCORDÉON
-              "themeOuvert ? 'block' : 'hidden'" sur mobile : replié par
-              défaut, s'ouvre au clic sur le bouton ci-dessus.
-              "md:block" écrase ce comportement sur desktop : toujours
-              visible, peu importe l'état themeOuvert.
-              ============================================================ */}
           <div className={themeOuvert ? 'block' : 'hidden md:block'}>
             <div className="flex flex-col gap-2 mb-4">
               {THEMES_DISPONIBLES.map((theme) => {
@@ -357,8 +419,6 @@ function SettingsScreen({ onChangerEcran }) {
             )}
           </div>
 
-          {/* "À propos" — visible seulement sur desktop ici (déjà affiché
-              plus haut dans la colonne gauche pour mobile) */}
           <div className="hidden md:block pt-4 border-t border-espresso/10">
             <div className="flex items-center gap-2 mb-3">
               <IconInfo style={{ width: '15px', height: '15px' }} className="text-espresso/50" />

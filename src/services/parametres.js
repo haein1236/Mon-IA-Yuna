@@ -1,47 +1,43 @@
-// ============================================================
-// SERVICE PARAMÈTRES
-// Gère la sauvegarde et la lecture des réglages utilisateur.
-// Fonctionne exactement comme conversations.jsx : tout est stocké
-// dans le localStorage du navigateur, sous une seule clé.
-// ============================================================
-
 const CLE_PARAMETRES = 'yuna-parametres'
 
-// Valeurs utilisées si l'utilisateur n'a encore rien configuré
-export const parametresParDefaut = {
-  // --- Yuna & moi ---
-  surnom: 'Saki',               // Comment Yuna doit t'appeler dans le chat
-  dateAnniversaire: '',         // Format 'AAAA-MM-JJ' — vide = non renseignée
+// ============================================================
+// FONDS D'ÉCRAN DISPONIBLES POUR LE CHAT
+// Chaque fond est soit une couleur unie, soit un dégradé CSS —
+// "style" est directement utilisable dans un style={{ background }}
+// ============================================================
+export const FONDS_CHAT_DISPONIBLES = [
+  { id: 'defaut',     nom: 'Défaut',         style: null },
+  { id: 'sakura',     nom: 'Sakura',         style: 'linear-gradient(160deg, #FBE4EB 0%, #F4C9D6 100%)' },
+  { id: 'nuit',       nom: 'Nuit douce',     style: 'linear-gradient(160deg, #2B1A2E 0%, #4A2E4F 100%)' },
+  { id: 'ocean',      nom: 'Océan calme',    style: 'linear-gradient(160deg, #E3EEF5 0%, #B8D4E3 100%)' },
+  { id: 'automne',    nom: 'Automne',        style: 'linear-gradient(160deg, #F5E6D3 0%, #E0B896 100%)' },
+]
 
-  // --- Messages spontanés ---
-  messagesActifs: true,         // Yuna a-t-elle le droit d'écrire en premier ?
-  frequence: 'quotidien',       // 'quotidien' | 'deuxFoisParJour' | 'hebdomadaire'
-  heureDebut: '08:00',          // Yuna n'écrira jamais avant cette heure
-  heureFin: '21:00',            // ...ni après celle-ci
-
-  // --- Personnalité de l'IA (utilisé plus tard dans gemini.js) ---
-  personnalite: 'caline',       // 'caline' | 'taquine' | 'motivante' | 'calme'
-
-  // --- Notifications ---
+const parametresParDefaut = {
+  surnom: 'Saki',
+  dateAnniversaire: '',
+  messagesActifs: true,
+  frequence: 'quotidien',
+  heureDebut: '08:00',
+  heureFin: '21:00',
+  personnalite: 'caline',
   notificationsActives: true,
-
-  // --- Thème visuel ---
-  themeId: 'espresso',          // id du preset choisi (voir ThemeContext.jsx)
-  couleursPersonnalisees: null, // { espresso, peony, cream } si mode "sur-mesure"
-
-  // Dans parametresParDefaut, ajoute cette ligne :
-  reduireAnimations: false, // Désactive les animations (accessibilité / performance)
+  themeId: 'espresso',
+  couleursPersonnalisees: null,
+  reduireAnimations: false,
+  // ⬅️ NOUVEAU : fond d'écran du chat
+  fondEcranChat: 'defaut',       // id d'un preset ci-dessus, ou 'personnalise'
+  fondEcranChatPerso: null,      // image en base64 si "personnalise" choisi
 }
 
-// Charge les paramètres sauvegardés (fusionnés avec les valeurs par défaut,
-// au cas où on ajoute un nouveau réglage plus tard sans casser les anciens profils)
 export function chargerParametres() {
   const donneesBrutes = localStorage.getItem(CLE_PARAMETRES)
   if (!donneesBrutes) return parametresParDefaut
   return { ...parametresParDefaut, ...JSON.parse(donneesBrutes) }
 }
 
-// Sauvegarde l'objet paramètres complet
 export function sauvegarderParametres(parametres) {
   localStorage.setItem(CLE_PARAMETRES, JSON.stringify(parametres))
 }
+
+export { parametresParDefaut }

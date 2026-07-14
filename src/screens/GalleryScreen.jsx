@@ -6,6 +6,8 @@ import {
   toggleFavoriImage,
   fichierVersBase64,
   ajouterCommentaireImage,
+  toggleReactionImage,
+  REACTIONS_DISPONIBLES,
 } from '../services/images'
 
 const IconFleur = (props) => (
@@ -87,6 +89,12 @@ const IconCroix = (props) => (
     <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>
 )
+// Icône bulle de commentaire, pour le bouton qui ouvre le panneau
+const IconBulle = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.3 8.3 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+  </svg>
+)
 
 const imagesInitiales = [
   // { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
@@ -115,7 +123,7 @@ const moods = [
   { label: 'Aesthetic', valeur: 90 },
 ]
 
-const reactions = [
+const reactionsDecoratives = [
   { texte: 'magnifique !! 😍', date: 'il y a 2h', coeurs: 3 },
   { texte: 'jadore cette ambiance', date: 'il y a 5h', coeurs: 2 },
   { texte: 'tellement apaisant ✨', date: 'hier', coeurs: 4 },
@@ -129,11 +137,15 @@ function GalleryScreen() {
   const inputFichierRef = useRef(null)
   const [indexOuvert, setIndexOuvert] = useState(null)
   const [commentaireEnEdition, setCommentaireEnEdition] = useState('')
-
-  // NOUVEAU : message d'erreur affiché si la sauvegarde du commentaire
-  // échoue (par exemple stockage plein) — avant, l'échec était
-  // totalement silencieux, l'utilisateur ne savait jamais pourquoi
   const [erreurCommentaire, setErreurCommentaire] = useState('')
+
+  // ============================================================
+  // NOUVEAU : le panneau commentaire/réactions est maintenant replié
+  // par défaut. "panneauOuvert" contrôle son affichage — on l'ouvre
+  // via un bouton dédié plutôt que de toujours l'afficher, ce qui
+  // laisse plus de place à l'image et rend l'interface moins chargée.
+  // ============================================================
+  const [panneauOuvert, setPanneauOuvert] = useState(false)
 
   const positionSwipeDebut = useRef(null)
 
@@ -164,11 +176,15 @@ function GalleryScreen() {
     return () => window.removeEventListener('keydown', gererClavier)
   }, [indexOuvert, imagesFiltrees])
 
+  // Quand on change d'image dans la visionneuse, on recharge son
+  // commentaire ET on referme le panneau (évite de laisser le
+  // panneau ouvert avec le texte de l'image précédente affiché)
   useEffect(() => {
     if (indexOuvert === null) return
     const img = imagesFiltrees[indexOuvert]
     setCommentaireEnEdition(img?.commentairePerso || '')
     setErreurCommentaire('')
+    setPanneauOuvert(false)
   }, [indexOuvert])
 
   const toggleFavori = (id) => {
@@ -179,6 +195,18 @@ function GalleryScreen() {
     }
     const imagesMaj = toggleFavoriImage(id)
     setImages(imagesMaj.map((img) => ({ ...img, Icone: iconeParMood[img.mood] || IconFleur })))
+  }
+
+  // ============================================================
+  // NOUVEAU : basculer une réaction (emoji) sur l'image ouverte
+  // ============================================================
+  const toggleReaction = (id, emoji) => {
+    try {
+      const imagesMaj = toggleReactionImage(id, emoji)
+      setImages(imagesMaj.map((img) => ({ ...img, Icone: iconeParMood[img.mood] || IconFleur })))
+    } catch (erreur) {
+      console.error('Erreur réaction :', erreur)
+    }
   }
 
   const handleUpload = async (e) => {
@@ -231,13 +259,6 @@ function GalleryScreen() {
     positionSwipeDebut.current = null
   }
 
-  // ============================================================
-  // SAUVEGARDE DU COMMENTAIRE — avec gestion d'erreur visible
-  // AVANT : en cas d'échec (stockage plein, clé introuvable...),
-  // rien ne se passait visuellement, l'utilisateur ne comprenait
-  // pas pourquoi "ça ne marche pas". Le try/catch capture
-  // maintenant l'erreur et l'affiche clairement.
-  // ============================================================
   const sauvegarderCommentaire = () => {
     if (indexOuvert === null) return
     try {
@@ -247,7 +268,6 @@ function GalleryScreen() {
       setErreurCommentaire('')
     } catch (erreur) {
       console.error('Erreur sauvegarde commentaire :', erreur)
-      // QuotaExceededError = le stockage du navigateur est plein
       if (erreur.name === 'QuotaExceededError') {
         setErreurCommentaire("Stockage plein ! Supprime quelques photos dans Paramètres pour libérer de la place.")
       } else {
@@ -455,7 +475,20 @@ function GalleryScreen() {
             </p>
           )}
 
-          <div className="mb-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+          {/* ============================================================
+              GRILLE PRINCIPALE — CORRIGÉE POUR TABLETTE
+              AVANT : "sm:grid-cols-3 lg:grid-cols-5" — sur une tablette
+              (souvent entre 768px et 1024px), on tombait directement à
+              3 colonnes serrées avec des images restées à taille "sm"
+              (160px de haut), ce qui donnait des vignettes ressenties
+              comme trop petites vu l'espace réellement disponible.
+              APRÈS : palier "md" ajouté spécifiquement pour tablette
+              (3 colonnes mais BEAUCOUP plus hautes, 200px), et "xl"
+              repousse le passage à 5 colonnes aux vrais grands écrans
+              desktop — chaque palier a maintenant une taille d'image
+              proportionnée à l'espace réel de l'appareil.
+              ============================================================ */}
+          <div className="mb-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3.5 md:gap-4">
             {imagesFiltrees.map((img, i) => (
               <div
                 key={img.id}
@@ -465,7 +498,10 @@ function GalleryScreen() {
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 22px rgba(62,39,35,0.25)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(62,39,35,0.15)' }}
               >
-                <div className="relative h-[120px] sm:h-[160px]" style={{ background: img.bg }}>
+                {/* Hauteur d'image progressive : 120px mobile → 160px petit
+                    écran → 200px tablette (md) → 180px grand écran (lg+),
+                    où plus de colonnes compensent une hauteur un peu moindre */}
+                <div className="relative h-[120px] sm:h-[160px] md:h-[200px] lg:h-[180px]" style={{ background: img.bg }}>
                   {img.url ? (
                     <img src={img.url} alt={img.titre} className="absolute inset-0 w-full h-full" style={{ objectFit: 'cover' }} />
                   ) : (
@@ -501,6 +537,13 @@ function GalleryScreen() {
                       />
                     </svg>
                   </button>
+
+                  {/* Aperçu des réactions déjà posées, en bas à droite */}
+                  {img.reactions?.length > 0 && (
+                    <div className="absolute bottom-2 right-2 bg-espresso/70 rounded-full px-1.5 py-0.5 text-[10px]">
+                      {img.reactions.slice(0, 3).join('')}
+                    </div>
+                  )}
 
                   <p className="hidden sm:block absolute bottom-2 left-2.5 right-2.5 text-[9px] text-cream/90 italic leading-snug" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
                     {img.texte}
@@ -540,7 +583,7 @@ function GalleryScreen() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-espresso/10">
-              {reactions.map((r, i) => (
+              {reactionsDecoratives.map((r, i) => (
                 <div key={i} className="rounded-xl bg-cream px-4 py-3.5">
                   <p className="text-[12px] text-espresso/70">{r.texte}</p>
                   <div className="flex items-center justify-between mt-2">
@@ -567,26 +610,23 @@ function GalleryScreen() {
       </div>
 
       {/* ============================================================
-          VISIONNEUSE PLEIN ÉCRAN — CORRIGÉE
-          CHANGEMENT CLÉ : onTouchStart/onTouchEnd (le swipe) ne sont
-          plus posés sur TOUTE la fenêtre — ils sont maintenant
-          UNIQUEMENT sur la zone image (voir plus bas). La zone
-          commentaire ne capte donc plus jamais ces événements tactiles
-          par erreur, ce qui la rendait inutilisable.
-          Sur mobile, l'image est limitée à 45vh max (max-h-[45vh]) pour
-          GARANTIR que la zone commentaire ait toujours de la place
-          visible en dessous, même sur un petit écran — sur desktop
-          (md:), cette limite est levée (md:max-h-[92vh]).
+          VISIONNEUSE PLEIN ÉCRAN — commentaire/réactions en PANNEAU
+          AVANT : la zone commentaire était toujours visible sous
+          l'image, prenant de la place et se retrouvant mal positionnée
+          sur petits écrans.
+          APRÈS : un bouton "💬 Commenter" ouvre/ferme un panneau
+          dédié (comme un tiroir), qui contient à la fois le champ de
+          texte ET la barre de réactions emoji. Fermé par défaut, donc
+          l'image a toute la place à l'ouverture de la visionneuse.
           ============================================================ */}
       {indexOuvert !== null && imagesFiltrees[indexOuvert] && (() => {
         const imageActuelle = imagesFiltrees[indexOuvert]
+        const reactionsActives = imageActuelle.reactions || []
 
         return (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/90"
             onClick={() => setIndexOuvert(null)}
-            // SUPPRIMÉ ICI : onTouchStart/onTouchEnd — déplacés plus
-            // bas, uniquement sur la zone image
           >
             <button
               onClick={() => setIndexOuvert(null)}
@@ -621,10 +661,10 @@ function GalleryScreen() {
               className="w-full max-w-[900px] max-h-[92vh] bg-espresso rounded-3xl overflow-hidden flex flex-col md:flex-row"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* ===== Zone image — LE SWIPE EST MAINTENANT ICI, PAS AILLEURS ===== */}
+              {/* ===== Zone image — swipe posé uniquement ici ===== */}
               <div
-                className="relative w-full md:w-[60%] flex-shrink-0 flex items-center justify-center max-h-[45vh] md:max-h-[92vh]"
-                style={{ background: imageActuelle.bg, minHeight: '200px' }}
+                className="relative w-full md:w-[62%] flex-shrink-0 flex items-center justify-center max-h-[55vh] md:max-h-[92vh]"
+                style={{ background: imageActuelle.bg, minHeight: '220px' }}
                 onTouchStart={gererDebutSwipe}
                 onTouchEnd={gererFinSwipe}
               >
@@ -662,76 +702,123 @@ function GalleryScreen() {
                 </button>
               </div>
 
-              {/* ===== Zone infos + commentaire — LIBRE de tout swipe,
-                  garantie visible grâce à la limite de hauteur de
-                  l'image ci-dessus, avec min-h-0 pour permettre son
-                  propre scroll interne sans être écrasée ===== */}
-              <div className="flex-1 min-h-0 p-5 md:p-7 overflow-y-auto scroll-suave flex flex-col">
+              {/* ===== Zone infos — compacte, avec bouton pour ouvrir le panneau ===== */}
+              <div className="flex-1 min-h-0 p-5 md:p-6 overflow-y-auto scroll-suave flex flex-col">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-[9px] uppercase tracking-[0.1em] text-peony/50 border border-peony/20 rounded-full px-2.5 py-1">
                     {imageActuelle.mood}
                   </span>
                 </div>
 
-                <h2 className="text-peony font-semibold mb-3" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px' }}>
+                <h2 className="text-peony font-semibold mb-2" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '20px' }}>
                   {imageActuelle.titre}
                 </h2>
 
-                <p className="italic text-peony/70 text-[13px] leading-relaxed mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                <p className="italic text-peony/70 text-[12.5px] leading-relaxed mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
                   {imageActuelle.texte}
                 </p>
 
-                <p className="text-[10.5px] text-peony/40 mb-5">{imageActuelle.sous}</p>
+                {/* Aperçu du dernier commentaire, si présent, même
+                    quand le panneau est fermé */}
+                {imageActuelle.commentairePerso && (
+                  <p className="text-[10.5px] text-peony/50 italic mb-4 pb-4 border-b border-peony/10">
+                    💬 "{imageActuelle.commentairePerso}"
+                  </p>
+                )}
 
-                <div className="mb-5">
-                  <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
-                    Ton petit mot sur cette photo
-                  </label>
-                  <textarea
-                    value={commentaireEnEdition}
-                    onChange={(e) => setCommentaireEnEdition(e.target.value)}
-                    placeholder="Écris ce que cette image représente pour toi..."
-                    rows={3}
-                    className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-[12px] text-peony placeholder:text-peony/30 outline-none focus:border-peony/50 transition-colors duration-200 resize-none"
-                  />
+                {/* Aperçu des réactions déjà posées */}
+                {reactionsActives.length > 0 && (
+                  <div className="flex items-center gap-1.5 mb-4">
+                    {reactionsActives.map((r) => (
+                      <span key={r} className="text-[16px]">{r}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-auto flex flex-col gap-2">
+                  {/* ===== BOUTON qui ouvre/ferme le panneau ===== */}
                   <button
-                    onClick={sauvegarderCommentaire}
-                    className="mt-2 text-[10.5px] font-semibold text-espresso bg-peony rounded-full px-4 py-1.5 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                    onClick={() => setPanneauOuvert(!panneauOuvert)}
+                    className="flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold border border-peony/30 text-peony transition-all duration-200 hover:bg-white/5"
                   >
-                    Enregistrer le mot
+                    <IconBulle style={{ width: '14px', height: '14px' }} />
+                    {panneauOuvert ? 'Fermer' : 'Commenter et réagir'}
                   </button>
 
-                  {/* NOUVEAU : message d'erreur visible si la sauvegarde échoue */}
-                  {erreurCommentaire && (
-                    <p className="text-[10px] text-red-300 mt-2">{erreurCommentaire}</p>
-                  )}
-
-                  {imageActuelle.commentairePerso && !erreurCommentaire && (
-                    <p className="text-[10px] text-peony/50 italic mt-2">
-                      Dernier mot enregistré : "{imageActuelle.commentairePerso}"
-                    </p>
-                  )}
+                  <button
+                    onClick={() => toggleFavori(imageActuelle.id)}
+                    className="flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
+                    style={{
+                      background: imageActuelle.favori ? 'var(--color-accent)' : 'transparent',
+                      border: `1.5px solid var(--color-accent)`,
+                      color: imageActuelle.favori ? '#fff' : 'var(--color-accent)',
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" style={{ width: '14px', height: '14px' }}>
+                      <path
+                        d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z"
+                        fill={imageActuelle.favori ? '#fff' : 'none'}
+                        stroke={imageActuelle.favori ? '#fff' : 'var(--color-accent)'}
+                        strokeWidth="1.8"
+                      />
+                    </svg>
+                    {imageActuelle.favori ? 'Dans tes favoris' : 'Ajouter aux favoris'}
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => toggleFavori(imageActuelle.id)}
-                  className="mt-auto flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
-                  style={{
-                    background: imageActuelle.favori ? 'var(--color-accent)' : 'transparent',
-                    border: `1.5px solid var(--color-accent)`,
-                    color: imageActuelle.favori ? '#fff' : 'var(--color-accent)',
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" style={{ width: '14px', height: '14px' }}>
-                    <path
-                      d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z"
-                      fill={imageActuelle.favori ? '#fff' : 'none'}
-                      stroke={imageActuelle.favori ? '#fff' : 'var(--color-accent)'}
-                      strokeWidth="1.8"
+                {/* ============================================================
+                    PANNEAU COMMENTAIRE + RÉACTIONS — affiché seulement
+                    si panneauOuvert est vrai. Contient le champ de texte
+                    ET la rangée d'emojis de réaction, dans une seule
+                    zone dédiée et bien délimitée (fond légèrement
+                    contrasté pour bien la distinguer du reste).
+                    ============================================================ */}
+                {panneauOuvert && (
+                  <div className="mt-3 pt-4 border-t border-peony/15">
+
+                    <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
+                      Réagis à cette image
+                    </label>
+                    <div className="flex items-center gap-2 mb-5">
+                      {REACTIONS_DISPONIBLES.map((emoji) => {
+                        const estActive = reactionsActives.includes(emoji)
+                        return (
+                          <button
+                            key={emoji}
+                            onClick={() => toggleReaction(imageActuelle.id, emoji)}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-[16px] transition-all duration-200 hover:scale-110 active:scale-95"
+                            style={{
+                              background: estActive ? 'var(--color-accent)' : 'rgba(255,255,255,0.08)',
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
+                      Ton petit mot sur cette photo
+                    </label>
+                    <textarea
+                      value={commentaireEnEdition}
+                      onChange={(e) => setCommentaireEnEdition(e.target.value)}
+                      placeholder="Écris ce que cette image représente pour toi..."
+                      rows={3}
+                      className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-[12px] text-peony placeholder:text-peony/30 outline-none focus:border-peony/50 transition-colors duration-200 resize-none"
                     />
-                  </svg>
-                  {imageActuelle.favori ? 'Dans tes favoris' : 'Ajouter aux favoris'}
-                </button>
+                    <button
+                      onClick={sauvegarderCommentaire}
+                      className="mt-2 text-[10.5px] font-semibold text-espresso bg-peony rounded-full px-4 py-1.5 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                    >
+                      Enregistrer le mot
+                    </button>
+
+                    {erreurCommentaire && (
+                      <p className="text-[10px] text-red-300 mt-2">{erreurCommentaire}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

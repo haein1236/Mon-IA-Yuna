@@ -6,6 +6,7 @@ import AIAvatar from '../components/AIAvatar'
 import { envoyerMessageAYuna, verifierMessageSpontane, extraireEtMemoriserFaits } from '../services/gemini'
 import { sauvegarderConversation, creerNouvelleConversation } from '../services/conversations'
 import { sauvegarderImage, fichierVersBase64 } from '../services/images'
+import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
 
 function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation }) {
 
@@ -19,6 +20,9 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
   const [saisie, setSaisie]             = useState('')
   const [yunaEcrit, setYunaEcrit]       = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
+
+  // ⬅️ NOUVEAU : fond d'écran choisi, lu depuis les paramètres
+  const [fondEcran, setFondEcran] = useState(() => chargerParametres())
 
   const inputImageRef = useRef(null)
   const basDeListeRef = useRef(null)
@@ -129,8 +133,28 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     }
   }
 
+  // ============================================================
+  // CALCULE LE STYLE DE FOND DE LA ZONE MESSAGES
+  // Trois cas possibles : fond personnalisé (image uploadée en
+  // Paramètres), un des presets (dégradés CSS), ou le fond par
+  // défaut (dégradé crème/peony habituel).
+  // ============================================================
+  const styleFond = (() => {
+    if (fondEcran.fondEcranChat === 'personnalise' && fondEcran.fondEcranChatPerso) {
+      return {
+        backgroundImage: `linear-gradient(rgba(255,248,245,0.75), rgba(255,248,245,0.75)), url(${fondEcran.fondEcranChatPerso})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    }
+    const preset = FONDS_CHAT_DISPONIBLES.find((f) => f.id === fondEcran.fondEcranChat)
+    if (preset?.style) {
+      return { background: preset.style }
+    }
+    return { background: 'linear-gradient(180deg, var(--color-cream) 0%, color-mix(in srgb, var(--color-cream), var(--color-peony) 8%) 100%)' }
+  })()
+
   return (
-    // FIX : min-h-0 sur le conteneur racine flex-col
     <div className="h-full min-h-0 flex flex-col bg-cream overflow-hidden">
 
       <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 md:py-4 bg-white border-b border-peony/30 flex-shrink-0" style={{ boxShadow: '0 1px 0 rgba(62,39,35,0.03)' }}>
@@ -155,8 +179,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
           </div>
         </div>
 
-        {/* RESPONSIVE : sur mobile, seulement l'icône "+" (pas le mot
-            "Nouvelle") pour économiser de la place */}
         <button
           onClick={nouvelleConversation}
           className="text-[10.5px] font-medium text-cream bg-espresso px-2.5 md:px-3.5 py-2 rounded-full hover:opacity-90 transition-opacity duration-200 flex items-center gap-1.5 flex-shrink-0"
@@ -177,11 +199,13 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
         </button>
       </div>
 
-      {/* FIX CRITIQUE : min-h-0 ajouté ici — c'est cette zone qui a
-          "overflow-y-auto" et devait pouvoir scroller les messages */}
+      {/* FIX SCROLL : min-h-0 + overflow-y-auto + scroll-suave, tous
+          les trois nécessaires ensemble pour un scroll fluide et
+          fonctionnel sur mobile/tablette. Le fond suit maintenant le
+          choix de fond d'écran fait dans Paramètres. */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 flex flex-col gap-4"
-        style={{ background: 'linear-gradient(180deg, var(--color-cream) 0%, color-mix(in srgb, var(--color-cream), var(--color-peony) 8%) 100%)' }}
+        className="flex-1 min-h-0 overflow-y-auto scroll-suave p-4 md:p-6 flex flex-col gap-4"
+        style={styleFond}
       >
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} onImageGeneree={handleImageGeneree} />
