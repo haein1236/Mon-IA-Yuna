@@ -224,7 +224,7 @@ function GalleryScreen() {
         source: 'moi',
         favori: false,
         url: base64,
-        bg: 'linear-gradient(135deg, #F4C9D6, #FBE4EB)',
+        bg: 'linear-gradient(135deg, #c9cdf4, #ebe4fb)',
         Icone: IconFleur,
         date: new Date().toISOString(),
       }
