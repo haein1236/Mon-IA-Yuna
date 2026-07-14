@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import AIAvatar from './AIAvatar'
 
 // Détecte si un message contient une commande image [IMAGE: ...]
@@ -11,21 +12,71 @@ function extraireImage(texte) {
   }
 }
 
-function MessageBubble({ message, onImageGeneree }) {
+function formaterDureeAudio(secondes) {
+  const m = Math.floor(secondes / 60)
+  const s = secondes % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function MessageBubble({ message, onImageGeneree, onModifierMessage }) {
 
   const estUser = message.auteur === 'user'
 
-  // Vérifie si c'est un message image envoyé par l'utilisateur
+  // Vérifie si c'est un message image envoyée par l'utilisateur
   const estImageUtilisateur = message.texte === '[IMAGE_ENVOYEE]' && message.imageUrl
 
+  // Vérifie si c'est une note vocale envoyée par l'utilisateur
+  const estAudioUtilisateur = message.texte === '[NOTE_VOCALE]' && message.audioUrl
+
   // Vérifie si c'est une image générée par Yuna
-  const donneesImage = !estUser && !estImageUtilisateur
+  const donneesImage = !estUser && !estImageUtilisateur && !estAudioUtilisateur
     ? extraireImage(message.texte)
     : null
 
   const urlImageYuna = donneesImage
     ? `https://image.pollinations.ai/prompt/${encodeURIComponent(donneesImage.description)}?width=512&height=512&nologo=true`
     : null
+
+  // Seul un message texte "normal" envoyé par l'utilisateur peut être modifié
+  // (pas les images, pas les notes vocales)
+  const estModifiable = estUser && !estImageUtilisateur && !estAudioUtilisateur && !!onModifierMessage
+
+  // ============================================================
+  // ÉDITION DU MESSAGE
+  // ============================================================
+  const [enEdition, setEnEdition]       = useState(false)
+  const [texteEdition, setTexteEdition] = useState(message.texte)
+
+  const commencerEdition = () => {
+    setTexteEdition(message.texte)
+    setEnEdition(true)
+  }
+
+  const annulerEdition = () => {
+    setTexteEdition(message.texte)
+    setEnEdition(false)
+  }
+
+  const validerEdition = () => {
+    const texteNettoye = texteEdition.trim()
+    if (!texteNettoye || texteNettoye === message.texte) {
+      setEnEdition(false)
+      return
+    }
+    onModifierMessage(message.id, texteNettoye)
+    setEnEdition(false)
+  }
+
+  const gererToucheEdition = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      validerEdition()
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      annulerEdition()
+    }
+  }
 
   return (
     <div className={`flex items-end gap-2 ${estUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -45,7 +96,7 @@ function MessageBubble({ message, onImageGeneree }) {
         </div>
       )}
 
-      <div className={`flex flex-col max-w-[65%] ${estUser ? 'items-end' : 'items-start'}`}>
+      <div className={`flex flex-col max-w-[80%] sm:max-w-[65%] ${estUser ? 'items-end' : 'items-start'}`}>
 
         <span className="text-[9px] font-semibold text-espresso/50 mb-1 mx-1">
           {estUser ? 'Toi' : 'Yuna'}
@@ -66,14 +117,82 @@ function MessageBubble({ message, onImageGeneree }) {
           </div>
         )}
 
+        {/* ===== NOTE VOCALE ENVOYÉE PAR L'UTILISATEUR ===== */}
+        {estAudioUtilisateur && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-[18px] rounded-br-[4px] bg-espresso w-full" style={{ minWidth: '220px', maxWidth: '260px' }}>
+            <div className="w-7 h-7 rounded-full bg-peony/20 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5" stroke="var(--color-peony)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="3" width="6" height="11" rx="3" />
+                <path d="M5 11a7 7 0 0 0 14 0" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="8" y1="22" x2="16" y2="22" />
+              </svg>
+            </div>
+            <audio controls src={message.audioUrl} className="flex-1 min-w-0" style={{ height: '32px' }} />
+            {typeof message.dureeAudio === 'number' && (
+              <span className="text-[9px] text-peony/70 flex-shrink-0 tabular-nums">
+                {formaterDureeAudio(message.dureeAudio)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ===== MODE ÉDITION D'UN MESSAGE TEXTE ===== */}
+        {enEdition && (
+          <div className="flex flex-col gap-1.5 w-full" style={{ minWidth: '220px' }}>
+            <textarea
+              autoFocus
+              value={texteEdition}
+              onChange={(e) => setTexteEdition(e.target.value)}
+              onKeyDown={gererToucheEdition}
+              onFocus={(e) => {
+                const val = e.target.value
+                e.target.value = ''
+                e.target.value = val
+              }}
+              rows={Math.min(6, Math.max(2, texteEdition.split('\n').length))}
+              className="px-4 py-2.5 text-[16px] sm:text-[11px] leading-relaxed bg-espresso text-peony rounded-[18px] rounded-br-[4px] outline-none resize-none border-2 border-peony/50 w-full"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={annulerEdition}
+                className="text-[10px] font-medium text-espresso/60 px-3 py-1.5 rounded-full hover:bg-peony-light active:scale-95 transition-all duration-150"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={validerEdition}
+                disabled={!texteEdition.trim()}
+                className="text-[10px] font-medium text-cream bg-espresso px-3.5 py-1.5 rounded-full hover:opacity-90 active:scale-95 disabled:opacity-40 transition-all duration-150"
+              >
+                Renvoyer
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ===== MESSAGE TEXTE NORMAL ===== */}
-        {!estImageUtilisateur && (donneesImage ? donneesImage.texteAvant : message.texte) && (
-          <div className={`px-4 py-2.5 text-[11px] leading-relaxed ${
-            estUser
-              ? 'bg-espresso text-peony rounded-[18px] rounded-br-[4px]'
-              : 'bg-white text-espresso border border-peony/30 rounded-[18px] rounded-bl-[4px]'
-          }`}>
-            {donneesImage ? donneesImage.texteAvant : message.texte}
+        {!enEdition && !estImageUtilisateur && !estAudioUtilisateur && (donneesImage ? donneesImage.texteAvant : message.texte) && (
+          <div className="group flex items-end gap-1">
+            {estModifiable && (
+              <button
+                onClick={commencerEdition}
+                className="flex-shrink-0 w-7 h-7 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-espresso/35 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150 hover:text-espresso/70 hover:bg-peony-light"
+                title="Modifier ce message"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+            )}
+            <div className={`px-4 py-2.5 text-[11px] leading-relaxed ${
+              estUser
+                ? 'bg-espresso text-peony rounded-[18px] rounded-br-[4px]'
+                : 'bg-white text-espresso border border-peony/30 rounded-[18px] rounded-bl-[4px]'
+            }`}>
+              {donneesImage ? donneesImage.texteAvant : message.texte}
+            </div>
           </div>
         )}
 
@@ -114,9 +233,14 @@ function MessageBubble({ message, onImageGeneree }) {
           </div>
         )}
 
-        <span className="text-[8px] text-espresso/35 mt-1 mx-1">
-          {message.heure}
-        </span>
+        <div className="flex items-center gap-1 mt-1 mx-1">
+          {message.modifie && !enEdition && (
+            <span className="text-[8px] text-espresso/35 italic">modifié ·</span>
+          )}
+          <span className="text-[8px] text-espresso/35">
+            {message.heure}
+          </span>
+        </div>
       </div>
     </div>
   )

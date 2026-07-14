@@ -21,8 +21,19 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
   const [yunaEcrit, setYunaEcrit]       = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
 
-  // ⬅️ NOUVEAU : fond d'écran choisi, lu depuis les paramètres
+  // Fond d'écran choisi, lu depuis les paramètres
   const [fondEcran, setFondEcran] = useState(() => chargerParametres())
+
+  // ============================================================
+  // NOTE VOCALE : état de l'enregistrement en cours
+  // ============================================================
+  const [enregistrement, setEnregistrement]             = useState(false)
+  const [dureeEnregistrement, setDureeEnregistrement]   = useState(0)
+  const [erreurMicro, setErreurMicro]                   = useState(false)
+
+  const mediaRecorderRef = useRef(null)
+  const chunksAudioRef   = useRef([])
+  const timerRef         = useRef(null)
 
   const inputImageRef = useRef(null)
   const basDeListeRef = useRef(null)
@@ -53,6 +64,14 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
       }
     }
     verifierEtEnvoyerMessageSpontane()
+  }, [])
+
+  // Nettoyage : si le composant se démonte pendant un enregistrement
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current)
+      mediaRecorderRef.current?.stream?.getTracks().forEach((track) => track.stop())
+    }
   }, [])
 
   const handleImageGeneree = (image) => sauvegarderImage(image)
@@ -134,10 +153,122 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
   }
 
   // ============================================================
+  // NOTES VOCALES
+  // ============================================================
+
+  const blobVersBase64 = (blob) => new Promise((resolve, reject) => {
+    const lecteur = new FileReader()
+    lecteur.onloadend = () => resolve(lecteur.result)
+    lecteur.onerror = reject
+    lecteur.readAsDataURL(blob)
+  })
+
+  const formaterDuree = (secondes) => {
+    const m = Math.floor(secondes / 60)
+    const s = secondes % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  const demarrerEnregistrement = async () => {
+    if (envoiEnCours) return
+    setErreurMicro(false)
+    try {
+      const flux = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const typeMime = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '')
+
+      const recorder = typeMime
+        ? new MediaRecorder(flux, { mimeType: typeMime })
+        : new MediaRecorder(flux)
+
+      mediaRecorderRef.current = recorder
+      chunksAudioRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksAudioRef.current.push(e.data)
+      }
+
+      recorder.start()
+      setEnregistrement(true)
+      setDureeEnregistrement(0)
+      timerRef.current = setInterval(() => {
+        setDureeEnregistrement((d) => d + 1)
+      }, 1000)
+    } catch (err) {
+      console.error("Impossible d'accéder au micro :", err)
+      setErreurMicro(true)
+      setTimeout(() => setErreurMicro(false), 3000)
+    }
+  }
+
+  const stopperFlux = (recorder) => {
+    recorder?.stream?.getTracks().forEach((track) => track.stop())
+  }
+
+  const annulerEnregistrement = () => {
+    const recorder = mediaRecorderRef.current
+    clearInterval(timerRef.current)
+    setEnregistrement(false)
+    setDureeEnregistrement(0)
+    if (!recorder) return
+    recorder.onstop = () => stopperFlux(recorder)
+    if (recorder.state !== 'inactive') recorder.stop()
+  }
+
+  const arreterEtEnvoyerEnregistrement = () => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder) return
+
+    const dureeFinale = dureeEnregistrement
+    clearInterval(timerRef.current)
+    setEnregistrement(false)
+
+    recorder.onstop = async () => {
+      stopperFlux(recorder)
+
+      // Ignore les enregistrements trop courts (clic accidentel)
+      if (dureeFinale < 1) {
+        chunksAudioRef.current = []
+        return
+      }
+
+      const blobAudio = new Blob(chunksAudioRef.current, { type: recorder.mimeType || 'audio/webm' })
+      const audioBase64 = await blobVersBase64(blobAudio)
+      await envoyerMessageVocal(audioBase64, dureeFinale)
+    }
+
+    if (recorder.state !== 'inactive') recorder.stop()
+  }
+
+  const envoyerMessageVocal = async (audioBase64, duree) => {
+    const messageVocal = {
+      id: Date.now(), auteur: 'user', texte: '[NOTE_VOCALE]',
+      audioUrl: audioBase64, dureeAudio: duree,
+      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    const nouveauxMessages = [...messages, messageVocal]
+    setMessages(nouveauxMessages)
+    setEnvoiEnCours(true)
+    setYunaEcrit(true)
+
+    const reponseTexte = await envoyerMessageAYuna(
+      nouveauxMessages.slice(1),
+      `[L'utilisateur t'a envoyé une note vocale de ${duree} secondes. Tu ne peux pas l'écouter, alors réagis naturellement comme une pote : demande ce qu'elle raconte, ou dis un truc chaleureux en rapport avec le fait qu'elle t'ait envoyé un vocal.]`
+    )
+
+    setYunaEcrit(false)
+    setEnvoiEnCours(false)
+
+    setMessages((anciens) => [...anciens, {
+      id: Date.now() + 1, auteur: 'yuna', texte: reponseTexte,
+      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    }])
+  }
+
+  // ============================================================
   // CALCULE LE STYLE DE FOND DE LA ZONE MESSAGES
-  // Trois cas possibles : fond personnalisé (image uploadée en
-  // Paramètres), un des presets (dégradés CSS), ou le fond par
-  // défaut (dégradé crème/peony habituel).
   // ============================================================
   const styleFond = (() => {
     if (fondEcran.fondEcranChat === 'personnalise' && fondEcran.fondEcranChatPerso) {
@@ -181,7 +312,7 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
 
         <button
           onClick={nouvelleConversation}
-          className="text-[10.5px] font-medium text-cream bg-espresso px-2.5 md:px-3.5 py-2 rounded-full hover:opacity-90 transition-opacity duration-200 flex items-center gap-1.5 flex-shrink-0"
+          className="text-[10.5px] font-medium text-cream bg-espresso px-2.5 md:px-3.5 py-2 rounded-full hover:opacity-90 active:scale-95 transition-all duration-200 flex items-center gap-1.5 flex-shrink-0"
           title="Démarrer une nouvelle conversation"
         >
           <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -201,10 +332,11 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
 
       {/* FIX SCROLL : min-h-0 + overflow-y-auto + scroll-suave, tous
           les trois nécessaires ensemble pour un scroll fluide et
-          fonctionnel sur mobile/tablette. Le fond suit maintenant le
-          choix de fond d'écran fait dans Paramètres. */}
+          fonctionnel sur mobile/tablette. Le fond suit le choix fait
+          dans Paramètres. Le padding-x s'adapte pour laisser plus
+          d'air sur petit écran sans gaspiller de place. */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto scroll-suave p-4 md:p-6 flex flex-col gap-4"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-suave p-3 sm:p-4 md:p-6 flex flex-col gap-3 sm:gap-4"
         style={styleFond}
       >
         {messages.map((message) => (
@@ -214,57 +346,117 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
         <div ref={basDeListeRef} />
       </div>
 
-      <div className="flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 md:py-4 bg-white border-t border-peony/30 flex-shrink-0">
+      {/* ZONE DE SAISIE
+          - padding-bottom tient compte de la safe-area (encoche /
+            barre gestuelle iOS) pour que rien ne soit coupé.
+          - text-[16px] sur l'input : en dessous de 16px, Safari iOS
+            zoome automatiquement la page au focus, ce qui cassait
+            l'expérience sur téléphone. On revient à une taille plus
+            petite uniquement à partir du breakpoint md (desktop). */}
+      <div
+        className="flex flex-col flex-shrink-0 bg-white border-t border-peony/30"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        {erreurMicro && (
+          <p className="text-[10.5px] text-center text-red-500 pt-2 px-4">
+            Impossible d'accéder au micro. Vérifie les autorisations de l'app.
+          </p>
+        )}
 
-        <div className="hidden sm:flex w-8 h-8 rounded-full bg-espresso items-center justify-center flex-shrink-0">
-          <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4"
-            stroke="var(--color-peony)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-          </svg>
-        </div>
+        {enregistrement ? (
+          // ---------- BARRE D'ENREGISTREMENT ----------
+          <div className="flex items-center gap-2 md:gap-3 px-3 sm:px-4 md:px-6 py-2.5 md:py-4">
+            <button
+              onClick={annulerEnregistrement}
+              className="w-11 h-11 md:w-10 md:h-10 rounded-full bg-peony-light flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform duration-150"
+              title="Annuler l'enregistrement"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-espresso/70" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
 
-        <input
-          ref={inputImageRef}
-          type="file"
-          accept="image/*"
-          onChange={handleEnvoyerImage}
-          style={{ display: 'none' }}
-        />
+            <div className="flex-1 min-w-0 flex items-center gap-2 bg-cream border border-peony/40 rounded-full px-4 py-3 md:py-2.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
+              <span className="text-[13px] text-espresso/70 font-medium tabular-nums">
+                {formaterDuree(dureeEnregistrement)}
+              </span>
+              <span className="text-[11px] text-espresso/45 truncate">Enregistrement en cours...</span>
+            </div>
 
-        <button
-          onClick={() => inputImageRef.current?.click()}
-          className="w-9 h-9 rounded-full bg-peony-light flex items-center justify-center flex-shrink-0 transition-transform duration-200 hover:scale-110"
-          title="Envoyer une image à Yuna"
-        >
-          <IconPaperclip className="w-4 h-4 text-espresso/65" />
-        </button>
+            <button
+              onClick={arreterEtEnvoyerEnregistrement}
+              className="w-11 h-11 md:w-10 md:h-10 rounded-full bg-espresso flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform duration-150"
+              title="Envoyer la note vocale"
+            >
+              <IconSend className="w-4 h-4 text-peony" />
+            </button>
+          </div>
+        ) : (
+          // ---------- BARRE DE SAISIE NORMALE ----------
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 px-3 sm:px-4 md:px-6 py-2.5 md:py-4">
 
-        <input
-          type="text"
-          value={saisie}
-          onChange={(e) => setSaisie(e.target.value)}
-          onKeyDown={gererToucheEntree}
-          onFocus={(e) => {
-            e.target.style.borderColor = 'var(--color-accent)'
-            e.target.style.boxShadow = '0 0 0 4px color-mix(in srgb, var(--color-accent) 15%, transparent)'
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = ''
-            e.target.style.boxShadow = 'none'
-          }}
-          placeholder="Écris à Yuna..."
-          disabled={envoiEnCours}
-          className="flex-1 min-w-0 bg-cream border border-peony/40 rounded-full px-4 py-2.5 text-[12px] text-espresso placeholder:text-espresso/40 outline-none transition-all duration-200 disabled:opacity-50"
-        />
+            <input
+              ref={inputImageRef}
+              type="file"
+              accept="image/*"
+              onChange={handleEnvoyerImage}
+              style={{ display: 'none' }}
+            />
 
-        <button
-          onClick={envoyerMessage}
-          disabled={!saisie.trim() || envoiEnCours}
-          className="w-10 h-10 rounded-full bg-espresso flex items-center justify-center flex-shrink-0 transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:scale-100"
-        >
-          <IconSend className="w-4 h-4 text-peony" />
-        </button>
+            <button
+              onClick={() => inputImageRef.current?.click()}
+              disabled={envoiEnCours}
+              className="w-11 h-11 sm:w-10 sm:h-10 md:w-9 md:h-9 rounded-full bg-peony-light flex items-center justify-center flex-shrink-0 transition-transform duration-200 active:scale-90 disabled:opacity-40"
+              title="Envoyer une image à Yuna"
+            >
+              <IconPaperclip className="w-4 h-4 text-espresso/65" />
+            </button>
+
+            <input
+              type="text"
+              value={saisie}
+              onChange={(e) => setSaisie(e.target.value)}
+              onKeyDown={gererToucheEntree}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--color-accent)'
+                e.target.style.boxShadow = '0 0 0 4px color-mix(in srgb, var(--color-accent) 15%, transparent)'
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = ''
+                e.target.style.boxShadow = 'none'
+              }}
+              placeholder="Écris à Yuna..."
+              disabled={envoiEnCours}
+              className="flex-1 min-w-0 bg-cream border border-peony/40 rounded-full px-4 py-3 md:py-2.5 text-[16px] md:text-[13px] text-espresso placeholder:text-espresso/40 outline-none transition-all duration-200 disabled:opacity-50"
+            />
+
+            {saisie.trim() ? (
+              <button
+                onClick={envoyerMessage}
+                disabled={envoiEnCours}
+                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-espresso flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 disabled:opacity-35 disabled:cursor-not-allowed"
+              >
+                <IconSend className="w-4 h-4 text-peony" />
+              </button>
+            ) : (
+              <button
+                onClick={demarrerEnregistrement}
+                disabled={envoiEnCours}
+                className="w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-espresso flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 disabled:opacity-35 disabled:cursor-not-allowed"
+                title="Enregistrer une note vocale"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="var(--color-peony)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="3" width="6" height="11" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
