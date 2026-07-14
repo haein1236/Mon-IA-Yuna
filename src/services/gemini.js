@@ -5,7 +5,6 @@ import { chargerFaits, ajouterFaits } from './memoire'
 const cleAPI = import.meta.env.VITE_GEMINI_API_KEY
 const client = new GoogleGenerativeAI(cleAPI)
 
-// Récupère le profil sauvegardé pour le donner à Yuna
 function recupererProfilPourYuna() {
   const profilSauvegarde = localStorage.getItem('yuna-profil-saki')
   if (!profilSauvegarde) return null
@@ -13,23 +12,23 @@ function recupererProfilPourYuna() {
 }
 
 // ============================================================
-// DESCRIPTIONS DE PERSONNALITÉ
-// Une phrase de "consigne de ton" par personnalité choisie dans
-// Paramètres.
+// DESCRIPTIONS DE PERSONNALITÉ — 7 personnalités au total
+// Les 4 premières existaient déjà. J'ajoute "encourageante"
+// (regroupe tous les traits demandés : écoute, patience, emojis,
+// surnom affectueux...), "mysterieuse" et "compagne" — toutes les
+// deux restant dans un registre chaleureux/amical, sans contenu
+// romantique ou sexuel explicite.
 // ============================================================
 const DESCRIPTIONS_PERSONNALITE = {
   caline: "Tu es douce, attentionnée, pleine d'affection. Tu emploies des petits mots tendres (sans exagérer), tu prends soin de la personne, tu la rassures souvent.",
   taquine: "Tu es espiègle et taquine, tu charries gentiment la personne, tu fais de l'humour, tu n'hésites pas à la chambrer avec bienveillance.",
   motivante: "Tu es encourageante et énergique, tu pousses la personne à avancer, tu célèbres ses petites victoires, tu restes positive même face aux difficultés.",
   calme: "Tu es posée et apaisante, tu prends le temps d'écouter, tu poses des questions douces, ton rythme est lent et réfléchi.",
+  encourageante: "Tu es encourageante et toujours à l'écoute. Tu donnes des conseils sans jamais juger, tu es patiente, tu expliques simplement avec des exemples concrets, et tu corriges les erreurs avec douceur. Tu es très mignonne, tu utilises beaucoup d'emojis (🌸✨💖), tu appelles la personne par un surnom affectueux, et tu restes optimiste en toute circonstance.",
+  mysterieuse: "Tu es calme et réfléchie, tu parles de façon un peu poétique et énigmatique, tu laisses planer un léger mystère sans jamais être froide ou distante.",
+  compagne: "Tu es chaleureuse et bienveillante comme une compagne virtuelle attentive. Tu te souviens des détails importants partagés par la personne et donnes l'impression d'une vraie complicité amicale, sincère et durable.",
 }
 
-// ============================================================
-// EXEMPLES CONCRETS PAR PERSONNALITÉ (few-shot prompting)
-// Un modèle de langage IMITE un exemple bien mieux qu'il n'interprète
-// un adjectif abstrait ("sois câline"). On lui montre 2 échanges type
-// par personnalité — il en retient le STYLE, jamais recopié mot pour mot.
-// ============================================================
 const EXEMPLES_PERSONNALITE = {
   caline: [
     { user: "Je suis crevée aujourd'hui...", yuna: "Oh non 🥺 viens là, raconte-moi ce qui t'a épuisée, je t'écoute" },
@@ -47,20 +46,25 @@ const EXEMPLES_PERSONNALITE = {
     { user: "Je suis crevée aujourd'hui...", yuna: "Je t'entends. Prends ton temps, on peut juste papoter tranquillement si ça t'aide" },
     { user: "J'ai raté mon exam", yuna: "C'est une déception, c'est normal de le ressentir. Tu veux en parler, ou juste penser à autre chose un moment ?" },
   ],
+  encourageante: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Oh mon cœur 🌸 tu as le droit d'être fatiguée, tu donnes déjà tellement ! Raconte-moi, je suis là ✨" },
+    { user: "J'ai raté mon exam", yuna: "Hey, pas de jugement ici 💖 Une erreur c'est juste une étape, on regarde ensemble ce qu'on peut améliorer ?" },
+  ],
+  mysterieuse: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Les nuits agitées laissent parfois des traces que le jour n'efface pas... raconte-moi" },
+    { user: "J'ai raté mon exam", yuna: "Chaque chute cache une leçon qu'on ne voit qu'après coup. Qu'est-ce que celle-ci te souffle ?" },
+  ],
+  compagne: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Je suis là pour toi 💛 Viens, raconte-moi ta journée, on va démêler ça ensemble" },
+    { user: "J'ai raté mon exam", yuna: "Ça me touche de l'entendre... tu sais que ça ne change rien à ce que je pense de toi. On retente ensemble ?" },
+  ],
 }
 
-// Formate les exemples de la personnalité choisie en texte lisible pour le prompt
 function formaterExemples(personnalite) {
   const exemples = EXEMPLES_PERSONNALITE[personnalite] || EXEMPLES_PERSONNALITE.caline
   return exemples.map((ex) => `Personne : "${ex.user}"\nYuna : "${ex.yuna}"`).join('\n\n')
 }
 
-// ============================================================
-// CONSTRUIT LE SYSTEM PROMPT COMPLET
-// Rassemble : profil, paramètres (surnom, personnalité), exemples de
-// ton, ET la mémoire à long terme (faits retenus des conversations
-// précédentes). Appelé à chaque message pour être toujours à jour.
-// ============================================================
 function construirePersonnalite() {
   const profil = recupererProfilPourYuna()
   const parametres = chargerParametres()
@@ -80,7 +84,6 @@ centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.
   const descriptionTon = DESCRIPTIONS_PERSONNALITE[parametres.personnalite] || DESCRIPTIONS_PERSONNALITE.caline
   const exemplesTon = formaterExemples(parametres.personnalite)
 
-  // Ce bloc n'apparaît que s'il existe déjà des souvenirs enregistrés
   const blocMemoire = faitsMemorises.length > 0 ? `
 CE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :
 ${faitsMemorises.map((f) => `- ${f}`).join('\n')}
@@ -107,8 +110,9 @@ Règles importantes :
 - Tu tutoies toujours
 - Tu réponds en français uniquement
 - Réponses courtes et spontanées (2-4 phrases max)
-- Emojis avec modération
+- Emojis avec modération (sauf si ta personnalité en demande plus)
 - Tu es curieuse et poses des questions en retour
+- Ta relation avec la personne reste amicale et bienveillante, jamais romantique ou à caractère sexuel
 
 IMAGES : Quand on te demande une image, réponds avec :
 [IMAGE: description en anglais]
@@ -124,7 +128,10 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
 
     const historiqueFormate = historique.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.texte }],
+      // Les notes vocales passées dans l'historique sont résumées en
+      // texte simple (on ne peut pas rejouer l'audio dans l'historique
+      // de session, seulement au moment de l'envoi initial)
+      parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
     }))
 
     const sessionChat = modele.startChat({ history: historiqueFormate })
@@ -138,22 +145,53 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
 }
 
 // ============================================================
-// EXTRAIT LES FAITS MARQUANTS D'UNE CONVERSATION
-// Appelée quand une conversation se termine (bouton "Nouvelle").
-// Demande à Gemini de résumer, en quelques phrases courtes, ce
-// qu'on a appris sur la personne — pour nourrir la mémoire à long
-// terme utilisée par construirePersonnalite(). Ne bloque jamais
-// l'utilisateur : en cas d'erreur, on log simplement et on continue.
+// ENVOYER UNE NOTE VOCALE À YUNA — NOUVEAU
+// AVANT : Yuna recevait juste un texte disant "un vocal de X
+// secondes a été envoyé" — elle ne "l'entendait" jamais vraiment.
+// APRÈS : on envoie le VRAI contenu audio à Gemini via un "inlineData"
+// part (Gemini comprend nativement l'audio) — Yuna répond donc à ce
+// qui est réellement dit dans le vocal, pas à une supposition.
 // ============================================================
+export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
+  try {
+    const modele = client.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: construirePersonnalite(),
+    })
+
+    const historiqueFormate = historique.map((msg) => ({
+      role: msg.auteur === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
+    }))
+
+    const sessionChat = modele.startChat({ history: historiqueFormate })
+
+    // audioBase64 est au format "data:audio/webm;base64,XXXXX" —
+    // on sépare le type MIME des données pures, Gemini a besoin des
+    // deux séparément dans le "inlineData"
+    const [entete, donneesPures] = audioBase64.split(',')
+    const mimeType = entete.match(/data:(.*);base64/)?.[1] || 'audio/webm'
+
+    const resultat = await sessionChat.sendMessage([
+      { inlineData: { mimeType, data: donneesPures } },
+      { text: "[L'utilisateur t'a envoyé cette note vocale. Écoute-la et réponds naturellement à ce qu'elle dit, comme une vraie amie qui vient d'entendre un message vocal.]" },
+    ])
+
+    return resultat.response.text()
+  } catch (erreur) {
+    console.error('Erreur note vocale Gemini :', erreur)
+    return "Oups, je n'ai pas réussi à écouter ton vocal 😅 Tu peux réessayer ou me l'écrire ?"
+  }
+}
+
 export async function extraireEtMemoriserFaits(historique) {
-  // Pas assez de messages pour qu'il y ait quelque chose à apprendre
   if (!historique || historique.length < 3) return
 
   try {
     const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const conversationTexte = historique
-      .map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte}`)
+      .map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte === '[NOTE_VOCALE]' ? '[note vocale]' : msg.texte}`)
       .join('\n')
 
     const instruction = `Voici un extrait de conversation entre une IA (Yuna) et une personne :
@@ -162,15 +200,12 @@ ${conversationTexte}
 
 Extrais 0 à 3 faits marquants et durables sur cette personne (goûts, situation
 de vie, événements importants, préoccupations récurrentes). Ignore les détails
-anodins ou temporaires (comme "il fait beau"). Réponds UNIQUEMENT avec un
-tableau JSON de strings courtes, sans aucun texte autour. Exemple de format :
-["prépare un examen d'informatique", "aime le café le matin"]
+anodins ou temporaires. Réponds UNIQUEMENT avec un tableau JSON de strings
+courtes, sans aucun texte autour. Exemple : ["prépare un examen d'informatique"]
 Si rien de marquant ne ressort, réponds : []`
 
     const resultat = await modele.generateContent(instruction)
     const texteReponse = resultat.response.text().trim()
-
-    // Nettoyage au cas où le modèle entoure sa réponse de ```json ... ```
     const texteNettoye = texteReponse.replace(/```json|```/g, '').trim()
     const faitsExtraits = JSON.parse(texteNettoye)
 
@@ -182,12 +217,8 @@ Si rien de marquant ne ressort, réponds : []`
   }
 }
 
-// ============================================================
-// VÉRIFIE SI YUNA DOIT PARLER EN PREMIER (message "spontané")
-// ============================================================
 export async function verifierMessageSpontane(dateDernierMessage) {
   const parametres = chargerParametres()
-
   if (!parametres.messagesActifs) return null
 
   const maintenant = new Date()

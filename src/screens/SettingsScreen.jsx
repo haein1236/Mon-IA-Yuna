@@ -85,10 +85,13 @@ function SectionParametre({ titre, description, children }) {
 }
 
 const PERSONNALITES = [
-  { id: 'caline',    label: 'Câline',    desc: "Douce, attentionnée, pleine d'affection" },
-  { id: 'taquine',   label: 'Taquine',   desc: 'Espiègle, aime charrier gentiment' },
-  { id: 'motivante', label: 'Motivante', desc: 'Encourageante, pousse à avancer' },
-  { id: 'calme',     label: 'Calme',     desc: "Posée, à l'écoute, apaisante" },
+  { id: 'caline',       label: 'Câline',            desc: "Douce, attentionnée, pleine d'affection" },
+  { id: 'taquine',      label: 'Taquine',           desc: 'Espiègle, aime charrier gentiment' },
+  { id: 'motivante',    label: 'Motivante',         desc: 'Encourageante, pousse à avancer' },
+  { id: 'calme',        label: 'Calme',             desc: "Posée, à l'écoute, apaisante" },
+  { id: 'encourageante',label: 'Encourageante',     desc: 'Patiente, mignonne, plein d\'emojis 🌸' },
+  { id: 'mysterieuse',  label: 'Mystérieuse',       desc: 'Calme, réfléchie, poétique' },
+  { id: 'compagne',     label: 'Compagne virtuelle',desc: 'Chaleureuse, se souvient de toi' },
 ]
 
 const VERSION_APP = '1.0.0'

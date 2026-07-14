@@ -3,7 +3,7 @@ import MessageBubble   from '../components/MessageBubble'
 import TypingIndicator from '../components/TypingIndicator'
 import { IconSend, IconPaperclip } from '../components/Icons'
 import AIAvatar from '../components/AIAvatar'
-import { envoyerMessageAYuna, verifierMessageSpontane, extraireEtMemoriserFaits } from '../services/gemini'
+import { envoyerMessageAYuna, envoyerNoteVocaleAYuna, verifierMessageSpontane, extraireEtMemoriserFaits } from '../services/gemini'
 import { sauvegarderConversation, creerNouvelleConversation } from '../services/conversations'
 import { sauvegarderImage, fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
@@ -20,23 +20,17 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
   const [saisie, setSaisie]             = useState('')
   const [yunaEcrit, setYunaEcrit]       = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
+  const [fondEcran, setFondEcran]       = useState(() => chargerParametres())
 
-  // Fond d'écran choisi, lu depuis les paramètres
-  const [fondEcran, setFondEcran] = useState(() => chargerParametres())
-
-  // ============================================================
-  // NOTE VOCALE : état de l'enregistrement en cours
-  // ============================================================
-  const [enregistrement, setEnregistrement]             = useState(false)
-  const [dureeEnregistrement, setDureeEnregistrement]   = useState(0)
-  const [erreurMicro, setErreurMicro]                   = useState(false)
+  const [enregistrement, setEnregistrement]           = useState(false)
+  const [dureeEnregistrement, setDureeEnregistrement] = useState(0)
+  const [erreurMicro, setErreurMicro]                 = useState(false)
 
   const mediaRecorderRef = useRef(null)
   const chunksAudioRef   = useRef([])
   const timerRef         = useRef(null)
-
-  const inputImageRef = useRef(null)
-  const basDeListeRef = useRef(null)
+  const inputImageRef    = useRef(null)
+  const basDeListeRef    = useRef(null)
 
   useEffect(() => {
     basDeListeRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -66,7 +60,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     verifierEtEnvoyerMessageSpontane()
   }, [])
 
-  // Nettoyage : si le composant se démonte pendant un enregistrement
   useEffect(() => {
     return () => {
       clearInterval(timerRef.current)
@@ -153,8 +146,35 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
   }
 
   // ============================================================
-  // NOTES VOCALES
+  // NOUVEAU : MODIFIER UN MESSAGE DÉJÀ ENVOYÉ
+  // On garde tout ce qui précède le message modifié, on remplace ce
+  // message, et on SUPPRIME tout ce qui suivait (l'ancienne réponse
+  // de Yuna n'a plus de sens vu que la question a changé) — exactement
+  // le comportement de WhatsApp ou ChatGPT quand on édite un message.
+  // Puis on redemande une nouvelle réponse à Yuna sur cette base.
   // ============================================================
+  const modifierMessage = async (idMessage, nouveauTexte) => {
+    const index = messages.findIndex((m) => m.id === idMessage)
+    if (index === -1) return
+
+    const messagesAvant = messages.slice(0, index)
+    const messageModifie = { ...messages[index], texte: nouveauTexte, modifie: true }
+    const nouveauxMessages = [...messagesAvant, messageModifie]
+
+    setMessages(nouveauxMessages)
+    setEnvoiEnCours(true)
+    setYunaEcrit(true)
+
+    const reponseTexte = await envoyerMessageAYuna(nouveauxMessages.slice(1), nouveauTexte)
+
+    setYunaEcrit(false)
+    setEnvoiEnCours(false)
+
+    setMessages((anciens) => [...anciens, {
+      id: Date.now(), auteur: 'yuna', texte: reponseTexte,
+      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    }])
+  }
 
   const blobVersBase64 = (blob) => new Promise((resolve, reject) => {
     const lecteur = new FileReader()
@@ -227,7 +247,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     recorder.onstop = async () => {
       stopperFlux(recorder)
 
-      // Ignore les enregistrements trop courts (clic accidentel)
       if (dureeFinale < 1) {
         chunksAudioRef.current = []
         return
@@ -241,6 +260,11 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     if (recorder.state !== 'inactive') recorder.stop()
   }
 
+  // ============================================================
+  // CORRIGÉ : utilise maintenant envoyerNoteVocaleAYuna() qui
+  // transmet le VRAI audio à Gemini, au lieu d'une simple phrase
+  // texte lui disant "un vocal a été envoyé" sans contenu réel.
+  // ============================================================
   const envoyerMessageVocal = async (audioBase64, duree) => {
     const messageVocal = {
       id: Date.now(), auteur: 'user', texte: '[NOTE_VOCALE]',
@@ -253,10 +277,7 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     setEnvoiEnCours(true)
     setYunaEcrit(true)
 
-    const reponseTexte = await envoyerMessageAYuna(
-      nouveauxMessages.slice(1),
-      `[L'utilisateur t'a envoyé une note vocale de ${duree} secondes. Tu ne peux pas l'écouter, alors réagis naturellement comme une pote : demande ce qu'elle raconte, ou dis un truc chaleureux en rapport avec le fait qu'elle t'ait envoyé un vocal.]`
-    )
+    const reponseTexte = await envoyerNoteVocaleAYuna(nouveauxMessages.slice(1), audioBase64)
 
     setYunaEcrit(false)
     setEnvoiEnCours(false)
@@ -267,9 +288,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     }])
   }
 
-  // ============================================================
-  // CALCULE LE STYLE DE FOND DE LA ZONE MESSAGES
-  // ============================================================
   const styleFond = (() => {
     if (fondEcran.fondEcranChat === 'personnalise' && fondEcran.fondEcranChatPerso) {
       return {
@@ -279,9 +297,7 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
       }
     }
     const preset = FONDS_CHAT_DISPONIBLES.find((f) => f.id === fondEcran.fondEcranChat)
-    if (preset?.style) {
-      return { background: preset.style }
-    }
+    if (preset?.style) return { background: preset.style }
     return { background: 'linear-gradient(180deg, var(--color-cream) 0%, color-mix(in srgb, var(--color-cream), var(--color-peony) 8%) 100%)' }
   })()
 
@@ -289,7 +305,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     <div className="h-full min-h-0 flex flex-col bg-cream overflow-hidden">
 
       <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 md:py-4 bg-white border-b border-peony/30 flex-shrink-0" style={{ boxShadow: '0 1px 0 rgba(62,39,35,0.03)' }}>
-
         <div
           className="w-9 h-9 md:w-10 md:h-10 rounded-full border border-peony flex items-center justify-center flex-shrink-0"
           style={{ background: 'color-mix(in srgb, var(--color-peony) 30%, transparent)' }}
@@ -330,29 +345,22 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
         </button>
       </div>
 
-      {/* FIX SCROLL : min-h-0 + overflow-y-auto + scroll-suave, tous
-          les trois nécessaires ensemble pour un scroll fluide et
-          fonctionnel sur mobile/tablette. Le fond suit le choix fait
-          dans Paramètres. Le padding-x s'adapte pour laisser plus
-          d'air sur petit écran sans gaspiller de place. */}
       <div
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-suave p-3 sm:p-4 md:p-6 flex flex-col gap-3 sm:gap-4"
         style={styleFond}
       >
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} onImageGeneree={handleImageGeneree} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onImageGeneree={handleImageGeneree}
+            onModifierMessage={modifierMessage}
+          />
         ))}
         {yunaEcrit && <TypingIndicator />}
         <div ref={basDeListeRef} />
       </div>
 
-      {/* ZONE DE SAISIE
-          - padding-bottom tient compte de la safe-area (encoche /
-            barre gestuelle iOS) pour que rien ne soit coupé.
-          - text-[16px] sur l'input : en dessous de 16px, Safari iOS
-            zoome automatiquement la page au focus, ce qui cassait
-            l'expérience sur téléphone. On revient à une taille plus
-            petite uniquement à partir du breakpoint md (desktop). */}
       <div
         className="flex flex-col flex-shrink-0 bg-white border-t border-peony/30"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
@@ -364,7 +372,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
         )}
 
         {enregistrement ? (
-          // ---------- BARRE D'ENREGISTREMENT ----------
           <div className="flex items-center gap-2 md:gap-3 px-3 sm:px-4 md:px-6 py-2.5 md:py-4">
             <button
               onClick={annulerEnregistrement}
@@ -394,9 +401,7 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
             </button>
           </div>
         ) : (
-          // ---------- BARRE DE SAISIE NORMALE ----------
           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 px-3 sm:px-4 md:px-6 py-2.5 md:py-4">
-
             <input
               ref={inputImageRef}
               type="file"

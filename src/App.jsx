@@ -69,13 +69,14 @@ function App() {
           ============================================================ */}
       <div className="order-1 md:order-2 flex-1 min-h-0 overflow-hidden">
         {ecranActuel === 'accueil'    && <HomeScreen       onChangerEcran={gererChangerEcran} />}
-        {ecranActuel === 'chat'       && (
-          <ChatScreen
-            conversationActive={conversationActive}
-            onChangerEcran={gererChangerEcran}
-            onNouvelleConversation={gererNouvelleConversation}
-          />
-        )}
+{ecranActuel === 'chat' && (
+  <ChatScreen
+    key={conversationActive?.id || 'nouvelle'}
+    conversationActive={conversationActive}
+    onChangerEcran={gererChangerEcran}
+    onNouvelleConversation={gererNouvelleConversation}
+  />
+)}
         {ecranActuel === 'historique' && (
           <HistoriqueScreen
             onChangerEcran={gererChangerEcran}
