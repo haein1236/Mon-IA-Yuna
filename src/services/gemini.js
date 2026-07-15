@@ -324,7 +324,6 @@ export async function verifierMessageSpontane(dateDernierMessage) {
 // ============================================================
 // [1] Le prompt système reste identique, acceptant le résumé chargé depuis la DB
 
-
 // Initialisation sécurisée via les variables d'environnement process.env
 const aiGoogle = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
@@ -368,6 +367,8 @@ TA PERSONNALITÉ ET TON RÔLE : ${personnage.personnalite}`;
 async function genererNouveauResume(ancienResume, nouveauxMessagesACondenser) {
   try {
     const modeleDeResume = aiGoogle.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    
+    // CORRECTION APPLIQUÉE : La ligne est parfaitement alignée et sans saut parasite
     const texteAajouter = nouveauxMessagesACondenser.map(msg => `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'}: ${msg.texte}`).join('\n');
     
     const promptResume = `Analyse ces nouveaux messages de jeu de rôle et intègre-les de manière fluide dans le résumé existant de l'histoire.
@@ -440,7 +441,7 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     historiqueFiltre = historique.slice(12);
   }
 
-  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation);
+  const promptSysteme = construirPersonnagePrompt(personnage, resumeRelation);
 
   // ————— STEP 2 : TENTATIVE STANDARD AVEC GEMINI —————
   try {
