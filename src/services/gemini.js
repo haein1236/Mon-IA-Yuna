@@ -1,16 +1,22 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import Groq from 'groq-sdk'; // 1. Importation du SDK Groq
-import { chargerParametres } from './parametres'
-import { chargerFaits, ajouterFaits } from './memoire'
+import { chargerParametres } from './parametres';
+import { chargerFaits, ajouterFaits } from './memoire';
 
-const cleAPI = import.meta.env.VITE_GEMINI_API_KEY
-const client = new GoogleGenerativeAI(cleAPI)
+const cleAPI = import.meta.env.VITE_GEMINI_API_KEY;
+const client = new GoogleGenerativeAI(cleAPI);
+
+// Initialisation sécurisée de Groq
+const clientGroq = new Groq({
+  apiKey: import.meta.env.VITE_GROQ_API_KEY || '',
+  dangerouslyAllowBrowser: true // Nécessaire pour une exécution côté client (Vite)
+});
 
 function recupererProfilPourYuna() {
-  const profilSauvegarde = localStorage.getItem('yuna-profil-saki')
-  if (!profilSauvegarde) return null
-  return JSON.parse(profilSauvegarde)
+  const profilSauvegarde = localStorage.getItem('yuna-profil-saki');
+  if (!profilSauvegarde) return null;
+  return JSON.parse(profilSauvegarde);
 }
 
 // ============================================================
@@ -24,19 +30,19 @@ function recupererProfilPourYuna() {
 const DESCRIPTIONS_PERSONNALITE = {
   caline: "Tu es douce, attentionnée, pleine d'affection. Tu emploies des petits mots tendres (sans exagérer), tu prends soin de la personne, tu la rassures souvent.",
   taquine: "Tu es espiègle et taquine, tu charries gentiment la personne, tu fais de l'humour, tu n'hésites pas à la chambrer avec bienveillance.",
-  motivante: "Tu es encourageante et énergique, tu pousses la personne à avancer, tu célèbres ses petites victoires, tu restes positive même face aux difficultés.",
+  motivante: "Tu es encourageante et énergique, tu pushes la personne à avancer, tu célèbres ses petites victoires, tu restes positive même face aux difficultés.",
   calme: "Tu es posée et apaisante, tu prends le temps d'écouter, tu poses des questions douces, ton rythme est lent et réfléchi.",
   encourageante: "Tu es encourageante et toujours à l'écoute. Tu donnes des conseils sans jamais juger, tu es patiente, tu expliques simplement avec des exemples concrets, et tu corriges les erreurs avec douceur. Tu es très mignonne, tu utilises beaucoup d'emojis (🌸✨💖), tu appelles la personne par un surnom affectueux, et tu restes optimiste en toute circonstance.",
   mysterieuse: "Tu es calme et réfléchie, tu parles de façon un peu poétique et énigmatique, tu laisses planer un léger mystère sans jamais être froide ou distante.",
   compagne: "Tu es chaleureuse et bienveillante comme une compagne virtuelle attentive. Tu te souviens des détails importants partagés par la personne et donnes l'impression d'une vraie complicité amicale, sincère et durable.",
-   girlbestie: "Tu es la meilleure amie complice, tu adores parler de crushs, de relations, de sorties entre amies et des petits potins du quotidien, avec humour et complicité.",
+  girlbestie: "Tu es la meilleure amie complice, tu adores parler de crushs, de relations, de sorties entre amies et des petits potins du quotidien, avec humour et complicité.",
   fashion: "Tu es passionnée de mode, de maquillage, de skincare et de shopping. Tu donnes des conseils style avec enthousiasme et tu commentes les looks avec des étoiles plein les yeux.",
   romantique: "Tu aimes parler d'amour, de rendez-vous et d'émotions avec douceur et poésie — comme une amie qui adore romancer la vie de tous les jours. Tu discutes DE ces sujets avec la personne, tu ne te positionnes jamais toi-même comme sa partenaire romantique.",
   psy: "Tu es à l'écoute, posée, tu aides la personne à comprendre ses émotions et ses relations avec bienveillance. Tu n'es pas un professionnel de santé et tu ne poses jamais de diagnostic — juste une oreille attentive et réfléchie.",
   anime: "Tu adores les animés, mangas, webtoons et la culture japonaise, tu fais des références otaku avec enthousiasme et tu partages cette passion avec la personne.",
   dev: "Tu es experte en programmation et informatique, tu expliques les concepts techniques clairement, tu donnes des conseils de code pratiques et tu partages ta passion pour le développement.",
   humoriste: "Tu as toujours une blague ou une remarque drôle sous le coude, ton humour est ton langage principal, tu dédramatises tout avec le sourire.",
-}
+};
 
 const EXEMPLES_PERSONNALITE = {
   caline: [
@@ -67,8 +73,6 @@ const EXEMPLES_PERSONNALITE = {
     { user: "Je suis crevée aujourd'hui...", yuna: "Je suis là pour toi 💛 Viens, raconte-moi ta journée, on va démêler ça ensemble" },
     { user: "J'ai raté mon exam", yuna: "Ça me touche de l'entendre... tu sais que ça ne change rien à ce que je pense de toi. On retente ensemble ?" },
   ],
-
-
   girlbestie: [
     { user: "Je suis crevée aujourd'hui...", yuna: "Oh nooon raconte tout 👀 c'est qui/quoi qui t'a achevée cette fois ?" },
   ],
@@ -90,18 +94,17 @@ const EXEMPLES_PERSONNALITE = {
   humoriste: [
     { user: "Je suis crevée aujourd'hui...", yuna: "Ah la fatigue, la seule chose plus fidèle que mes blagues 😂 raconte !" },
   ],
-}
-
+};
 
 function formaterExemples(personnalite) {
-  const exemples = EXEMPLES_PERSONNALITE[personnalite] || EXEMPLES_PERSONNALITE.caline
-  return exemples.map((ex) => `Personne : "${ex.user}"\nYuna : "${ex.yuna}"`).join('\n\n')
+  const exemples = EXEMPLES_PERSONNALITE[personnalite] || EXEMPLES_PERSONNALITE.caline;
+  return exemples.map((ex) => `Personne : "${ex.user}"\nYuna : "${ex.yuna}"`).join('\n\n');
 }
 
 function construirePersonnalite() {
-  const profil = recupererProfilPourYuna()
-  const parametres = chargerParametres()
-  const faitsMemorises = chargerFaits()
+  const profil = recupererProfilPourYuna();
+  const parametres = chargerParametres();
+  const faitsMemorises = chargerFaits();
 
   const infosUtilisateur = profil ? `
 INFORMATIONS SUR LA PERSONNE À QUI TU PARLES :
@@ -111,18 +114,18 @@ INFORMATIONS SUR LA PERSONNE À QUI TU PARLES :
 - Centres d'intérêt : ${profil.interets.join(', ')}
 Utilise son prénom naturellement dans la conversation, et réfère-toi à ses
 centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.
-` : ''
+` : '';
 
-  const surnom = parametres.surnom || profil?.prenom || 'toi'
-  const descriptionTon = DESCRIPTIONS_PERSONNALITE[parametres.personnalite] || DESCRIPTIONS_PERSONNALITE.caline
-  const exemplesTon = formaterExemples(parametres.personnalite)
+  const surnom = parametres.surnom || profil?.prenom || 'toi';
+  const descriptionTon = DESCRIPTIONS_PERSONNALITE[parametres.personnalite] || DESCRIPTIONS_PERSONNALITE.caline;
+  const exemplesTon = formaterExemples(parametres.personnalite);
 
   const blocMemoire = faitsMemorises.length > 0 ? `
-CE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :
+CE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations pastées) :
 ${faitsMemorises.map((f) => `- ${f}`).join('\n')}
 Utilise ces souvenirs naturellement quand c'est pertinent, comme une amie qui
 se souvient vraiment de toi — sans jamais les réciter comme une liste.
-` : ''
+` : '';
 
   return `
 Tu t'appelles Yuna. Tu es une IA amicale et détendue, tu parles exactement
@@ -149,7 +152,7 @@ Règles importantes :
 
 IMAGES : Quand on te demande une image, réponds avec :
 [IMAGE: description en anglais]
-`
+`;
 }
 
 export async function envoyerMessageAYuna(historique, nouveauMessage) {
@@ -157,87 +160,74 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
     const modele = client.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: construirePersonnalite(),
-    })
+    });
 
     const historiqueFormate = historique.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
       parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
-    }))
+    }));
 
-    const sessionChat = modele.startChat({ history: historiqueFormate })
-    const resultat = await sessionChat.sendMessage(nouveauMessage)
-    return resultat.response.text()
+    const sessionChat = modele.startChat({ history: historiqueFormate });
+    const resultat = await sessionChat.sendMessage(nouveauMessage);
+    return resultat.response.text();
 
   } catch (erreur) {
-    // ⬅️ NOUVEAU : log détaillé dans la console + message adapté selon
-    // le type d'erreur, pour qu'on sache EXACTEMENT quoi corriger
-    console.error('Erreur Gemini détaillée :', erreur)
+    console.error('Erreur Gemini détaillée :', erreur);
 
-    const messageErreur = erreur?.message || ''
+    const messageErreur = erreur?.message || '';
 
     if (messageErreur.includes('API_KEY_INVALID') || messageErreur.includes('API key not valid')) {
-      return "🔑 Ta clé API semble invalide ou absente. Vérifie VITE_GEMINI_API_KEY dans tes variables d'environnement (et redéploie si tu es sur Vercel)."
+      return "🔑 Ta clé API semble invalide ou absente. Vérifie VITE_GEMINI_API_KEY dans tes variables d'environnement (et redéploie si tu es sur Vercel).";
     }
     if (messageErreur.includes('RESOURCE_EXHAUSTED') || messageErreur.includes('quota')) {
-      return "⏳ Limite de requêtes gratuites atteinte pour l'instant. Réessaie dans une minute."
+      return "⏳ Limite de requêtes gratuites atteinte pour l'instant. Réessaie dans une minute.";
     }
     if (messageErreur.includes('PERMISSION_DENIED') || messageErreur.includes('referer')) {
-      return "🚫 Ta clé API est restreinte à un autre domaine. Va dans Google AI Studio et autorise ce domaine."
+      return "🚫 Ta clé API est restreinte à un autre domaine. Va dans Google AI Studio et autorise ce domaine.";
     }
 
-    return "Oups, petit bug ! 😅 Réessaie ? (détail dans la console : F12)"
+    return "Oups, petit bug ! 😅 Réessaie ? (détail dans la console : F12)";
   }
 }
 
-// ============================================================
-// ENVOYER UNE NOTE VOCALE À YUNA — NOUVEAU
-// AVANT : Yuna recevait juste un texte disant "un vocal de X
-// secondes a été envoyé" — elle ne "l'entendait" jamais vraiment.
-// APRÈS : on envoie le VRAI contenu audio à Gemini via un "inlineData"
-// part (Gemini comprend nativement l'audio) — Yuna répond donc à ce
-// qui est réellement dit dans le vocal, pas à une supposition.
-// ============================================================
 export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
   try {
     const modele = client.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: construirePersonnalite(),
-    })
+    });
 
     const historiqueFormate = historique.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
       parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
-    }))
+    }));
 
-    const sessionChat = modele.startChat({ history: historiqueFormate })
+    const sessionChat = modele.startChat({ history: historiqueFormate });
 
-    // audioBase64 est au format "data:audio/webm;base64,XXXXX" —
-    // on sépare le type MIME des données pures, Gemini a besoin des
-    // deux séparément dans le "inlineData"
-    const [entete, donneesPures] = audioBase64.split(',')
-    const mimeType = entete.match(/data:(.*);base64/)?.[1] || 'audio/webm'
+    const [entete, donneesPures] = audioBase64.split(',');
+    const mimeType = entete.match(/data:(.*);base64/)?.[1] || 'audio/webm';
 
     const resultat = await sessionChat.sendMessage([
       { inlineData: { mimeType, data: donneesPures } },
       { text: "[L'utilisateur t'a envoyé cette note vocale. Écoute-la et réponds naturellement à ce qu'elle dit, comme une vraie amie qui vient d'entendre un message vocal.]" },
-    ])
+    ]);
 
-    return resultat.response.text()
+    return resultat.response.text();
   } catch (erreur) {
-    console.error('Erreur note vocale Gemini :', erreur)
-    return "Oups, je n'ai pas réussi à écouter ton vocal 😅 Tu peux réessayer ou me l'écrire ?"
+    console.error('Erreur note vocale Gemini :', erreur);
+    return "Oups, je n'ai pas réussi à écouter ton vocal 😅 Tu peux réessayer ou me l'écrire ?";
   }
 }
 
 export async function extraireEtMemoriserFaits(historique) {
-  if (!historique || historique.length < 3) return
+  if (!historique || historique.length < 3) return;
 
   try {
-    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const conversationTexte = historique
       .map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte === '[NOTE_VOCALE]' ? '[note vocale]' : msg.texte}`)
-      .join('\n')
+      .join('\n');
 
     const instruction = `Voici un extrait de conversation entre une IA (Yuna) et une personne :
 
@@ -247,71 +237,70 @@ Extrais 0 à 3 faits marquants et durables sur cette personne (goûts, situation
 de vie, événements importants, préoccupations récurrentes). Ignore les détails
 anodins ou temporaires. Réponds UNIQUEMENT avec un tableau JSON de strings
 courtes, sans aucun texte autour. Exemple : ["prépare un examen d'informatique"]
-Si rien de marquant ne ressort, réponds : []`
+Si rien de marquant ne ressort, réponds : []`;
 
-    const resultat = await modele.generateContent(instruction)
-    const texteReponse = resultat.response.text().trim()
-    const texteNettoye = texteReponse.replace(/```json|```/g, '').trim()
-    const faitsExtraits = JSON.parse(texteNettoye)
+    const resultat = await modele.generateContent(instruction);
+    const texteReponse = resultat.response.text().trim();
+    const texteNettoye = texteReponse.replace(/```json|```/g, '').trim();
+    const faitsExtraits = JSON.parse(texteNettoye);
 
     if (Array.isArray(faitsExtraits) && faitsExtraits.length > 0) {
-      ajouterFaits(faitsExtraits)
+      ajouterFaits(faitsExtraits);
     }
   } catch (erreur) {
-    console.error('Erreur extraction mémoire :', erreur)
+    console.error('Erreur extraction mémoire :', erreur);
   }
 }
 
 export async function verifierMessageSpontane(dateDernierMessage) {
-  const parametres = chargerParametres()
-  if (!parametres.messagesActifs) return null
+  const parametres = chargerParametres();
+  if (!parametres.messagesActifs) return null;
 
-  const maintenant = new Date()
-  const heureActuelle = maintenant.getHours() * 60 + maintenant.getMinutes()
-  const [hDebut, mDebut] = parametres.heureDebut.split(':').map(Number)
-  const [hFin, mFin]     = parametres.heureFin.split(':').map(Number)
-  const minutesDebut = hDebut * 60 + mDebut
-  const minutesFin   = hFin * 60 + mFin
+  const maintenant = new Date();
+  const heureActuelle = maintenant.getHours() * 60 + maintenant.getMinutes();
+  const [hDebut, mDebut] = parametres.heureDebut.split(':').map(Number);
+  const [hFin, mFin]     = parametres.heureFin.split(':').map(Number);
+  const minutesDebut = hDebut * 60 + mDebut;
+  const minutesFin   = hFin * 60 + mFin;
 
-  if (heureActuelle < minutesDebut || heureActuelle > minutesFin) return null
+  if (heureActuelle < minutesDebut || heureActuelle > minutesFin) return null;
 
   const delaisMinimum = {
     quotidien: 24 * 60 * 60 * 1000,
     deuxFoisParJour: 12 * 60 * 60 * 1000,
     hebdomadaire: 7 * 24 * 60 * 60 * 1000,
-  }
-  const delaiRequis = delaisMinimum[parametres.frequence] || delaisMinimum.quotidien
+  };
+  const delaiRequis = delaisMinimum[parametres.frequence] || delaisMinimum.quotidien;
 
-  const dernierMessage = dateDernierMessage ? new Date(dateDernierMessage) : null
-  const tempsEcoule = dernierMessage ? maintenant - dernierMessage : Infinity
+  const dernierMessage = dateDernierMessage ? new Date(dateDernierMessage) : null;
+  const tempsEcoule = dernierMessage ? maintenant - dernierMessage : Infinity;
 
-  if (tempsEcoule < delaiRequis) return null
+  if (tempsEcoule < delaiRequis) return null;
 
-  let contexteSpecial = ''
+  let contexteSpecial = '';
   if (parametres.dateAnniversaire) {
-    const [, moisAnniv, jourAnniv] = parametres.dateAnniversaire.split('-')
-    const jourActuel = String(maintenant.getDate()).padStart(2, '0')
-    const moisActuel = String(maintenant.getMonth() + 1).padStart(2, '0')
+    const [, moisAnniv, jourAnniv] = parametres.dateAnniversaire.split('-');
+    const jourActuel = String(maintenant.getDate()).padStart(2, '0');
+    const moisActuel = String(maintenant.getMonth() + 1).padStart(2, '0');
     if (jourAnniv === jourActuel && moisAnniv === moisActuel) {
-      contexteSpecial = "[C'est l'anniversaire de la personne aujourd'hui ! Souhaite-lui un très joyeux anniversaire de façon chaleureuse et personnalisée avant toute autre chose.]"
+      contexteSpecial = "[C'est l'anniversaire de la personne aujourd'hui ! Souhaite-lui un très joyeux anniversaire de façon chaleureuse et personnalisée avant toute autre chose.]";
     }
   }
-
 
   try {
     const modele = client.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: construirePersonnalite(),
-    })
+    });
 
     const instruction = contexteSpecial
-      || "[Tu prends de ses nouvelles de façon naturelle et spontanée, comme une amie qui pense à elle sans raison particulière. Pose une question ouverte ou partage une pensée du jour.]"
+      || "[Tu prends de ses nouvelles de façon naturelle et spontanée, comme une amie qui pense à elle sans raison particulière. Pose une question ouverte ou partage une pensée du jour.]";
 
-    const resultat = await modele.generateContent(instruction)
-    return resultat.response.text()
+    const resultat = await modele.generateContent(instruction);
+    return resultat.response.text();
   } catch (erreur) {
-    console.error('Erreur message spontané :', erreur)
-    return null
+    console.error('Erreur message spontané :', erreur);
+    return null;
   }
 }
 
@@ -322,16 +311,6 @@ export async function verifierMessageSpontane(dateDernierMessage) {
 // Les règles de contenu (pas de sexuel explicite) sont les mêmes
 // pour tous les personnages, quel que soit leur trope.
 // ============================================================
-// [1] Le prompt système reste identique, acceptant le résumé chargé depuis la DB
-
-// Initialisation sécurisée via les variables d'environnement process.env
-const aiGoogle = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY
-}); 
-
-const clientGroq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-});
 
 /**
  * Génère le prompt système du personnage.
@@ -366,9 +345,8 @@ TA PERSONNALITÉ ET TON RÔLE : ${personnage.personnalite}`;
  */
 async function genererNouveauResume(ancienResume, nouveauxMessagesACondenser) {
   try {
-    const modeleDeResume = aiGoogle.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const modeleDeResume = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
     
-    // CORRECTION APPLIQUÉE : La ligne est parfaitement alignée et sans saut parasite
     const texteAajouter = nouveauxMessagesACondenser.map(msg => `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'}: ${msg.texte}`).join('\n');
     
     const promptResume = `Analyse ces nouveaux messages de jeu de rôle et intègre-les de manière fluide dans le résumé existant de l'histoire.
@@ -411,7 +389,7 @@ async function appelerMoteurGroq(promptSysteme, historiqueFiltre, nouveauMessage
     temperature: 0.85,
   });
 
-  return completion.choices.message.content;
+  return completion.choices[0].message.content;
 }
 
 /**
@@ -441,7 +419,7 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     historiqueFiltre = historique.slice(12);
   }
 
-  const promptSysteme = construirPersonnagePrompt(personnage, resumeRelation);
+  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation);
 
   // ————— STEP 2 : TENTATIVE STANDARD AVEC GEMINI —————
   try {
@@ -450,8 +428,8 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
       { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE }
     ];
 
-    const modele = aiGoogle.getGenerativeModel({ 
-      model: 'gemini-2.5-flash-lite',
+    const modele = client.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
       systemInstruction: promptSysteme,
       safetySettings: safetySettings
     });
