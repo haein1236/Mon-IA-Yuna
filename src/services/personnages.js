@@ -11,15 +11,21 @@ const CLE_CONVERSATIONS_PERSONNAGES = 'yuna-personnages-conversations'
 
 // ============================================================
 // CATÉGORIES DISPONIBLES
-// Utilisées pour les filtres et les badges sur les cartes
+// Utilisées pour les filtres et les badges sur les cartes.
+// Un personnage peut appartenir à PLUSIEURS catégories à la fois
+// (voir le champ `categories` ci-dessous, tableau).
 // ============================================================
 export const CATEGORIES_PERSONNAGES = [
-  { id: 'romance',  label: '🌸 Romance' },
-  { id: 'fantasy',  label: '⚔️ Fantasy' },
-  { id: 'ecole',    label: '🏫 Vie scolaire' },
-  { id: 'enquete',  label: '🕵️ Enquête' },
-  { id: 'comedie',  label: '😂 Comédie' },
-  { id: 'amitie',   label: '☀️ Amitié' },
+  { id: 'romance',   label: '🌸 Romance' },
+  { id: 'drame',     label: '💔 Drame' },
+  { id: 'fantasy',   label: '⚔️ Fantasy' },
+  { id: 'ecole',     label: '🏫 Vie scolaire' },
+  { id: 'enquete',   label: '🕵️ Enquête' },
+  { id: 'comedie',   label: '😂 Comédie' },
+  { id: 'amitie',    label: '☀️ Amitié' },
+  { id: 'possessif', label: '🔥 Possessif' },
+  { id: 'jaloux',    label: '😤 Jaloux' },
+  { id: 'attachant', label: '🥺 Attachant·e' },
 ]
 
 // ============================================================
@@ -30,6 +36,12 @@ export const CATEGORIES_PERSONNAGES = [
 // définir comment le personnage doit se comporter et parler.
 // Contenu pensé pour rester dans un registre romance/dramatique,
 // jamais explicite.
+//
+// Chaque personnage garde son `categorie` d'origine (chaîne, pour
+// compatibilité avec l'existant) ET reçoit maintenant un tableau
+// `categories` qui peut en contenir plusieurs — c'est ce tableau
+// que l'écran Personnages utilise en priorité pour l'affichage et
+// le filtrage multi-catégories.
 // ============================================================
 export const personnagesParDefaut = [
   {
@@ -38,6 +50,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#C4688A',
     categorie: 'romance',
+    categories: ['romance', 'attachant'],
     trope: 'meet-cute',
     tags: ['université', 'doux', 'timide au début'],
     description: "Un étudiant charmant que tu croises littéralement en arrivant dans ta nouvelle université.",
@@ -53,6 +66,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#8B6FA8',
     categorie: 'fantasy',
+    categories: ['fantasy', 'drame'],
     trope: 'destinee',
     tags: ['magie', 'quête', 'mystérieuse'],
     description: "Une guerrière énigmatique qui semble t'attendre depuis longtemps dans un royaume en guerre.",
@@ -68,6 +82,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#4A6B94',
     categorie: 'ecole',
+    categories: ['ecole', 'attachant'],
     trope: 'voisin-de-classe',
     tags: ['lycée', 'froid au début', 'attachant'],
     description: "Ton nouveau voisin de classe, distant en apparence mais qui cache une facette plus douce.",
@@ -83,6 +98,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#2B3D2D',
     categorie: 'enquete',
+    categories: ['enquete', 'drame'],
     trope: 'thriller',
     tags: ['mystère', 'tension', 'nocturne'],
     description: "Une voix mystérieuse au téléphone, à 2h du matin, qui semble en savoir bien trop sur toi.",
@@ -98,6 +114,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#C4917A',
     categorie: 'comedie',
+    categories: ['comedie'],
     trope: 'absurde',
     tags: ['humour', 'absurde', 'léger'],
     description: "Un chat en costume trois pièces, terriblement pointilleux sur les horaires, qui te prépare à dîner.",
@@ -113,6 +130,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#6B8F5E',
     categorie: 'amitie',
+    categories: ['amitie', 'attachant'],
     trope: 'amitie-sincere',
     tags: ['amitié', 'culture', 'chaleureuse'],
     description: "Une nouvelle camarade de classe pétillante, pratiquante et fière de sa culture, qui devient vite une amie précieuse.",
@@ -128,6 +146,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#3E2723',
     categorie: 'romance',
+    categories: ['romance', 'drame', 'possessif', 'jaloux'],
     trope: 'mari-possessif',
     tags: ['mariage arrangé', 'tension', 'dark romance'],
     description: "Un homme d'affaires froid et possessif, que la tradition familiale vient de te destiner en mariage.",
@@ -143,6 +162,7 @@ export const personnagesParDefaut = [
     avatarUrl: null,
     couleur: '#B46A72',
     categorie: 'romance',
+    categories: ['romance', 'drame', 'jaloux'],
     trope: 'ennemis-to-lovers',
     tags: ['rivalité', 'tension', 'ennemis to lovers'],
     description: "Ta plus grande rivale professionnelle, avec qui la tension n'a jamais été seulement de la rivalité.",
@@ -204,7 +224,9 @@ export function togglerFavoriPersonnage(id) {
 // ============================================================
 // CRÉER UN NOUVEAU PERSONNAGE PERSONNALISÉ
 // Génère un objet personnage vide prêt à être rempli par le
-// créateur (formulaire dans PersonnagesScreen.jsx)
+// créateur (formulaire dans PersonnagesScreen.jsx). `categories`
+// est un tableau vide par défaut : l'utilisateur doit choisir au
+// moins une catégorie dans le formulaire.
 // ============================================================
 export function creerPersonnageVide() {
   return {
@@ -212,7 +234,8 @@ export function creerPersonnageVide() {
     nom: '',
     avatarUrl: null,
     couleur: '#C4688A',
-    categorie: 'romance',
+    categorie: '',
+    categories: [],
     trope: '',
     tags: [],
     description: '',
