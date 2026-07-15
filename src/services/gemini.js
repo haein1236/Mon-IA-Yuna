@@ -153,7 +153,7 @@ IMAGES : Quand on te demande une image, réponds avec :
 export async function envoyerMessageAYuna(historique, nouveauMessage) {
   try {
     const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction: construirePersonnalite(),
     })
 
@@ -198,7 +198,7 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
 export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
   try {
     const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction: construirePersonnalite(),
     })
 
@@ -231,7 +231,7 @@ export async function extraireEtMemoriserFaits(historique) {
   if (!historique || historique.length < 3) return
 
   try {
-    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const modele = client.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const conversationTexte = historique
       .map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte === '[NOTE_VOCALE]' ? '[note vocale]' : msg.texte}`)
@@ -297,7 +297,7 @@ export async function verifierMessageSpontane(dateDernierMessage) {
 
   try {
     const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction: construirePersonnalite(),
     })
 
