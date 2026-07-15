@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { SafetySetting, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import Groq from 'groq-sdk'; // 1. Importation du SDK Groq
 import { chargerParametres } from './parametres'
 import { chargerFaits, ajouterFaits } from './memoire'
