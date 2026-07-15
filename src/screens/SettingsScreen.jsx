@@ -85,13 +85,20 @@ function SectionParametre({ titre, description, children }) {
 }
 
 const PERSONNALITES = [
-  { id: 'caline',       label: 'Câline',            desc: "Douce, attentionnée, pleine d'affection" },
-  { id: 'taquine',      label: 'Taquine',           desc: 'Espiègle, aime charrier gentiment' },
-  { id: 'motivante',    label: 'Motivante',         desc: 'Encourageante, pousse à avancer' },
-  { id: 'calme',        label: 'Calme',             desc: "Posée, à l'écoute, apaisante" },
-  { id: 'encourageante',label: 'Encourageante',     desc: 'Patiente, mignonne, plein d\'emojis 🌸' },
-  { id: 'mysterieuse',  label: 'Mystérieuse',       desc: 'Calme, réfléchie, poétique' },
-  { id: 'compagne',     label: 'Compagne virtuelle',desc: 'Chaleureuse, se souvient de toi' },
+  { id: 'caline',        emoji: '🤗', label: 'Câline',            desc: "Douce, pleine d'affection" },
+  { id: 'taquine',       emoji: '😏', label: 'Taquine',           desc: 'Espiègle, charrie gentiment' },
+  { id: 'motivante',     emoji: '💪', label: 'Motivante',         desc: 'Encourageante, pousse à avancer' },
+  { id: 'calme',         emoji: '🌊', label: 'Calme',             desc: "Posée, à l'écoute" },
+  { id: 'encourageante', emoji: '🌸', label: 'Encourageante',     desc: "Patiente, plein d'emojis" },
+  { id: 'mysterieuse',   emoji: '🌙', label: 'Mystérieuse',       desc: 'Calme, poétique' },
+  { id: 'compagne',      emoji: '❤️', label: 'Compagne virtuelle',desc: 'Chaleureuse, se souvient de toi' },
+  { id: 'girlbestie',    emoji: '💖', label: 'Girl Bestie',       desc: 'Crushs, sorties, potins' },
+  { id: 'fashion',       emoji: '✨', label: 'Fashionista',       desc: 'Mode, makeup, skincare' },
+  { id: 'romantique',    emoji: '🌹', label: 'Romantique',        desc: "Amour, rendez-vous, douceur" },
+  { id: 'psy',           emoji: '🧠', label: 'Psychologue',       desc: 'Comprendre émotions et relations' },
+  { id: 'anime',         emoji: '🌸', label: 'Otaku',             desc: 'Animés, mangas, webtoons' },
+  { id: 'dev',           emoji: '💻', label: 'Développeuse',      desc: 'Code et informatique' },
+  { id: 'humoriste',     emoji: '😂', label: 'Humoriste',         desc: 'Toujours une blague prête' },
 ]
 
 const VERSION_APP = '1.0.0'
@@ -223,20 +230,40 @@ function SettingsScreen({ onChangerEcran }) {
             </div>
           </SectionParametre>
 
-          <SectionParametre titre="Personnalité de Yuna" description="Le ton qu'elle utilisera dans vos échanges">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {PERSONNALITES.map((p) => {
-                const estActif = parametres.personnalite === p.id
-                return (
-                  <button key={p.id} onClick={() => mettreAJourParametres({ personnalite: p.id })}
-                    className={`text-left rounded-xl p-3 border transition-all duration-200 ${estActif ? 'bg-espresso border-espresso' : 'bg-[#F0EEEB] border-espresso/12 hover:border-espresso/30'}`}>
-                    <p className={`text-[12px] font-semibold ${estActif ? 'text-peony' : 'text-espresso'}`}>{p.label}</p>
-                    <p className={`text-[9.5px] mt-0.5 ${estActif ? 'text-peony/70' : 'text-espresso/45'}`}>{p.desc}</p>
-                  </button>
-                )
-              })}
-            </div>
-          </SectionParametre>
+<SectionParametre titre="Personnalité de Yuna" description="Le ton qu'elle utilisera dans vos échanges">
+  {/* ============================================================
+      NOUVEAU DESIGN : cartes compactes avec emoji visible en grand,
+      responsive (2 colonnes mobile, 3 dès sm:, 4 dès lg: pour ne
+      pas avoir une liste interminable sur grand écran). L'emoji sert
+      de repère visuel rapide, comme des "stickers" de personnalité.
+      ============================================================ */}
+  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+    {PERSONNALITES.map((p) => {
+      const estActif = parametres.personnalite === p.id
+      return (
+        <button
+          key={p.id}
+          onClick={() => mettreAJourParametres({ personnalite: p.id })}
+          className={`text-left rounded-xl p-2.5 border transition-all duration-200 flex items-start gap-2 ${
+            estActif
+              ? 'bg-espresso border-espresso'
+              : 'bg-[#F0EEEB] border-espresso/12 hover:border-espresso/30 hover:-translate-y-0.5'
+          }`}
+        >
+          <span className="text-[18px] leading-none flex-shrink-0 mt-0.5">{p.emoji}</span>
+          <div className="min-w-0">
+            <p className={`text-[11.5px] font-semibold truncate ${estActif ? 'text-peony' : 'text-espresso'}`}>
+              {p.label}
+            </p>
+            <p className={`text-[9px] mt-0.5 leading-snug ${estActif ? 'text-peony/70' : 'text-espresso/45'}`}>
+              {p.desc}
+            </p>
+          </div>
+        </button>
+      )
+    })}
+  </div>
+</SectionParametre>
 
           {/* ===== NOUVELLE SECTION : FOND D'ÉCRAN DU CHAT ===== */}
           <SectionParametre titre="Fond d'écran du Chat" description="Personnalise l'arrière-plan de tes conversations">

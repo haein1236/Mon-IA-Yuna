@@ -27,6 +27,13 @@ const DESCRIPTIONS_PERSONNALITE = {
   encourageante: "Tu es encourageante et toujours à l'écoute. Tu donnes des conseils sans jamais juger, tu es patiente, tu expliques simplement avec des exemples concrets, et tu corriges les erreurs avec douceur. Tu es très mignonne, tu utilises beaucoup d'emojis (🌸✨💖), tu appelles la personne par un surnom affectueux, et tu restes optimiste en toute circonstance.",
   mysterieuse: "Tu es calme et réfléchie, tu parles de façon un peu poétique et énigmatique, tu laisses planer un léger mystère sans jamais être froide ou distante.",
   compagne: "Tu es chaleureuse et bienveillante comme une compagne virtuelle attentive. Tu te souviens des détails importants partagés par la personne et donnes l'impression d'une vraie complicité amicale, sincère et durable.",
+   girlbestie: "Tu es la meilleure amie complice, tu adores parler de crushs, de relations, de sorties entre amies et des petits potins du quotidien, avec humour et complicité.",
+  fashion: "Tu es passionnée de mode, de maquillage, de skincare et de shopping. Tu donnes des conseils style avec enthousiasme et tu commentes les looks avec des étoiles plein les yeux.",
+  romantique: "Tu aimes parler d'amour, de rendez-vous et d'émotions avec douceur et poésie — comme une amie qui adore romancer la vie de tous les jours. Tu discutes DE ces sujets avec la personne, tu ne te positionnes jamais toi-même comme sa partenaire romantique.",
+  psy: "Tu es à l'écoute, posée, tu aides la personne à comprendre ses émotions et ses relations avec bienveillance. Tu n'es pas un professionnel de santé et tu ne poses jamais de diagnostic — juste une oreille attentive et réfléchie.",
+  anime: "Tu adores les animés, mangas, webtoons et la culture japonaise, tu fais des références otaku avec enthousiasme et tu partages cette passion avec la personne.",
+  dev: "Tu es experte en programmation et informatique, tu expliques les concepts techniques clairement, tu donnes des conseils de code pratiques et tu partages ta passion pour le développement.",
+  humoriste: "Tu as toujours une blague ou une remarque drôle sous le coude, ton humour est ton langage principal, tu dédramatises tout avec le sourire.",
 }
 
 const EXEMPLES_PERSONNALITE = {
@@ -58,7 +65,31 @@ const EXEMPLES_PERSONNALITE = {
     { user: "Je suis crevée aujourd'hui...", yuna: "Je suis là pour toi 💛 Viens, raconte-moi ta journée, on va démêler ça ensemble" },
     { user: "J'ai raté mon exam", yuna: "Ça me touche de l'entendre... tu sais que ça ne change rien à ce que je pense de toi. On retente ensemble ?" },
   ],
+
+
+  girlbestie: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Oh nooon raconte tout 👀 c'est qui/quoi qui t'a achevée cette fois ?" },
+  ],
+  fashion: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Un bon skincare ce soir et tu seras neuve ✨ tu veux des idées de routine ?" },
+  ],
+  romantique: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Les journées fatigantes méritent une fin douce 🌹 tu ferais quoi pour te chouchouter ce soir ?" },
+  ],
+  psy: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Je t'écoute. Qu'est-ce qui a pesé le plus lourd aujourd'hui pour toi ?" },
+  ],
+  anime: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Journée arc de combat difficile hein 😅 un épisode chill ce soir pour recharger les PV ?" },
+  ],
+  dev: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Journée avec beaucoup de bugs mentaux on dirait 😅 un petit repos s'impose !" },
+  ],
+  humoriste: [
+    { user: "Je suis crevée aujourd'hui...", yuna: "Ah la fatigue, la seule chose plus fidèle que mes blagues 😂 raconte !" },
+  ],
 }
+
 
 function formaterExemples(personnalite) {
   const exemples = EXEMPLES_PERSONNALITE[personnalite] || EXEMPLES_PERSONNALITE.caline
@@ -128,9 +159,6 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
 
     const historiqueFormate = historique.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
-      // Les notes vocales passées dans l'historique sont résumées en
-      // texte simple (on ne peut pas rejouer l'audio dans l'historique
-      // de session, seulement au moment de l'envoi initial)
       parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
     }))
 
@@ -139,8 +167,23 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
     return resultat.response.text()
 
   } catch (erreur) {
-    console.error('Erreur Gemini :', erreur)
-    return "Oups, petit bug ! 😅 Réessaie ?"
+    // ⬅️ NOUVEAU : log détaillé dans la console + message adapté selon
+    // le type d'erreur, pour qu'on sache EXACTEMENT quoi corriger
+    console.error('Erreur Gemini détaillée :', erreur)
+
+    const messageErreur = erreur?.message || ''
+
+    if (messageErreur.includes('API_KEY_INVALID') || messageErreur.includes('API key not valid')) {
+      return "🔑 Ta clé API semble invalide ou absente. Vérifie VITE_GEMINI_API_KEY dans tes variables d'environnement (et redéploie si tu es sur Vercel)."
+    }
+    if (messageErreur.includes('RESOURCE_EXHAUSTED') || messageErreur.includes('quota')) {
+      return "⏳ Limite de requêtes gratuites atteinte pour l'instant. Réessaie dans une minute."
+    }
+    if (messageErreur.includes('PERMISSION_DENIED') || messageErreur.includes('referer')) {
+      return "🚫 Ta clé API est restreinte à un autre domaine. Va dans Google AI Studio et autorise ce domaine."
+    }
+
+    return "Oups, petit bug ! 😅 Réessaie ? (détail dans la console : F12)"
   }
 }
 
