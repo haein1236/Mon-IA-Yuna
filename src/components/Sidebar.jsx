@@ -4,6 +4,7 @@ function Sidebar({ ecranActuel, onChangerEcran }) {
 
   const onglets = [
     { id: 'chat',       Icone: IconChat    },
+    { id: 'personnages', Icone: IconPersonnages },
     { id: 'historique', Icone: IconClock   },
     { id: 'galerie',    Icone: IconGallery },
     { id: 'profil',     Icone: IconProfile },

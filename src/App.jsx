@@ -6,6 +6,7 @@ import HistoriqueScreen from './screens/HistoriqueScreen'
 import GalleryScreen    from './screens/GalleryScreen'
 import ProfileScreen    from './screens/ProfileScreen'
 import SettingsScreen   from './screens/SettingsScreen'
+import PersonnagesScreen from './screens/PersonnagesScreen'
 import Sidebar          from './components/Sidebar'
 import { creerNouvelleConversation } from './services/conversations'
 import { useHauteurEcran } from './hooks/useHauteurEcran'
@@ -83,7 +84,8 @@ function App() {
             onOuvrirConversation={ouvrirConversation}
           />
         )}
-        {ecranActuel === 'galerie'    && <GalleryScreen />}
+        {ecranActuel === 'galerie'    && <GalleryScreen />} 
+        {ecranActuel === 'personnages' && <PersonnagesScreen />}
         {ecranActuel === 'profil'     && <ProfileScreen onChangerEcran={gererChangerEcran} />}
         {ecranActuel === 'parametres' && <SettingsScreen onChangerEcran={gererChangerEcran} />}
       </div>

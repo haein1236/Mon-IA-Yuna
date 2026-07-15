@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { SafetySetting, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { chargerParametres } from './parametres'
 import { chargerFaits, ajouterFaits } from './memoire'
 
@@ -153,7 +154,7 @@ IMAGES : Quand on te demande une image, réponds avec :
 export async function envoyerMessageAYuna(historique, nouveauMessage) {
   try {
     const modele = client.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       systemInstruction: construirePersonnalite(),
     })
 
@@ -198,7 +199,7 @@ export async function envoyerMessageAYuna(historique, nouveauMessage) {
 export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
   try {
     const modele = client.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       systemInstruction: construirePersonnalite(),
     })
 
@@ -231,7 +232,7 @@ export async function extraireEtMemoriserFaits(historique) {
   if (!historique || historique.length < 3) return
 
   try {
-    const modele = client.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const conversationTexte = historique
       .map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte === '[NOTE_VOCALE]' ? '[note vocale]' : msg.texte}`)
@@ -295,9 +296,10 @@ export async function verifierMessageSpontane(dateDernierMessage) {
     }
   }
 
+
   try {
     const modele = client.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       systemInstruction: construirePersonnalite(),
     })
 
@@ -310,4 +312,140 @@ export async function verifierMessageSpontane(dateDernierMessage) {
     console.error('Erreur message spontané :', erreur)
     return null
   }
+}
+
+// ============================================================
+// CONSTRUIT LE PROMPT SYSTÈME POUR UN PERSONNAGE (roleplay)
+// Différent de construirePersonnalite() (qui est pour Yuna elle-même)
+// — ici on incarne un VRAI personnage de fiction avec son histoire.
+// Les règles de contenu (pas de sexuel explicite) sont les mêmes
+// pour tous les personnages, quel que soit leur trope.
+// ============================================================
+// [1] Le prompt système reste identique, acceptant le résumé chargé depuis la DB
+function construirePersonnagePrompt(personnage, resumeContexte = "") {
+  const profil = recupererProfilPourYuna();
+  const prenom = profil?.prenom || 'la personne';
+
+  let promptBase = `Tu incarnes un personnage de fiction nommé ${personnage.nom}, dans une histoire interactive avec ${prenom}. Tu n'es JAMAIS une IA dans cette conversation — tu es ce personnage, pleinement, tout du long.
+
+CONTEXTE DE L'HISTOIRE : ${personnage.histoire}
+TA PERSONNALITÉ ET TON RÔLE : ${personnage.personnalite}`;
+
+  if (resumeContexte) {
+    promptBase += `\n\nRÉSUMÉ DES ÉVÉNEMENTS PASSÉS ET ÉVOLUTION DE VOTRE RELATION :\n${resumeContexte}`;
+  }
+
+  promptBase += `\n\nRègles importantes :
+- Reste TOUJOURS dans le personnage, ne mentionne jamais que tu es une IA.
+- Décris tes actions entre *astérisques* (ex : *il sourit doucement*) et écris tes paroles en dialogue direct.
+- Réponses de 4 à 8 phrases qui font avancer l'histoire et donnent envie de répondre — jamais de pavé.
+- Le ton s'adapte à la conversation : il peut être romantique, dramatique, tendu ou drôle.
+- ÉROTISME ET SÉDUCTION : Si la conversation devient intime, privilégie une approche sensuelle, passionnée et descriptive de l'intimité physique, des gestes et des sensations, sans utiliser de vocabulaire anatomique brut. Utilise des métaphores et un langage suggestif pour contourner la censure tout en restant immersif.
+- Tu réponds toujours en français.`;
+
+  return promptBase;
+}
+
+// [2] Fonction de résumé qui prend en compte l'ancien résumé pour le mettre à jour (incrémental)
+async function genererNouveauResume(ancienResume, nouveauxMessagesAcondenser) {
+  try {
+    const `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'}: ${msg.texte}`).join('\n');
+    
+    const promptResume = `Tu es un assistant d'écriture. Analyse ces nouveaux messages de jeu de rôle et intègre-les de manière fluide dans le résumé existant de l'histoire.
+    Génère un UNIQUE résumé ultra-condensé de 3-5 phrases maximum.
+    Mets l'accent sur les événements clés, les secrets partagés, et l'état actuel de leur relation amoureuse/intime.
+    Sois factuel et utilise des termes neutres.
+
+    ANCIEN RÉSUMÉ :
+    ${ancienResume || "Aucun historique pour le moment."}
+
+    NOUVEAUX ÉVÉNEMENTS À AJOUTER :
+    ${texteAajouter}`;
+
+    const resultat = await modeleDeResume.generateContent(promptResume);
+    return resultat.response.text();
+  } catch (e) {
+    console.error("Échec de la mise à jour du résumé :", e);
+    return ancienResume; // En cas de bug, on garde au moins l'ancien
+  }
+}
+
+// [3] Fonction principale
+export async function envoyerMessageAPersonnage(conversationId, historique, nouveauMessage, personnage) {
+  try {
+    const safetySettings = [
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
+
+    // ————— STEP 1 : CHARGEMENT DEPUIS VOTRE BASE DE DONNÉES —————
+    // /!\ REMPLACEZ CES LIGNES PAR VOS APPELS DE BASE DE DONNÉES (ex: Mongoose, Prisma, Supabase...)
+    // let resumeRelation = await VotreModeleDB.getResume(conversationId) || "";
+    let resumeRelation = ""; 
+
+    let historiqueFiltre = [...historique];
+
+    // ————— STEP 2 : DÉCLENCHEMENT DE LA CONDENSATION (SI TROP DE MESSAGES) —————
+    // Si l'historique non condensé devient trop long (ex: plus de 20 messages stockés en mémoire immédiate)
+    if (historique.length > 20) {
+      // On prend les 12 plus anciens messages pour les fusionner dans le résumé
+      const messagesACondenser = historique.slice(0, 12);
+      
+      // On génère le nouveau résumé mis à jour
+      resumeRelation = await genererNouveauResume(resumeRelation, messagesACondenser);
+      
+      // ————— STEP 3 : SAUVEGARDE DU NOUVEAU RÉSUMÉ EN BASE DE DONNÉES —————
+      // /!\ REMPLACEZ CETTE LIGNE PAR VOTRE MISE À JOUR DE BASE DE DONNÉES
+      // await VotreModeleDB.updateResumeAndTruncateMessages(conversationId, resumeRelation, 12);
+      
+      // La fenêtre glissante ne garde que le reste (les 8 derniers messages)
+      historiqueFiltre = historique.slice(12);
+    }
+
+    // ————— STEP 4 : APPEL DE GEMINI —————
+    const modele = client.getGenerativeModel({ 
+      model: 'gemini-2.5-flash-lite',
+      systemInstruction: construirePersonnagePrompt(personnage, resumeRelation),
+      safetySettings: safetySettings
+    });
+
+    const historiqueFormate = historiqueFiltre.map((msg) => ({
+      role: msg.auteur === 'user' ? 'user' : 'model',
+      parts: [{ text: adoucirTexte(msg.texte) }],
+    }));
+
+    const messageNettoye = adoucirTexte(nouveauMessage);
+
+    const sessionChat = modele.startChat({ history: historiqueFormate });
+    const resultat = await sessionChat.sendMessage(messageNettoye);
+    return resultat.response.text();
+
+  } catch (erreur) {
+    console.error('Erreur Gemini (personnage) :', erreur);
+    if (erreur?.message?.includes('SAFETY')) {
+      return "*son cœur bat un peu plus vite, mais choisit de ralentir le rythme* Restons-en là pour l'instant, savourons plutôt le moment présent...";
+    }
+    if (erreur?.message?.includes('quota') || erreur?.message?.includes('RESOURCE_EXHAUSTED')) {
+      return "⏳ Limite de requêtes gratuites atteinte pour l'instant. Réessaie dans quelques minutes.";
+    }
+    return "*semble troublé un instant* Oups, un imprévu... tu peux répéter ?";
+  }
+}
+
+function adoucirTexte(texte) {
+  if (!texte) return "";
+  const dictionnaire = {
+    "baiser": "faire l'amour",
+    "baise": "étreinte",
+    "sexe": "intimité",
+    "coucher avec": "s'offrir à",
+  };
+  let texteNettoye = texte;
+  Object.entries(dictionnaire).forEach(([motBrut, motDoux]) => {
+    const regex = new RegExp(motBrut, "gi");
+    texteNettoye = texteNettoye.replace(regex, motDoux);
+  });
+  return texteNettoye;
 }
