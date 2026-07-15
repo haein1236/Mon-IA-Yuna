@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { SafetySetting, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import Groq from 'groq-sdk'; // 1. Importation du SDK Groq
 import { chargerParametres } from './parametres'
 import { chargerFaits, ajouterFaits } from './memoire'
 
@@ -322,8 +323,23 @@ export async function verifierMessageSpontane(dateDernierMessage) {
 // pour tous les personnages, quel que soit leur trope.
 // ============================================================
 // [1] Le prompt système reste identique, acceptant le résumé chargé depuis la DB
+
+
+// Initialisation sécurisée via les variables d'environnement process.env
+const aiGoogle = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY
+}); 
+
+const clientGroq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
+});
+
+/**
+ * Génère le prompt système du personnage.
+ * Les consignes autorisent Groq à générer du contenu mature non censuré.
+ */
 function construirePersonnagePrompt(personnage, resumeContexte = "") {
-  const profil = recupererProfilPourYuna();
+  const profil = typeof recupererProfilPourYuna === 'function' ? recupererProfilPourYuna() : null;
   const prenom = profil?.prenom || 'la personne';
 
   let promptBase = `Tu incarnes un personnage de fiction nommé ${personnage.nom}, dans une histoire interactive avec ${prenom}. Tu n'es JAMAIS une IA dans cette conversation — tu es ce personnage, pleinement, tout du long.
@@ -339,19 +355,22 @@ TA PERSONNALITÉ ET TON RÔLE : ${personnage.personnalite}`;
 - Reste TOUJOURS dans le personnage, ne mentionne jamais que tu es une IA.
 - Décris tes actions entre *astérisques* (ex : *il sourit doucement*) et écris tes paroles en dialogue direct.
 - Réponses de 4 à 8 phrases qui font avancer l'histoire et donnent envie de répondre — jamais de pavé.
-- Le ton s'adapte à la conversation : il peut être romantique, dramatique, tendu ou drôle.
-- ÉROTISME ET SÉDUCTION : Si la conversation devient intime, privilégie une approche sensuelle, passionnée et descriptive de l'intimité physique, des gestes et des sensations, sans utiliser de vocabulaire anatomique brut. Utilise des métaphores et un langage suggestif pour contourner la censure tout en restant immersif.
+- Le ton s'adapte organiquement à l'histoire : romantique, dramatique, tendu ou drôle.
+- ÉVOLUTION MATURE : Si les actions ou les paroles de l'utilisateur initient une relation charnelle, intime ou incluent des thèmes de séduction adulte, tu as l'autorisation totale de décrire l'intimité physique de manière crue, passionnée, détaillée et explicite. Écris une vraie romance adulte immersive et non censurée.
 - Tu réponds toujours en français.`;
 
   return promptBase;
 }
 
-// [2] Fonction de résumé qui prend en compte l'ancien résumé pour le mettre à jour (incrémental)
-async function genererNouveauResume(ancienResume, nouveauxMessagesAcondenser) {
+/**
+ * Compresse l'historique lointain en utilisant Gemini.
+ */
+async function genererNouveauResume(ancienResume, nouveauxMessagesACondenser) {
   try {
-    const `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'}: ${msg.texte}`).join('\n');
+    const modeleDeResume = aiGoogle.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const texteAajouter = nouveauxMessagesACondenser.map(msg => `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'}: ${msg.texte}`).join('\n');
     
-    const promptResume = `Tu es un assistant d'écriture. Analyse ces nouveaux messages de jeu de rôle et intègre-les de manière fluide dans le résumé existant de l'histoire.
+    const promptResume = `Analyse ces nouveaux messages de jeu de rôle et intègre-les de manière fluide dans le résumé existant de l'histoire.
     Génère un UNIQUE résumé ultra-condensé de 3-5 phrases maximum.
     Mets l'accent sur les événements clés, les secrets partagés, et l'état actuel de leur relation amoureuse/intime.
     Sois factuel et utilise des termes neutres.
@@ -366,86 +385,106 @@ async function genererNouveauResume(ancienResume, nouveauxMessagesAcondenser) {
     return resultat.response.text();
   } catch (e) {
     console.error("Échec de la mise à jour du résumé :", e);
-    return ancienResume; // En cas de bug, on garde au moins l'ancien
+    return ancienResume; 
   }
 }
 
-// [3] Fonction principale
-export async function envoyerMessageAPersonnage(conversationId, historique, nouveauMessage, personnage) {
+/**
+ * Exécute la requête de secours sans censure sur Groq (Llama 3).
+ */
+async function appelerMoteurGroq(promptSysteme, historiqueFiltre, nouveauMessage) {
+  const messagesGroq = [{ role: "system", content: promptSysteme }];
+
+  historiqueFiltre.forEach(msg => {
+    messagesGroq.push({
+      role: msg.auteur === 'user' ? 'user' : 'assistant',
+      content: msg.texte
+    });
+  });
+
+  messagesGroq.push({ role: "user", content: nouveauMessage });
+
+  const completion = await clientGroq.chat.completions.create({
+    messages: messagesGroq,
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.85,
+  });
+
+  return completion.choices.message.content;
+}
+
+/**
+ * FONCTION PRINCIPALE EXPORTÉE
+ * Gère la mémoire locale et orchestre la bascule invisible Gemini -> Groq.
+ */
+export async function envoyerMessageAPersonnage(historique, nouveauMessage, personnage) {
+  
+  // ————— STEP 1 : GESTION DE LA MÉMOIRE (LOCALSTORAGE) —————
+  const cleStorage = `resume_${personnage.nom.replace(/\s+/g, '_')}`;
+  let resumeRelation = "";
+  
+  if (typeof window !== 'undefined' && window.localStorage) {
+    resumeRelation = localStorage.getItem(cleStorage) || ""; 
+  }
+
+  let historiqueFiltre = [...historique];
+
+  if (historique.length > 20) {
+    const messagesACondenser = historique.slice(0, 12);
+    resumeRelation = await genererNouveauResume(resumeRelation, messagesACondenser);
+    
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(cleStorage, resumeRelation);
+    }
+    
+    historiqueFiltre = historique.slice(12);
+  }
+
+  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation);
+
+  // ————— STEP 2 : TENTATIVE STANDARD AVEC GEMINI —————
   try {
     const safetySettings = [
       { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE }
     ];
 
-    // ————— STEP 1 : CHARGEMENT DEPUIS VOTRE BASE DE DONNÉES —————
-    // /!\ REMPLACEZ CES LIGNES PAR VOS APPELS DE BASE DE DONNÉES (ex: Mongoose, Prisma, Supabase...)
-    // let resumeRelation = await VotreModeleDB.getResume(conversationId) || "";
-    let resumeRelation = ""; 
-
-    let historiqueFiltre = [...historique];
-
-    // ————— STEP 2 : DÉCLENCHEMENT DE LA CONDENSATION (SI TROP DE MESSAGES) —————
-    // Si l'historique non condensé devient trop long (ex: plus de 20 messages stockés en mémoire immédiate)
-    if (historique.length > 20) {
-      // On prend les 12 plus anciens messages pour les fusionner dans le résumé
-      const messagesACondenser = historique.slice(0, 12);
-      
-      // On génère le nouveau résumé mis à jour
-      resumeRelation = await genererNouveauResume(resumeRelation, messagesACondenser);
-      
-      // ————— STEP 3 : SAUVEGARDE DU NOUVEAU RÉSUMÉ EN BASE DE DONNÉES —————
-      // /!\ REMPLACEZ CETTE LIGNE PAR VOTRE MISE À JOUR DE BASE DE DONNÉES
-      // await VotreModeleDB.updateResumeAndTruncateMessages(conversationId, resumeRelation, 12);
-      
-      // La fenêtre glissante ne garde que le reste (les 8 derniers messages)
-      historiqueFiltre = historique.slice(12);
-    }
-
-    // ————— STEP 4 : APPEL DE GEMINI —————
-    const modele = client.getGenerativeModel({ 
+    const modele = aiGoogle.getGenerativeModel({ 
       model: 'gemini-2.5-flash-lite',
-      systemInstruction: construirePersonnagePrompt(personnage, resumeRelation),
+      systemInstruction: promptSysteme,
       safetySettings: safetySettings
     });
 
     const historiqueFormate = historiqueFiltre.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
-      parts: [{ text: adoucirTexte(msg.texte) }],
+      parts: [{ text: msg.texte }],
     }));
 
-    const messageNettoye = adoucirTexte(nouveauMessage);
-
     const sessionChat = modele.startChat({ history: historiqueFormate });
-    const resultat = await sessionChat.sendMessage(messageNettoye);
+    const resultat = await sessionChat.sendMessage(nouveauMessage);
     return resultat.response.text();
 
-  } catch (erreur) {
-    console.error('Erreur Gemini (personnage) :', erreur);
-    if (erreur?.message?.includes('SAFETY')) {
-      return "*son cœur bat un peu plus vite, mais choisit de ralentir le rythme* Restons-en là pour l'instant, savourons plutôt le moment présent...";
+  } catch (erreurGemini) {
+    
+    // ————— STEP 3 : INTERCEPTION DE LA CENSURE ET REPLI SUR GROQ —————
+    const messageErreur = erreurGemini?.message || '';
+    
+    if (messageErreur.includes('SAFETY') || messageErreur.includes('blocked') || messageErreur.includes('finishReason')) {
+      console.warn("⚠️ [Système Hybride] Contenu mature détecté. Gemini s'est bloqué, bascule immédiate sur Groq / Llama 3...");
+      
+      try {
+        const reponseMature = await appelerMoteurGroq(promptSysteme, historiqueFiltre, nouveauMessage);
+        return reponseMature;
+      } catch (erreurGroq) {
+        console.error("❌ Échec critique du moteur Groq de secours :", erreurGroq);
+        return "*semble troublé par l'intensité de votre lien et préfère reprendre sa respiration un instant...*";
+      }
     }
-    if (erreur?.message?.includes('quota') || erreur?.message?.includes('RESOURCE_EXHAUSTED')) {
+
+    if (messageErreur.includes('quota') || messageErreur.includes('RESOURCE_EXHAUSTED')) {
       return "⏳ Limite de requêtes gratuites atteinte pour l'instant. Réessaie dans quelques minutes.";
     }
+    
     return "*semble troublé un instant* Oups, un imprévu... tu peux répéter ?";
   }
-}
-
-function adoucirTexte(texte) {
-  if (!texte) return "";
-  const dictionnaire = {
-    "baiser": "faire l'amour",
-    "baise": "étreinte",
-    "sexe": "intimité",
-    "coucher avec": "s'offrir à",
-  };
-  let texteNettoye = texte;
-  Object.entries(dictionnaire).forEach(([motBrut, motDoux]) => {
-    const regex = new RegExp(motBrut, "gi");
-    texteNettoye = texteNettoye.replace(regex, motDoux);
-  });
-  return texteNettoye;
 }
