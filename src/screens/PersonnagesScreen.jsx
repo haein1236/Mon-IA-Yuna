@@ -81,6 +81,17 @@ const IconEtoiles = (props) => (
     <path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5l2 2M15.5 15.5l2 2M17.5 6.5l-2 2M8.5 15.5l-2 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
   </svg>
 )
+const IconCrayon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M12 20h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M16.5 3.5a1.9 1.9 0 0 1 2.7 2.7L7 18.4l-3.6.8.8-3.6L16.5 3.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+  </svg>
+)
+const IconCheck = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <polyline points="20 6 9 17 4 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 
 // ============================================================
 // EMOJIS RAPIDES pour la conversation
@@ -88,12 +99,29 @@ const IconEtoiles = (props) => (
 const EMOJIS_RAPIDES = ['😊', '😂', '❤️', '😍', '🥰', '😉', '😘', '😅', '😭', '😢', '😮', '🤔', '🔥', '✨', '👍', '💕']
 
 // ============================================================
+// HELPER : un personnage peut avoir soit `categories` (tableau,
+// nouveau format), soit `categorie` (chaîne, ancien format déjà
+// enregistré). Cette fonction renvoie toujours un tableau, pour que
+// le reste du composant n'ait jamais à se soucier du format d'origine.
+// ============================================================
+function obtenirCategories(personnage) {
+  if (!personnage) return []
+  if (Array.isArray(personnage.categories) && personnage.categories.length) return personnage.categories
+  if (personnage.categorie) return [personnage.categorie]
+  return []
+}
+
+function libelleCategorie(id) {
+  return CATEGORIES_PERSONNAGES.find((c) => c.id === id)?.label || id
+}
+
+// ============================================================
 // PETIT COMPOSANT : avatar de personnage (initiale + couleur si
 // pas d'image uploadée), avec bouton discret pour changer la photo
 // ============================================================
 function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModifier }) {
   return (
-    <div className="relative flex-shrink-0 group/avatar" style={{ width: taille, height: taille }}>
+    <div className="relative flex-shrink-0" style={{ width: taille, height: taille }}>
       {personnage.avatarUrl ? (
         <img
           src={personnage.avatarUrl}
@@ -122,10 +150,32 @@ function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModif
   )
 }
 
+// ============================================================
+// PETIT COMPOSANT : bandeau du haut d'une carte personnage.
+// Si le personnage a une photo, la photo devient le vrai visuel
+// de la carte (comme une couverture de profil), avec un léger
+// dégradé de la couleur du personnage par-dessus pour la lisibilité
+// des boutons. Sans photo, on retombe sur le dégradé de couleur pleine.
+// ============================================================
+function BandeauCarte({ personnage, children }) {
+  return (
+    <div className="h-16 relative flex items-end p-3 overflow-hidden" style={!personnage.avatarUrl ? { background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 20%))` } : undefined}>
+      {personnage.avatarUrl && (
+        <>
+          <img src={personnage.avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${personnage.couleur}10 0%, ${personnage.couleur}95 115%)` }} />
+        </>
+      )}
+      <div className="relative z-10 w-full h-full flex items-end">{children}</div>
+    </div>
+  )
+}
+
 function PersonnagesScreen() {
 
   const [personnages, setPersonnages] = useState([])
-  const [categorieFiltre, setCategorieFiltre] = useState('tout')
+  // Filtre de catégories multi-sélection : tableau vide = "Tous"
+  const [categoriesFiltre, setCategoriesFiltre] = useState([])
   const [recherche, setRecherche] = useState('')
 
   // Personnage actuellement ouvert en conversation (null = vue grille)
@@ -139,9 +189,10 @@ function PersonnagesScreen() {
   const [photoEnAttente, setPhotoEnAttente] = useState(null)
   const [emojiPickerOuvert, setEmojiPickerOuvert] = useState(false)
 
-  // Créateur de personnage
+  // Créateur / éditeur de personnage (même formulaire pour les deux)
   const [afficherCreateur, setAfficherCreateur] = useState(false)
   const [personnageEnEdition, setPersonnageEnEdition] = useState(null)
+  const [modeEdition, setModeEdition] = useState(false) // true = on modifie un personnage existant
 
   const basDeListeRef = useRef(null)
   const inputAvatarRef = useRef(null)
@@ -158,13 +209,21 @@ function PersonnagesScreen() {
     basDeListeRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, enTrainDecrire])
 
-  // ===== FILTRAGE =====
+  // ===== FILTRAGE (recherche + catégories multiples) =====
   const personnagesFiltres = personnages.filter((p) => {
-    const correspondCategorie = categorieFiltre === 'tout' || p.categorie === categorieFiltre
+    const categoriesDuPersonnage = obtenirCategories(p)
+    const correspondCategorie = categoriesFiltre.length === 0 ||
+      categoriesDuPersonnage.some((c) => categoriesFiltre.includes(c))
     const correspondRecherche = p.nom.toLowerCase().includes(recherche.toLowerCase()) ||
       p.tags.some((t) => t.toLowerCase().includes(recherche.toLowerCase()))
     return correspondCategorie && correspondRecherche
   })
+
+  const toggleFiltreCategorie = (id) => {
+    setCategoriesFiltre((actuelles) =>
+      actuelles.includes(id) ? actuelles.filter((c) => c !== id) : [...actuelles, id]
+    )
+  }
 
   // ===== OUVRIR UNE CONVERSATION AVEC UN PERSONNAGE =====
   const ouvrirPersonnage = (personnage) => {
@@ -331,14 +390,34 @@ function PersonnagesScreen() {
     setMessages(messagesReset)
   }
 
-  // ===== CRÉATEUR DE PERSONNAGE =====
+  // ===== CRÉATEUR / ÉDITEUR DE PERSONNAGE =====
   const ouvrirCreateur = (personnageAModifier = null) => {
-    setPersonnageEnEdition(personnageAModifier || creerPersonnageVide())
+    const base = personnageAModifier || creerPersonnageVide()
+    // On normalise toujours vers un tableau `categories`, même si le
+    // personnage venait de l'ancien format à catégorie unique.
+    setPersonnageEnEdition({ ...base, categories: obtenirCategories(base) })
+    setModeEdition(!!personnageAModifier)
     setAfficherCreateur(true)
+  }
+
+  const fermerCreateur = () => {
+    setAfficherCreateur(false)
+    setPersonnageEnEdition(null)
+    setModeEdition(false)
   }
 
   const modifierChampCreation = (champ, valeur) => {
     setPersonnageEnEdition((ancien) => ({ ...ancien, [champ]: valeur }))
+  }
+
+  const toggleCategorieEdition = (id) => {
+    setPersonnageEnEdition((ancien) => {
+      const actuelles = ancien.categories || []
+      const nouvelles = actuelles.includes(id)
+        ? actuelles.filter((c) => c !== id)
+        : [...actuelles, id]
+      return { ...ancien, categories: nouvelles }
+    })
   }
 
   const gererUploadAvatar = async (e) => {
@@ -349,14 +428,25 @@ function PersonnagesScreen() {
   }
 
   const validerCreation = () => {
-    if (!personnageEnEdition.nom.trim() || !personnageEnEdition.sceneOuverture.trim()) {
-      alert('Le nom et la scène d\'ouverture sont obligatoires.')
+    const categoriesChoisies = personnageEnEdition.categories || []
+    if (!personnageEnEdition.nom.trim() || !personnageEnEdition.sceneOuverture.trim() || categoriesChoisies.length === 0) {
+      alert('Le nom, au moins une catégorie et la scène d\'ouverture sont obligatoires.')
       return
     }
-    const personnagesMaj = sauvegarderPersonnage(personnageEnEdition)
+    // On enregistre à la fois `categories` (tableau, nouveau format) et
+    // `categorie` (première catégorie choisie) pour rester compatible
+    // avec le reste de l'app qui pourrait encore lire le champ singulier.
+    const personnageAEnregistrer = {
+      ...personnageEnEdition,
+      categories: categoriesChoisies,
+      categorie: categoriesChoisies[0],
+    }
+    const personnagesMaj = sauvegarderPersonnage(personnageAEnregistrer)
     setPersonnages(personnagesMaj)
-    setAfficherCreateur(false)
-    setPersonnageEnEdition(null)
+    if (personnageActif?.id === personnageAEnregistrer.id) {
+      setPersonnageActif(personnageAEnregistrer)
+    }
+    fermerCreateur()
   }
 
   const supprimerPersonnageActuel = (e, personnage) => {
@@ -401,6 +491,14 @@ function PersonnagesScreen() {
             <p className="text-[13px] font-semibold text-espresso truncate">{personnageActif.nom}</p>
             <p className="text-[9.5px] text-espresso/45 truncate">{personnageActif.description}</p>
           </div>
+
+          <button
+            onClick={() => ouvrirCreateur(personnageActif)}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0"
+            title="Modifier ce personnage"
+          >
+            <IconCrayon style={{ width: '14px', height: '14px' }} className="text-espresso/50" />
+          </button>
 
           <button
             onClick={recommencerHistoire}
@@ -580,7 +678,9 @@ function PersonnagesScreen() {
             <h1 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '24px' }}>
               Personnages
             </h1>
-            <p className="text-[10.5px] text-espresso/45 mt-0.5">Discute, crée, vis des histoires</p>
+            <p className="text-[10.5px] text-espresso/45 mt-0.5">
+              {personnages.length} personnage{personnages.length > 1 ? 's' : ''} — discute, crée, vis des histoires
+            </p>
           </div>
 
           <button
@@ -601,39 +701,52 @@ function PersonnagesScreen() {
           className="w-full bg-white border border-espresso/10 rounded-full px-4 py-2.5 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus:border-espresso/30 transition-colors duration-200 mb-4"
         />
 
-        {/* Filtres catégories — scroll horizontal sur mobile si ça déborde */}
+        {/* Filtres catégories — sélection MULTIPLE : on peut cocher
+            plusieurs catégories en même temps, "Tous" les décoche toutes */}
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 scroll-suave" style={{ scrollbarWidth: 'none' }}>
           <button
-            onClick={() => setCategorieFiltre('tout')}
+            onClick={() => setCategoriesFiltre([])}
             className="flex-shrink-0 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200"
             style={{
-              background: categorieFiltre === 'tout' ? 'var(--color-espresso)' : 'white',
-              color: categorieFiltre === 'tout' ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)',
-              border: categorieFiltre === 'tout' ? 'none' : '1px solid rgba(62,39,35,0.1)',
+              background: categoriesFiltre.length === 0 ? 'var(--color-espresso)' : 'white',
+              color: categoriesFiltre.length === 0 ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)',
+              border: categoriesFiltre.length === 0 ? 'none' : '1px solid rgba(62,39,35,0.1)',
             }}
           >
             Tous
           </button>
-          {CATEGORIES_PERSONNAGES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setCategorieFiltre(cat.id)}
-              className="flex-shrink-0 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200"
-              style={{
-                background: categorieFiltre === cat.id ? 'var(--color-espresso)' : 'white',
-                color: categorieFiltre === cat.id ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)',
-                border: categorieFiltre === cat.id ? 'none' : '1px solid rgba(62,39,35,0.1)',
-              }}
-            >
-              {cat.label}
-            </button>
-          ))}
+          {CATEGORIES_PERSONNAGES.map((cat) => {
+            const actif = categoriesFiltre.includes(cat.id)
+            return (
+              <button
+                key={cat.id}
+                onClick={() => toggleFiltreCategorie(cat.id)}
+                className="flex-shrink-0 flex items-center gap-1 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200"
+                style={{
+                  background: actif ? 'var(--color-espresso)' : 'white',
+                  color: actif ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)',
+                  border: actif ? 'none' : '1px solid rgba(62,39,35,0.1)',
+                }}
+              >
+                {actif && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                {cat.label}
+              </button>
+            )
+          })}
         </div>
 
         {personnagesFiltres.length === 0 && (
-          <p className="text-center text-espresso/40 italic py-16 text-[12px]">
-            Aucun personnage ne correspond à ta recherche
-          </p>
+          <div className="text-center py-16">
+            <p className="text-espresso/40 italic text-[12px] mb-3">
+              {personnages.length === 0 ? "Tu n'as encore aucun personnage" : "Aucun personnage ne correspond à ta recherche"}
+            </p>
+            <button
+              onClick={() => ouvrirCreateur()}
+              className="text-[11px] font-semibold text-espresso underline underline-offset-2 hover:text-espresso/70"
+            >
+              Créer ton premier personnage
+            </button>
+          </div>
         )}
 
         {/* ============================================================
@@ -642,89 +755,137 @@ function PersonnagesScreen() {
             les très grands écrans
             ============================================================ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pb-8">
-          {personnagesFiltres.map((personnage) => (
-            <div
-              key={personnage.id}
-              onClick={() => ouvrirPersonnage(personnage)}
-              className="group bg-white rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 border border-espresso/8"
-              style={{ boxShadow: '0 4px 14px rgba(62,39,35,0.06)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 10px 24px ${personnage.couleur}30`)}
-              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 4px 14px rgba(62,39,35,0.06)')}
-            >
-              {/* Bandeau coloré du haut, propre à chaque personnage */}
+          {personnagesFiltres.map((personnage) => {
+            const categoriesDuPersonnage = obtenirCategories(personnage)
+            return (
               <div
-                className="h-16 relative flex items-end p-3"
-                style={{ background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 20%))` }}
+                key={personnage.id}
+                onClick={() => ouvrirPersonnage(personnage)}
+                className="group bg-white rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 border border-espresso/8"
+                style={{ boxShadow: '0 4px 14px rgba(62,39,35,0.06)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 10px 24px ${personnage.couleur}30`)}
+                onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 4px 14px rgba(62,39,35,0.06)')}
               >
-                <button
-                  onClick={(e) => toggleFavori(e, personnage.id)}
-                  className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center bg-black/15 hover:bg-black/25 transition-colors duration-200"
-                >
-                  <IconCoeur style={{ width: '13px', height: '13px' }} fill={personnage.favori ? '#fff' : 'none'} stroke="#fff" strokeWidth="2" />
-                </button>
-
-                {personnage.origine === 'perso' && (
+                {/* Bandeau du haut : photo du personnage si dispo (comme une
+                    couverture de profil), sinon dégradé de sa couleur */}
+                <BandeauCarte personnage={personnage}>
                   <button
-                    onClick={(e) => supprimerPersonnageActuel(e, personnage)}
-                    className="absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center bg-black/15 hover:bg-black/25 transition-colors duration-200"
+                    onClick={(e) => toggleFavori(e, personnage.id)}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200"
                   >
-                    <IconTrash style={{ width: '12px', height: '12px' }} className="text-white" />
+                    <IconCoeur style={{ width: '13px', height: '13px' }} fill={personnage.favori ? '#fff' : 'none'} stroke="#fff" strokeWidth="2" />
                   </button>
-                )}
-              </div>
 
-              <div className="p-4 -mt-8 relative">
-                <AvatarPersonnage
-                  personnage={personnage}
-                  taille={56}
-                  modifiable
-                  onModifier={() => demanderChangementPhoto(personnage)}
-                />
+                  {personnage.origine === 'perso' && (
+                    <div className="absolute top-2 left-2 flex gap-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); ouvrirCreateur(personnage) }}
+                        className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200"
+                        title="Modifier"
+                      >
+                        <IconCrayon style={{ width: '11px', height: '11px' }} className="text-white" />
+                      </button>
+                      <button
+                        onClick={(e) => supprimerPersonnageActuel(e, personnage)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200"
+                        title="Supprimer"
+                      >
+                        <IconTrash style={{ width: '12px', height: '12px' }} className="text-white" />
+                      </button>
+                    </div>
+                  )}
+                </BandeauCarte>
 
-                <p className="font-semibold text-espresso mt-2.5 text-[14px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                  {personnage.nom}
-                </p>
+                <div className="p-4 -mt-8 relative">
+                  <AvatarPersonnage
+                    personnage={personnage}
+                    taille={56}
+                    modifiable
+                    onModifier={() => demanderChangementPhoto(personnage)}
+                  />
 
-                <span
-                  className="inline-block text-[8.5px] font-medium px-2 py-0.5 rounded-full mt-1"
-                  style={{ background: `${personnage.couleur}18`, color: personnage.couleur }}
-                >
-                  {CATEGORIES_PERSONNAGES.find((c) => c.id === personnage.categorie)?.label || personnage.categorie}
-                </span>
+                  <p className="font-semibold text-espresso mt-2.5 text-[14px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                    {personnage.nom}
+                  </p>
 
-                <p className="text-[10.5px] text-espresso/55 mt-2 leading-relaxed line-clamp-2">
-                  {personnage.description}
-                </p>
+                  {/* Toutes les catégories du personnage, plus une seule */}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {categoriesDuPersonnage.map((catId) => (
+                      <span
+                        key={catId}
+                        className="inline-block text-[8.5px] font-medium px-2 py-0.5 rounded-full"
+                        style={{ background: `${personnage.couleur}18`, color: personnage.couleur }}
+                      >
+                        {libelleCategorie(catId)}
+                      </span>
+                    ))}
+                  </div>
 
-                <div className="flex flex-wrap gap-1 mt-2.5">
-                  {personnage.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} className="text-[8px] text-espresso/40 bg-[#F0EEEB] px-1.5 py-0.5 rounded-full">
-                      #{tag}
-                    </span>
-                  ))}
+                  <p className="text-[10.5px] text-espresso/55 mt-2 leading-relaxed line-clamp-2">
+                    {personnage.description}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1 mt-2.5">
+                    {personnage.tags.slice(0, 3).map((tag) => (
+                      <span key={tag} className="text-[8px] text-espresso/40 bg-[#F0EEEB] px-1.5 py-0.5 rounded-full">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
       {/* ============================================================
-          CRÉATEUR DE PERSONNAGE — formulaire complet en plein écran
+          CRÉATEUR / ÉDITEUR DE PERSONNAGE — même formulaire pour
+          créer un nouveau personnage ou modifier un existant
           ============================================================ */}
       {afficherCreateur && personnageEnEdition && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-espresso/60" onClick={() => setAfficherCreateur(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-espresso/60" onClick={fermerCreateur}>
           <div
             className="bg-white rounded-3xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto scroll-suave p-5 md:p-7"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '20px' }}>
-                Créer un personnage
+                {modeEdition ? 'Modifier le personnage' : 'Créer un personnage'}
               </h2>
-              <button onClick={() => setAfficherCreateur(false)} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200">
+              <button onClick={fermerCreateur} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200">
                 <IconCroix style={{ width: '16px', height: '16px' }} className="text-espresso/50" />
               </button>
+            </div>
+
+            {/* Aperçu en direct de la carte, mis à jour à chaque frappe */}
+            <div className="mb-6">
+              <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1.5">Aperçu de la carte</p>
+              <div className="w-full max-w-[200px] bg-white rounded-2xl overflow-hidden border border-espresso/10" style={{ boxShadow: '0 4px 14px rgba(62,39,35,0.08)' }}>
+                <BandeauCarte personnage={personnageEnEdition}>
+                  <span />
+                </BandeauCarte>
+                <div className="p-3 -mt-7 relative">
+                  <AvatarPersonnage personnage={personnageEnEdition} taille={44} />
+                  <p className="font-semibold text-espresso mt-2 text-[12.5px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                    {personnageEnEdition.nom || 'Nom du personnage'}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(personnageEnEdition.categories || []).length === 0 && (
+                      <span className="text-[8px] text-espresso/30 italic">Aucune catégorie choisie</span>
+                    )}
+                    {(personnageEnEdition.categories || []).map((catId) => (
+                      <span
+                        key={catId}
+                        className="text-[8px] font-medium px-1.5 py-0.5 rounded-full"
+                        style={{ background: `${personnageEnEdition.couleur}18`, color: personnageEnEdition.couleur }}
+                      >
+                        {libelleCategorie(catId)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Avatar */}
@@ -738,6 +899,7 @@ function PersonnagesScreen() {
                 >
                   Choisir une image
                 </button>
+                <p className="text-[9px] text-espresso/35 mt-1">Cette photo remplace la couleur sur la carte</p>
               </div>
             </div>
 
@@ -763,17 +925,28 @@ function PersonnagesScreen() {
               </div>
             </div>
 
+            {/* Catégories — sélection MULTIPLE via des puces à cocher */}
             <div className="mb-3">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Catégorie</label>
-              <select
-                value={personnageEnEdition.categorie}
-                onChange={(e) => modifierChampCreation('categorie', e.target.value)}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso"
-              >
-                {CATEGORIES_PERSONNAGES.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-              </select>
+              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Catégories * (tu peux en choisir plusieurs)</label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {CATEGORIES_PERSONNAGES.map((cat) => {
+                  const choisie = (personnageEnEdition.categories || []).includes(cat.id)
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => toggleCategorieEdition(cat.id)}
+                      className="flex items-center gap-1 rounded-full text-[11px] font-medium px-3 py-1.5 transition-all duration-200 border"
+                      style={choisie
+                        ? { background: 'var(--color-espresso)', color: 'var(--color-peony)', borderColor: 'var(--color-espresso)' }
+                        : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}
+                    >
+                      {choisie && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                      {cat.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             <div className="mb-3">
@@ -824,7 +997,7 @@ function PersonnagesScreen() {
               onClick={validerCreation}
               className="w-full rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
             >
-              Créer le personnage
+              {modeEdition ? 'Enregistrer les modifications' : 'Créer le personnage'}
             </button>
           </div>
         </div>
