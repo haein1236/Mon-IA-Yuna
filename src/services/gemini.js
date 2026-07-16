@@ -437,4 +437,3 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
   }
 }
 
-```
