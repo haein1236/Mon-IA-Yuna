@@ -32,6 +32,10 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
   const inputImageRef    = useRef(null)
   const basDeListeRef    = useRef(null)
 
+  // ⬅️ NOUVEAU : compte le nombre de messages déjà pris en compte pour
+  // la mémoire, pour savoir quand redéclencher une extraction
+  const dernierIndexMemoriseRef = useRef(0)
+
   useEffect(() => {
     basDeListeRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, yunaEcrit])
@@ -69,8 +73,23 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
 
   const handleImageGeneree = (image) => sauvegarderImage(image)
 
+  // ============================================================
+  // NOUVEAU : mémoire périodique — appelée après chaque échange,
+  // se déclenche seulement si au moins 6 nouveaux messages sont
+  // apparus depuis la dernière extraction (évite de spammer l'API
+  // à chaque message, tout en garantissant que la mémoire se
+  // construise même si l'utilisateur ne clique jamais "Nouvelle").
+  // ============================================================
+  const memoriserSiNecessaire = (messagesActuels) => {
+    if (messagesActuels.length - dernierIndexMemoriseRef.current >= 6) {
+      extraireEtMemoriserFaits(messagesActuels.slice(1))
+      dernierIndexMemoriseRef.current = messagesActuels.length
+    }
+  }
+
   const nouvelleConversation = () => {
     extraireEtMemoriserFaits(messages)
+    dernierIndexMemoriseRef.current = 0
     const conv = creerNouvelleConversation()
     if (onNouvelleConversation) onNouvelleConversation(conv)
     setMessages([{
@@ -104,10 +123,12 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     setYunaEcrit(false)
     setEnvoiEnCours(false)
 
-    setMessages((anciens) => [...anciens, {
+    const messagesFinaux = [...nouveauxMessages, {
       id: Date.now() + 1, auteur: 'yuna', texte: reponseTexte,
       heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    }])
+    }]
+    setMessages(messagesFinaux)
+    memoriserSiNecessaire(messagesFinaux)
 
     e.target.value = ''
   }
@@ -132,10 +153,12 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     setYunaEcrit(false)
     setEnvoiEnCours(false)
 
-    setMessages((anciens) => [...anciens, {
+    const messagesFinaux = [...nouveauxMessages, {
       id: Date.now() + 1, auteur: 'yuna', texte: reponseTexte,
       heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    }])
+    }]
+    setMessages(messagesFinaux)
+    memoriserSiNecessaire(messagesFinaux)
   }
 
   const gererToucheEntree = (e) => {
@@ -145,14 +168,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     }
   }
 
-  // ============================================================
-  // NOUVEAU : MODIFIER UN MESSAGE DÉJÀ ENVOYÉ
-  // On garde tout ce qui précède le message modifié, on remplace ce
-  // message, et on SUPPRIME tout ce qui suivait (l'ancienne réponse
-  // de Yuna n'a plus de sens vu que la question a changé) — exactement
-  // le comportement de WhatsApp ou ChatGPT quand on édite un message.
-  // Puis on redemande une nouvelle réponse à Yuna sur cette base.
-  // ============================================================
   const modifierMessage = async (idMessage, nouveauTexte) => {
     const index = messages.findIndex((m) => m.id === idMessage)
     if (index === -1) return
@@ -170,10 +185,11 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     setYunaEcrit(false)
     setEnvoiEnCours(false)
 
-    setMessages((anciens) => [...anciens, {
+    const messagesFinaux = [...nouveauxMessages, {
       id: Date.now(), auteur: 'yuna', texte: reponseTexte,
       heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    }])
+    }]
+    setMessages(messagesFinaux)
   }
 
   const blobVersBase64 = (blob) => new Promise((resolve, reject) => {
@@ -246,12 +262,10 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
 
     recorder.onstop = async () => {
       stopperFlux(recorder)
-
       if (dureeFinale < 1) {
         chunksAudioRef.current = []
         return
       }
-
       const blobAudio = new Blob(chunksAudioRef.current, { type: recorder.mimeType || 'audio/webm' })
       const audioBase64 = await blobVersBase64(blobAudio)
       await envoyerMessageVocal(audioBase64, dureeFinale)
@@ -260,11 +274,6 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     if (recorder.state !== 'inactive') recorder.stop()
   }
 
-  // ============================================================
-  // CORRIGÉ : utilise maintenant envoyerNoteVocaleAYuna() qui
-  // transmet le VRAI audio à Gemini, au lieu d'une simple phrase
-  // texte lui disant "un vocal a été envoyé" sans contenu réel.
-  // ============================================================
   const envoyerMessageVocal = async (audioBase64, duree) => {
     const messageVocal = {
       id: Date.now(), auteur: 'user', texte: '[NOTE_VOCALE]',
@@ -282,10 +291,12 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     setYunaEcrit(false)
     setEnvoiEnCours(false)
 
-    setMessages((anciens) => [...anciens, {
+    const messagesFinaux = [...nouveauxMessages, {
       id: Date.now() + 1, auteur: 'yuna', texte: reponseTexte,
       heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    }])
+    }]
+    setMessages(messagesFinaux)
+    memoriserSiNecessaire(messagesFinaux)
   }
 
   const styleFond = (() => {

@@ -12,9 +12,10 @@ import {
 } from '../services/personnages'
 import { envoyerMessageAPersonnage } from '../services/gemini'
 import { fichierVersBase64 } from '../services/images'
+import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
 
 // ============================================================
-// ICÔNES LOCALES
+// ICÔNES LOCALES (inchangées)
 // ============================================================
 const IconCroix = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
@@ -92,18 +93,23 @@ const IconCheck = (props) => (
     <polyline points="20 6 9 17 4 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
+const IconPalette = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-0.9 2-2 0-0.5-0.2-1-0.5-1.4-0.3-0.3-0.5-0.8-0.5-1.3 0-1.1 0.9-2 2-2h2.3A4.2 4.2 0 0 0 21 10.2C21 6.2 16.9 3 12 3z" stroke="currentColor" strokeWidth="1.6" />
+    <circle cx="7.5" cy="10.5" r="1.2" fill="currentColor" />
+    <circle cx="12" cy="7.5" r="1.2" fill="currentColor" />
+    <circle cx="16" cy="10" r="1.2" fill="currentColor" />
+  </svg>
+)
 
-// ============================================================
-// EMOJIS RAPIDES pour la conversation
-// ============================================================
 const EMOJIS_RAPIDES = ['😊', '😂', '❤️', '😍', '🥰', '😉', '😘', '😅', '😭', '😢', '😮', '🤔', '🔥', '✨', '👍', '💕']
 
-// ============================================================
-// HELPER : un personnage peut avoir soit `categories` (tableau,
-// nouveau format), soit `categorie` (chaîne, ancien format déjà
-// enregistré). Cette fonction renvoie toujours un tableau, pour que
-// le reste du composant n'ait jamais à se soucier du format d'origine.
-// ============================================================
+// ⬅️ NOUVEAU : détecte si l'appareil est tactile (mobile/tablette).
+// "pointer: coarse" = le pointeur principal est un doigt, pas une souris.
+const estAppareilTactile =
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
+
 function obtenirCategories(personnage) {
   if (!personnage) return []
   if (Array.isArray(personnage.categories) && personnage.categories.length) return personnage.categories
@@ -115,10 +121,6 @@ function libelleCategorie(id) {
   return CATEGORIES_PERSONNAGES.find((c) => c.id === id)?.label || id
 }
 
-// ============================================================
-// PETIT COMPOSANT : avatar de personnage (initiale + couleur si
-// pas d'image uploadée), avec bouton discret pour changer la photo
-// ============================================================
 function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModifier }) {
   return (
     <div className="relative flex-shrink-0" style={{ width: taille, height: taille }}>
@@ -150,13 +152,6 @@ function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModif
   )
 }
 
-// ============================================================
-// PETIT COMPOSANT : bandeau du haut d'une carte personnage.
-// Si le personnage a une photo, la photo devient le vrai visuel
-// de la carte (comme une couverture de profil), avec un léger
-// dégradé de la couleur du personnage par-dessus pour la lisibilité
-// des boutons. Sans photo, on retombe sur le dégradé de couleur pleine.
-// ============================================================
 function BandeauCarte({ personnage, children }) {
   return (
     <div className="h-16 relative flex items-end p-3 overflow-hidden" style={!personnage.avatarUrl ? { background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 20%))` } : undefined}>
@@ -174,25 +169,25 @@ function BandeauCarte({ personnage, children }) {
 function PersonnagesScreen() {
 
   const [personnages, setPersonnages] = useState([])
-  // Filtre de catégories multi-sélection : tableau vide = "Tous"
   const [categoriesFiltre, setCategoriesFiltre] = useState([])
   const [recherche, setRecherche] = useState('')
 
-  // Personnage actuellement ouvert en conversation (null = vue grille)
   const [personnageActif, setPersonnageActif] = useState(null)
   const [messages, setMessages] = useState([])
   const [saisie, setSaisie] = useState('')
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [enTrainDecrire, setEnTrainDecrire] = useState(false)
 
-  // Pièce jointe (photo) en attente d'envoi dans la conversation
   const [photoEnAttente, setPhotoEnAttente] = useState(null)
   const [emojiPickerOuvert, setEmojiPickerOuvert] = useState(false)
 
-  // Créateur / éditeur de personnage (même formulaire pour les deux)
+  // ⬅️ NOUVEAU : fond d'écran de la conversation, réutilise le même
+  // réglage que le chat avec Yuna (défini dans Paramètres)
+  const [fondEcran] = useState(() => chargerParametres())
+
   const [afficherCreateur, setAfficherCreateur] = useState(false)
   const [personnageEnEdition, setPersonnageEnEdition] = useState(null)
-  const [modeEdition, setModeEdition] = useState(false) // true = on modifie un personnage existant
+  const [modeEdition, setModeEdition] = useState(false)
 
   const basDeListeRef = useRef(null)
   const inputAvatarRef = useRef(null)
@@ -209,7 +204,16 @@ function PersonnagesScreen() {
     basDeListeRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, enTrainDecrire])
 
-  // ===== FILTRAGE (recherche + catégories multiples) =====
+  // ⬅️ NOUVEAU : agrandit automatiquement la zone de texte en fonction
+  // du contenu tapé, jusqu'à une hauteur maximale de 128px — corrige
+  // la sensation de zone "trop petite" en écrivant
+  useEffect(() => {
+    const champ = zoneTexteRef.current
+    if (!champ) return
+    champ.style.height = 'auto'
+    champ.style.height = Math.min(champ.scrollHeight, 128) + 'px'
+  }, [saisie])
+
   const personnagesFiltres = personnages.filter((p) => {
     const categoriesDuPersonnage = obtenirCategories(p)
     const correspondCategorie = categoriesFiltre.length === 0 ||
@@ -225,7 +229,6 @@ function PersonnagesScreen() {
     )
   }
 
-  // ===== OUVRIR UNE CONVERSATION AVEC UN PERSONNAGE =====
   const ouvrirPersonnage = (personnage) => {
     setPersonnageActif(personnage)
     setMessages(chargerMessagesPersonnage(personnage))
@@ -243,7 +246,6 @@ function PersonnagesScreen() {
     setPersonnages(togglerFavoriPersonnage(id))
   }
 
-  // ===== CHANGER LA PHOTO DE PROFIL D'UN PERSONNAGE (depuis la grille ou la conversation) =====
   const demanderChangementPhoto = (personnage) => {
     personnagePourChangerPhotoRef.current = personnage
     inputAvatarRapideRef.current?.click()
@@ -263,7 +265,6 @@ function PersonnagesScreen() {
     }
   }
 
-  // ===== INSERTION D'ACTIONS ENTRE ASTÉRISQUES DANS LE CHAMP DE SAISIE =====
   const insererAsterisques = () => {
     const champ = zoneTexteRef.current
     if (!champ) return
@@ -287,7 +288,6 @@ function PersonnagesScreen() {
     })
   }
 
-  // ===== EMOJIS =====
   const insererEmoji = (emoji) => {
     const champ = zoneTexteRef.current
     const position = champ?.selectionStart ?? saisie.length
@@ -300,7 +300,6 @@ function PersonnagesScreen() {
     })
   }
 
-  // ===== PHOTO JOINTE À LA CONVERSATION =====
   const gererSelectionPhotoConversation = async (e) => {
     const fichier = e.target.files[0]
     e.target.value = ''
@@ -311,7 +310,6 @@ function PersonnagesScreen() {
 
   const retirerPhotoEnAttente = () => setPhotoEnAttente(null)
 
-  // ===== ENVOYER UN MESSAGE AU PERSONNAGE =====
   const envoyerMessage = async () => {
     if ((!saisie.trim() && !photoEnAttente) || envoiEnCours || !personnageActif) return
     const texteUtilisateur = saisie
@@ -331,8 +329,6 @@ function PersonnagesScreen() {
     setEnvoiEnCours(true)
     setEnTrainDecrire(true)
 
-    // L'historique envoyé à Gemini utilise le rôle "model" pour les
-    // messages du personnage (auteur 'personnage'), comme pour Yuna
     const historiquePourGemini = nouveauxMessages.slice(1).map((m) => ({
       ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
     }))
@@ -351,7 +347,6 @@ function PersonnagesScreen() {
     sauvegarderMessagesPersonnage(personnageActif.id, messagesAvecReponse)
   }
 
-  // ===== CONTINUER LA CAUSERIE SANS RIEN ÉCRIRE =====
   const continuerHistoire = async () => {
     if (envoiEnCours || !personnageActif || messages.length === 0) return
     setEnvoiEnCours(true)
@@ -375,7 +370,16 @@ function PersonnagesScreen() {
     sauvegarderMessagesPersonnage(personnageActif.id, messagesAvecReponse)
   }
 
+  // ============================================================
+  // CORRIGÉ : sur un appareil tactile, Entrée insère un simple
+  // retour à la ligne (comportement natif du textarea) — on
+  // n'intercepte PAS la touche pour envoyer, ce qui évite l'envoi
+  // accidentel en plein milieu de la frappe via le clavier virtuel.
+  // Sur desktop (souris), Entrée envoie toujours comme avant.
+  // ============================================================
   const gererToucheEntree = (e) => {
+    if (estAppareilTactile) return // ne rien faire : retour à la ligne normal
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (saisie.trim() || photoEnAttente) envoyerMessage()
@@ -390,11 +394,8 @@ function PersonnagesScreen() {
     setMessages(messagesReset)
   }
 
-  // ===== CRÉATEUR / ÉDITEUR DE PERSONNAGE =====
   const ouvrirCreateur = (personnageAModifier = null) => {
     const base = personnageAModifier || creerPersonnageVide()
-    // On normalise toujours vers un tableau `categories`, même si le
-    // personnage venait de l'ancien format à catégorie unique.
     setPersonnageEnEdition({ ...base, categories: obtenirCategories(base) })
     setModeEdition(!!personnageAModifier)
     setAfficherCreateur(true)
@@ -433,9 +434,6 @@ function PersonnagesScreen() {
       alert('Le nom, au moins une catégorie et la scène d\'ouverture sont obligatoires.')
       return
     }
-    // On enregistre à la fois `categories` (tableau, nouveau format) et
-    // `categorie` (première catégorie choisie) pour rester compatible
-    // avec le reste de l'app qui pourrait encore lire le champ singulier.
     const personnageAEnregistrer = {
       ...personnageEnEdition,
       categories: categoriesChoisies,
@@ -460,13 +458,29 @@ function PersonnagesScreen() {
     setPersonnages(supprimerPersonnage(personnage.id))
   }
 
-  // ============================================================
-  // VUE CONVERSATION — chat immersif avec le personnage sélectionné
-  // ============================================================
+  // ⬅️ NOUVEAU : calcule le style de fond de la conversation. Si
+  // l'utilisateur a choisi un fond spécifique dans Paramètres (autre
+  // que "défaut"), on l'utilise partout — sinon on garde la teinte
+  // douce basée sur la couleur du personnage, comme avant.
+  const styleFondConversation = (() => {
+    if (fondEcran.fondEcranChat === 'personnalise' && fondEcran.fondEcranChatPerso) {
+      return {
+        backgroundImage: `linear-gradient(rgba(255,248,245,0.7), rgba(255,248,245,0.7)), url(${fondEcran.fondEcranChatPerso})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    }
+    const preset = FONDS_CHAT_DISPONIBLES.find((f) => f.id === fondEcran.fondEcranChat)
+    if (preset?.style && fondEcran.fondEcranChat !== 'defaut') {
+      return { background: preset.style }
+    }
+    return { background: `color-mix(in srgb, ${personnageActif?.couleur || '#C4688A'} 6%, var(--color-cream))` }
+  })()
+
   if (personnageActif) {
     const saisieVide = !saisie.trim() && !photoEnAttente
     return (
-      <div className="h-full min-h-0 flex flex-col overflow-hidden" style={{ background: `color-mix(in srgb, ${personnageActif.couleur} 6%, var(--color-cream))` }}>
+      <div className="h-full min-h-0 flex flex-col overflow-hidden" style={styleFondConversation}>
 
         <style>{`
           @keyframes messageEntree { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -475,9 +489,7 @@ function PersonnagesScreen() {
           .anim-pop { animation: popEntree 0.16s ease-out both; }
         `}</style>
 
-        {/* Input caché : upload photo de conversation */}
         <input ref={inputPhotoConversationRef} type="file" accept="image/*" onChange={gererSelectionPhotoConversation} className="hidden" />
-        {/* Input caché : changement rapide de photo de profil */}
         <input ref={inputAvatarRapideRef} type="file" accept="image/*" onChange={gererChangementPhotoRapide} className="hidden" />
 
         <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 md:py-4 bg-white border-b flex-shrink-0" style={{ borderColor: `${personnageActif.couleur}30` }}>
@@ -564,7 +576,6 @@ function PersonnagesScreen() {
 
         <div className="flex-shrink-0 bg-white border-t" style={{ borderColor: `${personnageActif.couleur}30`, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
-          {/* Aperçu de la photo en attente d'envoi */}
           {photoEnAttente && (
             <div className="anim-pop flex items-center gap-2 px-3 sm:px-4 md:px-6 pt-3">
               <div className="relative">
@@ -580,7 +591,6 @@ function PersonnagesScreen() {
             </div>
           )}
 
-          {/* Sélecteur d'emojis */}
           {emojiPickerOuvert && (
             <div className="anim-pop mx-3 sm:mx-4 md:mx-6 mt-3 mb-1 bg-cream border rounded-2xl p-2.5 grid grid-cols-8 gap-1" style={{ borderColor: `${personnageActif.couleur}30` }}>
               {EMOJIS_RAPIDES.map((emoji) => (
@@ -599,7 +609,7 @@ function PersonnagesScreen() {
             <button
               onClick={() => inputPhotoConversationRef.current?.click()}
               title="Envoyer une photo"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center flex-shrink-0 text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200"
+              className="w-9 h-9 sm:w-9 sm:h-9 rounded-full flex items-center justify-center flex-shrink-0 text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200"
             >
               <IconImage style={{ width: '16px', height: '16px' }} />
             </button>
@@ -607,7 +617,7 @@ function PersonnagesScreen() {
             <button
               onClick={() => setEmojiPickerOuvert((o) => !o)}
               title="Emojis"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200"
+              className="w-9 h-9 sm:w-9 sm:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200"
               style={emojiPickerOuvert
                 ? { background: `${personnageActif.couleur}20`, color: personnageActif.couleur }
                 : undefined}
@@ -615,14 +625,18 @@ function PersonnagesScreen() {
               <IconSmile style={{ width: '16px', height: '16px' }} className={emojiPickerOuvert ? '' : 'text-espresso/45'} />
             </button>
 
+            {/* CORRIGÉ : "hidden sm:flex" retiré — visible sur mobile aussi */}
             <button
               onClick={insererAsterisques}
               title="Ajouter une action *comme ceci*"
-              className="hidden sm:flex w-8 h-8 sm:w-9 sm:h-9 rounded-full items-center justify-center flex-shrink-0 text-[12px] font-bold text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200"
+              className="w-9 h-9 sm:w-9 sm:h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[13px] font-bold text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200"
             >
               **
             </button>
 
+            {/* CORRIGÉ : min-height plus généreuse + auto-agrandissement
+                via le useEffect plus haut — corrige la sensation de
+                zone "trop petite" en écrivant */}
             <textarea
               ref={zoneTexteRef}
               value={saisie}
@@ -631,8 +645,8 @@ function PersonnagesScreen() {
               placeholder={`Réponds à ${personnageActif.nom}...`}
               disabled={envoiEnCours}
               rows={1}
-              className="flex-1 min-w-0 bg-cream border rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 text-[16px] md:text-[13px] text-espresso placeholder:text-espresso/40 outline-none transition-all duration-200 disabled:opacity-50 resize-none max-h-28 leading-relaxed"
-              style={{ borderColor: `${personnageActif.couleur}40` }}
+              className="flex-1 min-w-0 bg-cream border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-[16px] md:text-[13px] text-espresso placeholder:text-espresso/40 outline-none transition-all duration-200 disabled:opacity-50 resize-none max-h-32 leading-relaxed"
+              style={{ borderColor: `${personnageActif.couleur}40`, minHeight: '46px' }}
             />
 
             {saisieVide ? (
@@ -640,7 +654,7 @@ function PersonnagesScreen() {
                 onClick={continuerHistoire}
                 disabled={envoiEnCours || messages.length === 0}
                 title="Rien à dire ? Laisse le personnage continuer la scène"
-                className="h-10 px-2.5 sm:px-3.5 rounded-full flex items-center gap-1 sm:gap-1.5 flex-shrink-0 text-[9.5px] sm:text-[10.5px] font-semibold transition-all duration-200 active:scale-90 disabled:opacity-35 whitespace-nowrap"
+                className="h-11 px-2.5 sm:px-3.5 rounded-full flex items-center gap-1 sm:gap-1.5 flex-shrink-0 text-[9.5px] sm:text-[10.5px] font-semibold transition-all duration-200 active:scale-90 disabled:opacity-35 whitespace-nowrap"
                 style={{ background: `${personnageActif.couleur}18`, color: personnageActif.couleur }}
               >
                 <IconEtoiles style={{ width: '13px', height: '13px' }} className="flex-shrink-0" />
@@ -650,25 +664,23 @@ function PersonnagesScreen() {
               <button
                 onClick={envoyerMessage}
                 disabled={envoiEnCours}
-                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 disabled:opacity-35"
+                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 disabled:opacity-35"
                 style={{ background: personnageActif.couleur }}
               >
                 <IconEnvoi className="w-4 h-4 text-white" />
               </button>
             )}
           </div>
-          <p className="sm:hidden text-center text-[8.5px] text-espresso/30 pb-1.5 -mt-1">Astuce : entoure ton texte de * pour une action</p>
+          <p className="sm:hidden text-center text-[8.5px] text-espresso/30 pb-1.5 -mt-1">
+            {estAppareilTactile ? 'Astuce : entoure ton texte de * pour une action' : 'Entrée pour envoyer'}
+          </p>
         </div>
       </div>
     )
   }
 
-  // ============================================================
-  // VUE GRILLE — liste des personnages, filtres, création
-  // ============================================================
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
-      {/* Input caché partagé pour le changement rapide de photo depuis la grille */}
       <input ref={inputAvatarRapideRef} type="file" accept="image/*" onChange={gererChangementPhotoRapide} className="hidden" />
 
       <div className="px-4 md:px-8 py-5 md:py-7">
@@ -692,7 +704,6 @@ function PersonnagesScreen() {
           </button>
         </div>
 
-        {/* Recherche */}
         <input
           type="text"
           value={recherche}
@@ -701,9 +712,16 @@ function PersonnagesScreen() {
           className="w-full bg-white border border-espresso/10 rounded-full px-4 py-2.5 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus:border-espresso/30 transition-colors duration-200 mb-4"
         />
 
-        {/* Filtres catégories — sélection MULTIPLE : on peut cocher
-            plusieurs catégories en même temps, "Tous" les décoche toutes */}
-        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 scroll-suave" style={{ scrollbarWidth: 'none' }}>
+        {/* ============================================================
+            CORRIGÉ : "touchAction: 'pan-x'" + "WebkitOverflowScrolling"
+            ajoutés EXPLICITEMENT sur cette rangée précise — garantit
+            que le geste de swipe horizontal est bien capté ici, sans
+            être intercepté par le scroll vertical de la page entière.
+            ============================================================ */}
+        <div
+          className="flex items-center gap-2 mb-6 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: 'none', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
+        >
           <button
             onClick={() => setCategoriesFiltre([])}
             className="flex-shrink-0 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200"
@@ -749,11 +767,6 @@ function PersonnagesScreen() {
           </div>
         )}
 
-        {/* ============================================================
-            GRILLE DE CARTES — responsive : 1 colonne mobile (cartes
-            larges et lisibles), 2 dès sm:, 3 dès lg:, 4 dès xl: pour
-            les très grands écrans
-            ============================================================ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pb-8">
           {personnagesFiltres.map((personnage) => {
             const categoriesDuPersonnage = obtenirCategories(personnage)
@@ -766,8 +779,6 @@ function PersonnagesScreen() {
                 onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 10px 24px ${personnage.couleur}30`)}
                 onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 4px 14px rgba(62,39,35,0.06)')}
               >
-                {/* Bandeau du haut : photo du personnage si dispo (comme une
-                    couverture de profil), sinon dégradé de sa couleur */}
                 <BandeauCarte personnage={personnage}>
                   <button
                     onClick={(e) => toggleFavori(e, personnage.id)}
@@ -808,7 +819,6 @@ function PersonnagesScreen() {
                     {personnage.nom}
                   </p>
 
-                  {/* Toutes les catégories du personnage, plus une seule */}
                   <div className="flex flex-wrap gap-1 mt-1">
                     {categoriesDuPersonnage.map((catId) => (
                       <span
@@ -839,10 +849,6 @@ function PersonnagesScreen() {
         </div>
       </div>
 
-      {/* ============================================================
-          CRÉATEUR / ÉDITEUR DE PERSONNAGE — même formulaire pour
-          créer un nouveau personnage ou modifier un existant
-          ============================================================ */}
       {afficherCreateur && personnageEnEdition && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-espresso/60" onClick={fermerCreateur}>
           <div
@@ -858,7 +864,6 @@ function PersonnagesScreen() {
               </button>
             </div>
 
-            {/* Aperçu en direct de la carte, mis à jour à chaque frappe */}
             <div className="mb-6">
               <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1.5">Aperçu de la carte</p>
               <div className="w-full max-w-[200px] bg-white rounded-2xl overflow-hidden border border-espresso/10" style={{ boxShadow: '0 4px 14px rgba(62,39,35,0.08)' }}>
@@ -888,7 +893,6 @@ function PersonnagesScreen() {
               </div>
             </div>
 
-            {/* Avatar */}
             <div className="flex items-center gap-3 mb-5">
               <AvatarPersonnage personnage={personnageEnEdition} taille={60} />
               <div>
@@ -903,15 +907,16 @@ function PersonnagesScreen() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div>
                 <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Nom du personnage *</label>
+                {/* CORRIGÉ : padding généreux + texte 13px pour une meilleure prise en main tactile */}
                 <input
                   type="text"
                   value={personnageEnEdition.nom}
                   onChange={(e) => modifierChampCreation('nom', e.target.value)}
                   placeholder="Ex : Sofia"
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso"
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso"
                 />
               </div>
               <div>
@@ -920,13 +925,12 @@ function PersonnagesScreen() {
                   type="color"
                   value={personnageEnEdition.couleur}
                   onChange={(e) => modifierChampCreation('couleur', e.target.value)}
-                  className="w-full h-9 rounded-xl mt-1 cursor-pointer border border-espresso/15"
+                  className="w-full h-11 rounded-xl mt-1 cursor-pointer border border-espresso/15"
                 />
               </div>
             </div>
 
-            {/* Catégories — sélection MULTIPLE via des puces à cocher */}
-            <div className="mb-3">
+            <div className="mb-4">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Catégories * (tu peux en choisir plusieurs)</label>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {CATEGORIES_PERSONNAGES.map((cat) => {
@@ -936,7 +940,7 @@ function PersonnagesScreen() {
                       key={cat.id}
                       type="button"
                       onClick={() => toggleCategorieEdition(cat.id)}
-                      className="flex items-center gap-1 rounded-full text-[11px] font-medium px-3 py-1.5 transition-all duration-200 border"
+                      className="flex items-center gap-1 rounded-full text-[11.5px] font-medium px-3.5 py-2 transition-all duration-200 border"
                       style={choisie
                         ? { background: 'var(--color-espresso)', color: 'var(--color-peony)', borderColor: 'var(--color-espresso)' }
                         : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}
@@ -949,53 +953,58 @@ function PersonnagesScreen() {
               </div>
             </div>
 
-            <div className="mb-3">
+            <div className="mb-4">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Description courte (affichée sur la carte)</label>
               <input
                 type="text"
                 value={personnageEnEdition.description}
                 onChange={(e) => modifierChampCreation('description', e.target.value)}
                 placeholder="Une phrase qui donne envie de cliquer"
-                className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso"
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso"
               />
             </div>
 
-            <div className="mb-3">
+            {/* CORRIGÉ : rows augmenté de 3 à 5, padding généreux —
+                fini la sensation de zone "petite et agaçante" */}
+            <div className="mb-4">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Histoire / contexte</label>
               <textarea
                 value={personnageEnEdition.histoire}
                 onChange={(e) => modifierChampCreation('histoire', e.target.value)}
                 placeholder="Le contexte complet de l'histoire, la situation, la relation avec l'utilisateur..."
-                rows={3}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-none"
+                rows={5}
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed"
               />
             </div>
 
-            <div className="mb-3">
+            <div className="mb-4">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Personnalité (comment il/elle doit se comporter)</label>
               <textarea
                 value={personnageEnEdition.personnalite}
                 onChange={(e) => modifierChampCreation('personnalite', e.target.value)}
                 placeholder="Ex : Timide au début, drôle une fois en confiance, protecteur..."
-                rows={2}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-none"
+                rows={4}
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed"
               />
             </div>
 
-            <div className="mb-5">
+            <div className="mb-6">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Scène d'ouverture *</label>
               <textarea
                 value={personnageEnEdition.sceneOuverture}
                 onChange={(e) => modifierChampCreation('sceneOuverture', e.target.value)}
                 placeholder="Le tout premier message, celui qui lance l'histoire (contexte + arrivée du perso + réplique)"
-                rows={3}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-none"
+                rows={5}
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed"
               />
+              <p className="text-[9px] text-espresso/35 mt-1.5">
+                💡 Structure conseillée : contexte → événement déclencheur → arrivée du personnage → une réplique qui appelle une réponse
+              </p>
             </div>
 
             <button
               onClick={validerCreation}
-              className="w-full rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              className="w-full rounded-xl py-3.5 text-[13px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
             >
               {modeEdition ? 'Enregistrer les modifications' : 'Créer le personnage'}
             </button>
