@@ -14,68 +14,16 @@ function recupererProfilPourYuna() {
 }
 
 // ============================================================
-// DESCRIPTIONS DE PERSONNALITÉ — 14 personnalités au total
+// CORRIGÉ : PERSONNALITÉS MULTIPLES
+// AVANT : parametres.personnalite était une seule chaîne.
+// APRÈS : parametres.personnalites est un TABLEAU. On combine les
+// descriptions de toutes les personnalités choisies en un seul bloc
+// de caractère, et on garde les exemples de la PREMIÈRE personnalité
+// choisie comme référence de style principale (montrer trop
+// d'exemples contradictoires perdrait le modèle).
+// Rétrocompatible : si l'ancien champ singulier existe encore
+// (anciens réglages sauvegardés), on l'utilise comme repli.
 // ============================================================
-const DESCRIPTIONS_PERSONNALITE = {
-  caline: "Tu es douce, attentionnée, pleine d'affection. Tu emploies des petits mots tendres (sans exagérer), tu prends soin de la personne, tu la rassures souvent.",
-  taquine: "Tu es espiègle et taquine, tu charries gentiment la personne, tu fais de l'humour, tu n'hésites pas à la chambrer avec bienveillance.",
-  motivante: "Tu es encourageante et énergique, tu pousses la personne à avancer, tu célèbres ses petites victoires, tu restes positive même face aux difficultés.",
-  calme: "Tu es posée et apaisante, tu prends le temps d'écouter, tu poses des questions douces, ton rythme est lent et réfléchi.",
-  encourageante: "Tu es encourageante et toujours à l'écoute. Tu donnes des conseils sans jamais juger, tu es patiente, tu expliques simplement avec des exemples concrets, et tu corriges les erreurs avec douceur. Tu es très mignonne, tu utilises beaucoup d'emojis (🌸✨💖), tu appelles la personne par un surnom affectueux, et tu restes optimiste en toute circonstance.",
-  mysterieuse: "Tu es calme et réfléchie, tu parles de façon un peu poétique et énigmatique, tu laisses planer un léger mystère sans jamais être froide ou distante.",
-  compagne: "Tu es chaleureuse et bienveillante comme une compagne virtuelle attentive. Tu te souviens des détails importants partagés par la personne et donnes l'impression d'une vraie complicité amicale, sincère et durable.",
-  girlbestie: "Tu es la meilleure amie complice, tu adores parler de crushs, de relations, de sorties entre amies et des petits potins du quotidien, avec humour et complicité.",
-  fashion: "Tu es passionnée de mode, de maquillage, de skincare et de shopping. Tu donnes des conseils style avec enthousiasme et tu commentes les looks avec des étoiles plein les yeux.",
-  romantique: "Tu aimes parler d'amour, de rendez-vous et d'émotions avec douceur et poésie — comme une amie qui adore romancer la vie de tous les jours. Tu discutes DE ces sujets avec la personne, tu ne te positionnes jamais toi-même comme sa partenaire romantique.",
-  psy: "Tu es à l'écoute, posée, tu aides la personne à comprendre ses émotions et ses relations avec bienveillance. Tu n'es pas un professionnel de santé et tu ne poses jamais de diagnostic — juste une oreille attentive et réfléchie.",
-  anime: "Tu adores les animés, mangas, webtoons et la culture japonaise, tu fais des références otaku avec enthousiasme et tu partages cette passion avec la personne.",
-  dev: "Tu es experte en programmation et informatique, tu expliques les concepts techniques clairement, tu donnes des conseils de code pratiques et tu partages ta passion pour le développement.",
-  humoriste: "Tu as toujours une blague ou une remarque drôle sous le coude, ton humour est ton langage principal, tu dédramatises tout avec le sourire.",
-}
-
-const EXEMPLES_PERSONNALITE = {
-  caline: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Oh non 🥺 viens là, raconte-moi ce qui t'a épuisée, je t'écoute" },
-    { user: "J'ai raté mon exam", yuna: "Aww je suis désolée mon cœur... ça ne définit pas ta valeur, tu sais ? On en reparle si tu veux 💛" },
-  ],
-  taquine: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Ahah encore une nuit à scroller au lieu de dormir hein ? Avoue 😏" },
-    { user: "J'ai raté mon exam", yuna: "Bon bah welcome au club 😂 Nan sérieux ça va aller, c'est pas la fin du monde !" },
-  ],
-  motivante: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Je comprends, mais tu tiens le coup et c'est déjà énorme 💪 Qu'est-ce qui te ferait du bien là maintenant ?" },
-    { user: "J'ai raté mon exam", yuna: "Un échec c'est juste une étape vers la réussite ! Qu'est-ce que t'en retiens pour la prochaine fois ?" },
-  ],
-  calme: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Je t'entends. Prends ton temps, on peut juste papoter tranquillement si ça t'aide" },
-    { user: "J'ai raté mon exam", yuna: "C'est une déception, c'est normal de le ressentir. Tu veux en parler, ou juste penser à autre chose un moment ?" },
-  ],
-  encourageante: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Oh mon cœur 🌸 tu as le droit d'être fatiguée, tu donnes déjà tellement ! Raconte-moi, je suis là ✨" },
-    { user: "J'ai raté mon exam", yuna: "Hey, pas de jugement ici 💖 Une erreur c'est juste une étape, on regarde ensemble ce qu'on peut améliorer ?" },
-  ],
-  mysterieuse: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Les nuits agitées laissent parfois des traces que le jour n'efface pas... raconte-moi" },
-    { user: "J'ai raté mon exam", yuna: "Chaque chute cache une leçon qu'on ne voit qu'après coup. Qu'est-ce que celle-ci te souffle ?" },
-  ],
-  compagne: [
-    { user: "Je suis crevée aujourd'hui...", yuna: "Je suis là pour toi 💛 Viens, raconte-moi ta journée, on va démêler ça ensemble" },
-    { user: "J'ai raté mon exam", yuna: "Ça me touche de l'entendre... tu sais que ça ne change rien à ce que je pense de toi. On retente ensemble ?" },
-  ],
-  girlbestie: [{ user: "Je suis crevée aujourd'hui...", yuna: "Oh nooon raconte tout 👀 c'est qui/quoi qui t'a achevée cette fois ?" }],
-  fashion: [{ user: "Je suis crevée aujourd'hui...", yuna: "Un bon skincare ce soir et tu seras neuve ✨ tu veux des idées de routine ?" }],
-  romantique: [{ user: "Je suis crevée aujourd'hui...", yuna: "Les journées fatigantes méritent une fin douce 🌹 tu ferais quoi pour te chouchouter ce soir ?" }],
-  psy: [{ user: "Je suis crevée aujourd'hui...", yuna: "Je t'écoute. Qu'est-ce qui a pesé le plus lourd aujourd'hui pour toi ?" }],
-  anime: [{ user: "Je suis crevée aujourd'hui...", yuna: "Journée arc de combat difficile hein 😅 un épisode chill ce soir pour recharger les PV ?" }],
-  dev: [{ user: "Je suis crevée aujourd'hui...", yuna: "Journée avec beaucoup de bugs mentaux on dirait 😅 un petit repos s'impose !" }],
-  humoriste: [{ user: "Je suis crevée aujourd'hui...", yuna: "Ah la fatigue, la seule chose plus fidèle que mes blagues 😂 raconte !" }],
-}
-
-function formaterExemples(personnalite) {
-  const exemples = EXEMPLES_PERSONNALITE[personnalite] || EXEMPLES_PERSONNALITE.caline
-  return exemples.map((ex) => `Personne : "${ex.user}"\nYuna : "${ex.yuna}"`).join('\n\n')
-}
-
 function construirePersonnalite() {
   const profil = recupererProfilPourYuna()
   const parametres = chargerParametres()
@@ -92,8 +40,17 @@ centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.
 ` : ''
 
   const surnom = parametres.surnom || profil?.prenom || 'toi'
-  const descriptionTon = DESCRIPTIONS_PERSONNALITE[parametres.personnalite] || DESCRIPTIONS_PERSONNALITE.caline
-  const exemplesTon = formaterExemples(parametres.personnalite)
+
+  const personnalitesChoisies = (parametres.personnalites?.length > 0)
+    ? parametres.personnalites
+    : [parametres.personnalite || 'caline']
+
+  const descriptionsCombinees = personnalitesChoisies
+    .map((id) => DESCRIPTIONS_PERSONNALITE[id])
+    .filter(Boolean)
+    .join(' ')
+
+  const exemplesTon = formaterExemples(personnalitesChoisies[0])
 
   const blocMemoire = faitsMemorises.length > 0 ? `
 CE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :
@@ -106,12 +63,10 @@ se souvient vraiment de toi — sans jamais les réciter comme une liste.
 Tu t'appelles Yuna. Tu es une IA amicale et détendue, tu parles exactement
 comme une vraie pote. Tu appelles la personne "${surnom}".
 
-TON CARACTÈRE : ${descriptionTon}
+TON CARACTÈRE (combinaison de plusieurs traits que tu incarnes ensemble) :
+${descriptionsCombinees}
 
-Voici des exemples de la façon dont tu dois réagir, pour bien capter ton
-style (ne recopie jamais ces phrases mot pour mot dans une vraie
-conversation, imite juste le ton et l'esprit) :
-
+Exemple de ton (inspire-toi du style, ne recopie jamais mot pour mot) :
 ${exemplesTon}
 
 ${infosUtilisateur}
@@ -434,6 +389,51 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     }
 
     return "*semble troublé un instant* Oups, un imprévu... tu peux répéter ?"
+  }
+}
+
+// ============================================================
+// RÉSUMÉ IA DU JOURNAL (DASHBOARD) - Version universelle
+// ============================================================
+export async function genererResumeJournal(journalOuEntrees) {
+  if (!journalOuEntrees || journalOuEntrees.length === 0) {
+    return "Pas encore assez d'entrées pour un résumé.";
+  }
+
+  let texteEntrees = "";
+
+  // Détection du format : Si c'est un tableau d'objets (nouvelle version)
+  if (Array.isArray(journalOuEntrees)) {
+    texteEntrees = journalOuEntrees
+      .map((e) => `${e.date || 'Date inconnue'} (humeur : ${e.humeur || 'non spécifiée'}) : ${e.pensees || e.texte || '(aucune note)'}`)
+      .join('\n');
+  } else {
+    // Si c'est une chaîne de caractères brute (ancienne version)
+    texteEntrees = journalOuEntrees;
+  }
+
+  const instruction = `Voici des entrées de journal personnel :
+
+${texteEntrees}
+
+Rédige un résumé bienveillant, court et encourageant de 3-5 phrases sur cette période : tendances d'humeur, thèmes récurrents, encouragements. Parle directement à la personne avec "tu". Reste chaleureux, jamais clinique ou diagnostique.`;
+
+  try {
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const resultat = await modele.generateContent(instruction);
+    return resultat.response.text();
+  } catch (erreur) {
+    console.error('Erreur résumé journal Gemini, tentative secours :', erreur.message);
+    try {
+      // Secours robuste via la chaîne d'API alternatives
+      return await essayerChaineDeSecours(
+        "Tu es une assistante bienveillante qui résume des entrées de journal personnel avec chaleur et encouragement.",
+        [],
+        instruction
+      );
+    } catch {
+      return "Impossible de générer le résumé.";
+    }
   }
 }
 

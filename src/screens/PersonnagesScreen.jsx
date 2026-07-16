@@ -10,6 +10,7 @@ import {
   reinitialiserConversationPersonnage,
   CATEGORIES_PERSONNAGES,
 } from '../services/personnages'
+import { notifierErreur } from '../services/notifications'
 import { envoyerMessageAPersonnage } from '../services/gemini'
 import { fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
@@ -310,31 +311,34 @@ function PersonnagesScreen() {
 
   const retirerPhotoEnAttente = () => setPhotoEnAttente(null)
 
-  const envoyerMessage = async () => {
-    if ((!saisie.trim() && !photoEnAttente) || envoiEnCours || !personnageActif) return
-    const texteUtilisateur = saisie
-    const image = photoEnAttente
+const envoyerMessage = async () => {
+  if ((!saisie.trim() && !photoEnAttente) || envoiEnCours || !personnageActif) return
+  const texteUtilisateur = saisie
+  const image = photoEnAttente
 
-    const messageUtilisateur = {
-      id: Date.now(), auteur: 'user', texte: texteUtilisateur, image,
-      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    }
+  const messageUtilisateur = {
+    id: Date.now(), auteur: 'user', texte: texteUtilisateur, image,
+    heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+  }
 
-    const nouveauxMessages = [...messages, messageUtilisateur]
-    setMessages(nouveauxMessages)
-    sauvegarderMessagesPersonnage(personnageActif.id, nouveauxMessages)
-    setSaisie('')
-    setPhotoEnAttente(null)
-    setEmojiPickerOuvert(false)
-    setEnvoiEnCours(true)
-    setEnTrainDecrire(true)
+  const nouveauxMessages = [...messages, messageUtilisateur]
+  setMessages(nouveauxMessages)
+  sauvegarderMessagesPersonnage(personnageActif.id, nouveauxMessages)
+  setSaisie('')
+  setPhotoEnAttente(null)
+  setEmojiPickerOuvert(false)
+  setEnvoiEnCours(true)
+  setEnTrainDecrire(true)
 
-    const historiquePourGemini = nouveauxMessages.slice(1).map((m) => ({
-      ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
-    }))
+  const historiquePourGemini = nouveauxMessages.slice(1).map((m) => ({
+    ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
+  }))
 
-    const texteEnvoye = texteUtilisateur.trim() || (image ? "*envoie une photo*" : texteUtilisateur)
-    const reponseTexte = await envoyerMessageAPersonnage(historiquePourGemini, texteEnvoye, personnageActif)
+  // CORRIGÉ : l'image est maintenant transmise TELLE QUELLE à Gemini
+  // (au lieu d'un simple texte "*envoie une photo*"), pour que le
+  // personnage réagisse à ce qu'il voit vraiment
+  try {
+    const reponseTexte = await envoyerMessageAPersonnage(historiquePourGemini, texteUtilisateur, personnageActif, image)
 
     setEnTrainDecrire(false)
     setEnvoiEnCours(false)
@@ -345,19 +349,30 @@ function PersonnagesScreen() {
     }]
     setMessages(messagesAvecReponse)
     sauvegarderMessagesPersonnage(personnageActif.id, messagesAvecReponse)
+  } catch (erreur) {
+    // CORRIGÉ : erreur affichée en notification discrète, PAS comme
+    // un message du personnage dans la conversation
+    setEnTrainDecrire(false)
+    setEnvoiEnCours(false)
+    notifierErreur(erreur.message || "Le personnage n'a pas pu répondre. Réessaie.")
   }
+}
 
-  const continuerHistoire = async () => {
-    if (envoiEnCours || !personnageActif || messages.length === 0) return
-    setEnvoiEnCours(true)
-    setEnTrainDecrire(true)
+const continuerHistoire = async () => {
+  if (envoiEnCours || !personnageActif || messages.length === 0) return
+  setEnvoiEnCours(true)
+  setEnTrainDecrire(true)
 
-    const historiquePourGemini = messages.slice(1).map((m) => ({
-      ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
-    }))
+  const historiquePourGemini = messages.slice(1).map((m) => ({
+    ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
+  }))
 
-    const instructionContinuation = "*reste silencieux, continue la scène toi-même sans attendre de réponse*"
-    const reponseTexte = await envoyerMessageAPersonnage(historiquePourGemini, instructionContinuation, personnageActif)
+  try {
+    const reponseTexte = await envoyerMessageAPersonnage(
+      historiquePourGemini,
+      "*reste silencieux, continue la scène toi-même sans attendre de réponse*",
+      personnageActif
+    )
 
     setEnTrainDecrire(false)
     setEnvoiEnCours(false)
@@ -368,7 +383,64 @@ function PersonnagesScreen() {
     }]
     setMessages(messagesAvecReponse)
     sauvegarderMessagesPersonnage(personnageActif.id, messagesAvecReponse)
+  } catch (erreur) {
+    setEnTrainDecrire(false)
+    setEnvoiEnCours(false)
+    notifierErreur(erreur.message || "Impossible de continuer l'histoire. Réessaie.")
   }
+}
+
+// ============================================================
+// MODIFIER UN MESSAGE (comme dans le Chat avec Yuna)
+// ============================================================
+const modifierMessagePersonnage = async (idMessage, nouveauTexte) => {
+  const index = messages.findIndex((m) => m.id === idMessage)
+  if (index === -1) return
+
+  const messagesAvant = messages.slice(0, index)
+  const messageModifie = { ...messages[index], texte: nouveauTexte, modifie: true }
+  const nouveauxMessages = [...messagesAvant, messageModifie]
+
+  setMessages(nouveauxMessages)
+  sauvegarderMessagesPersonnage(personnageActif.id, nouveauxMessages)
+  setEnvoiEnCours(true)
+  setEnTrainDecrire(true)
+
+  const historiquePourGemini = nouveauxMessages.slice(1).map((m) => ({
+    ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
+  }))
+
+  try {
+    const reponseTexte = await envoyerMessageAPersonnage(historiquePourGemini, nouveauTexte, personnageActif)
+    setEnTrainDecrire(false)
+    setEnvoiEnCours(false)
+    const messagesFinaux = [...nouveauxMessages, {
+      id: Date.now(), auteur: 'personnage', texte: reponseTexte,
+      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    }]
+    setMessages(messagesFinaux)
+    sauvegarderMessagesPersonnage(personnageActif.id, messagesFinaux)
+  } catch (erreur) {
+    setEnTrainDecrire(false)
+    setEnvoiEnCours(false)
+    notifierErreur(erreur.message || "Le personnage n'a pas pu répondre.")
+  }
+}
+
+// ============================================================
+// REDÉMARRER LA CONVERSATION À PARTIR D'UN MESSAGE PRÉCIS
+// Garde tout jusqu'à ce message INCLUS, supprime tout ce qui suit —
+// utile pour "revenir en arrière" dans l'histoire sans tout recommencer
+// ============================================================
+const redemarrerApartirDe = (idMessage) => {
+  const confirme = window.confirm("Redémarrer l'histoire à partir de ce message ? Tout ce qui suit sera effacé.")
+  if (!confirme) return
+  const index = messages.findIndex((m) => m.id === idMessage)
+  if (index === -1) return
+  const messagesConserves = messages.slice(0, index + 1)
+  setMessages(messagesConserves)
+  sauvegarderMessagesPersonnage(personnageActif.id, messagesConserves)
+}
 
   // ============================================================
   // CORRIGÉ : sur un appareil tactile, Entrée insère un simple
@@ -522,44 +594,41 @@ function PersonnagesScreen() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-suave p-3 sm:p-4 md:p-6 flex flex-col gap-3">
-          {messages.map((message) => {
-            const estUser = message.auteur === 'user'
-            return (
-              <div key={message.id} className={`anim-message flex items-end gap-2 ${estUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                {!estUser && <AvatarPersonnage personnage={personnageActif} taille={28} />}
-                <div className={`flex flex-col ${estUser ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[70%]`}>
-                  {message.image && (
-                    <img
-                      src={message.image}
-                      alt="Photo envoyée"
-                      className={`mb-1 max-w-[220px] max-h-[220px] object-cover rounded-2xl border ${estUser ? 'rounded-br-[6px]' : 'rounded-bl-[6px]'}`}
-                      style={{ borderColor: `${personnageActif.couleur}30` }}
-                    />
-                  )}
-                  {message.texte && (
-                    <div className={`px-4 py-2.5 text-[12px] leading-relaxed whitespace-pre-line ${
-                      estUser
-                        ? 'bg-espresso text-peony rounded-[18px] rounded-br-[4px]'
-                        : 'bg-white text-espresso border rounded-[18px] rounded-bl-[4px]'
-                    }`}
-                      style={!estUser ? { borderColor: `${personnageActif.couleur}30`, boxShadow: '0 2px 8px rgba(62,39,35,0.05)' } : undefined}
-                    >
-                      {message.texte.split(/(\*[^*]+\*)/g).map((morceau, i) =>
-                        morceau.startsWith('*') && morceau.endsWith('*') && morceau.length > 1 ? (
-                          <em key={i} className={estUser ? 'text-peony/70' : 'text-espresso/50'}>{morceau.slice(1, -1)}</em>
-                        ) : (
-                          <span key={i}>{morceau}</span>
-                        )
-                      )}
-                    </div>
-                  )}
-                  {message.heure && (
-                    <span className="text-[8px] text-espresso/30 mt-0.5 px-1">{message.heure}</span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+         {messages.map((message) => {
+  const estUser = message.auteur === 'user'
+  return (
+    <div key={message.id} className={`anim-message group flex items-end gap-2 ${estUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      {!estUser && <AvatarPersonnage personnage={personnageActif} taille={28} />}
+      <div className={`flex flex-col ${estUser ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[70%]`}>
+        {/* ... contenu image/texte existant inchangé ... */}
+
+        {/* NOUVEAU : actions discrètes au survol/tap */}
+        <div className="flex items-center gap-2 mt-0.5 px-1">
+          {message.heure && <span className="text-[8px] text-espresso/30">{message.heure}</span>}
+          {estUser && (
+            <button
+              onClick={() => {
+                const nouveauTexte = window.prompt('Modifier ton message :', message.texte)
+                if (nouveauTexte && nouveauTexte.trim() && nouveauTexte !== message.texte) {
+                  modifierMessagePersonnage(message.id, nouveauTexte.trim())
+                }
+              }}
+              className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline"
+            >
+              modifier
+            </button>
+          )}
+          <button
+            onClick={() => redemarrerApartirDe(message.id)}
+            className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline"
+          >
+            redémarrer ici
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+})}
 
           {enTrainDecrire && (
             <div className="anim-message flex items-end gap-2">

@@ -41,3 +41,12 @@ export function supprimerFait(fait) {
 export function effacerMemoire() {
   localStorage.removeItem(CLE_MEMOIRE)
 }
+
+// Modifie un fait existant (par son index dans le tableau)
+export function modifierFait(index, nouveauTexte) {
+  const faits = chargerFaits()
+  if (index < 0 || index >= faits.length) return faits
+  faits[index] = nouveauTexte
+  localStorage.setItem(CLE_MEMOIRE, JSON.stringify(faits))
+  return faits
+}

@@ -3,6 +3,7 @@ import MessageBubble   from '../components/MessageBubble'
 import TypingIndicator from '../components/TypingIndicator'
 import { IconSend, IconPaperclip } from '../components/Icons'
 import AIAvatar from '../components/AIAvatar'
+import { notifierErreur } from '../services/notifications'
 import { envoyerMessageAYuna, envoyerNoteVocaleAYuna, verifierMessageSpontane, extraireEtMemoriserFaits } from '../services/gemini'
 import { sauvegarderConversation, creerNouvelleConversation } from '../services/conversations'
 import { sauvegarderImage, fichierVersBase64 } from '../services/images'
@@ -130,36 +131,44 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     setMessages(messagesFinaux)
     memoriserSiNecessaire(messagesFinaux)
 
+  
     e.target.value = ''
   }
 
-  const envoyerMessage = async () => {
-    if (!saisie.trim() || envoiEnCours) return
-    const texteUtilisateur = saisie
 
-    const messageUtilisateur = {
-      id: Date.now(), auteur: 'user', texte: texteUtilisateur,
-      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    }
 
-    const nouveauxMessages = [...messages, messageUtilisateur]
-    setMessages(nouveauxMessages)
-    setSaisie('')
-    setEnvoiEnCours(true)
-    setYunaEcrit(true)
+// Remplace la fonction envoyerMessage entière par :
+const envoyerMessage = async () => {
+  if (!saisie.trim() || envoiEnCours) return
+  const texteUtilisateur = saisie
 
+  const messageUtilisateur = {
+    id: Date.now(), auteur: 'user', texte: texteUtilisateur,
+    heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+  }
+
+  const nouveauxMessages = [...messages, messageUtilisateur]
+  setMessages(nouveauxMessages)
+  setSaisie('')
+  setEnvoiEnCours(true)
+  setYunaEcrit(true)
+
+  try {
     const reponseTexte = await envoyerMessageAYuna(nouveauxMessages.slice(1), texteUtilisateur)
-
     setYunaEcrit(false)
     setEnvoiEnCours(false)
-
     const messagesFinaux = [...nouveauxMessages, {
       id: Date.now() + 1, auteur: 'yuna', texte: reponseTexte,
       heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
     }]
     setMessages(messagesFinaux)
     memoriserSiNecessaire(messagesFinaux)
+  } catch (erreur) {
+    setYunaEcrit(false)
+    setEnvoiEnCours(false)
+    notifierErreur(erreur.message || "Yuna n'a pas pu répondre. Réessaie.")
   }
+}
 
   const gererToucheEntree = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {

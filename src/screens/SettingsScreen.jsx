@@ -472,109 +472,36 @@ function SettingsScreen({ onChangerEcran }) {
               </div>
             </div>
           </SectionParametre>
-
-          <SectionParametre
-            titre="Personnalité de Yuna"
-            description="Le ton qu'elle utilisera dans vos échanges"
-          >
-            {/* ============================================================
-      NOUVEAU DESIGN : cartes compactes avec emoji visible en grand,
-      responsive (2 colonnes mobile, 3 dès sm:, 4 dès lg: pour ne
-      pas avoir une liste interminable sur grand écran). L'emoji sert
-      de repère visuel rapide, comme des "stickers" de personnalité.
-      ============================================================ */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              {PERSONNALITES.map((p) => {
-                const estActif = parametres.personnalite === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() =>
-                      mettreAJourParametres({ personnalite: p.id })
-                    }
-                    className={`text-left rounded-xl p-2.5 border transition-all duration-200 flex items-start gap-2 ${
-                      estActif
-                        ? "bg-espresso border-espresso"
-                        : "bg-[#F0EEEB] border-espresso/12 hover:border-espresso/30 hover:-translate-y-0.5"
-                    }`}
-                  >
-                    <span className="text-[18px] leading-none flex-shrink-0 mt-0.5">
-                      {p.emoji}
-                    </span>
-                    <div className="min-w-0">
-                      <p
-                        className={`text-[11.5px] font-semibold truncate ${estActif ? "text-peony" : "text-espresso"}`}
-                      >
-                        {p.label}
-                      </p>
-                      <p
-                        className={`text-[9px] mt-0.5 leading-snug ${estActif ? "text-peony/70" : "text-espresso/45"}`}
-                      >
-                        {p.desc}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </SectionParametre>
-
-          {/* ===== NOUVELLE SECTION : FOND D'ÉCRAN DU CHAT ===== */}
-          <SectionParametre
-            titre="Fond d'écran du Chat"
-            description="Personnalise l'arrière-plan de tes conversations"
-          >
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3">
-              {FONDS_CHAT_DISPONIBLES.map((fond) => {
-                const estActif = parametres.fondEcranChat === fond.id;
-                return (
-                  <button
-                    key={fond.id}
-                    onClick={() =>
-                      mettreAJourParametres({
-                        fondEcranChat: fond.id,
-                        fondEcranChatPerso: null,
-                      })
-                    }
-                    className="rounded-xl overflow-hidden border-2 transition-all duration-200"
-                    style={{
-                      borderColor: estActif
-                        ? "var(--color-espresso)"
-                        : "transparent",
-                      height: "54px",
-                    }}
-                  >
-                    <div
-                      className="w-full h-full flex items-end p-1.5"
-                      style={{ background: fond.style || "#FFF8F5" }}
-                    >
-                      <span className="text-[8px] font-medium bg-white/80 px-1.5 py-0.5 rounded-full text-espresso">
-                        {fond.nom}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <label className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-espresso/20 px-4 py-3 cursor-pointer hover:border-espresso/40 transition-colors duration-200">
-              <IconImage
-                style={{ width: "15px", height: "15px" }}
-                className="text-espresso/50"
-              />
-              <span className="text-[11px] text-espresso/60">
-                {parametres.fondEcranChat === "personnalise"
-                  ? "Changer ma photo de fond"
-                  : "Utiliser ma propre photo"}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={gererUploadFondEcran}
-                className="hidden"
-              />
-            </label>
-          </SectionParametre>
+<SectionParametre titre="Personnalité de Yuna" description="Choisis un ou plusieurs traits, Yuna les combine">
+  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+    {PERSONNALITES.map((p) => {
+      const estChoisie = (parametres.personnalites || []).includes(p.id)
+      return (
+        <button
+          key={p.id}
+          onClick={() => {
+            const actuelles = parametres.personnalites || []
+            const nouvelles = estChoisie
+              ? actuelles.filter((id) => id !== p.id)
+              : [...actuelles, p.id]
+            // Empêche de tout décocher — au moins une personnalité active
+            if (nouvelles.length === 0) return
+            mettreAJourParametres({ personnalites: nouvelles })
+          }}
+          className={`text-left rounded-xl p-2.5 border transition-all duration-200 flex items-start gap-2 ${
+            estChoisie ? 'bg-espresso border-espresso' : 'bg-[#F0EEEB] border-espresso/12 hover:border-espresso/30'
+          }`}
+        >
+          <span className="text-[18px] leading-none flex-shrink-0 mt-0.5">{p.emoji}</span>
+          <div className="min-w-0">
+            <p className={`text-[11.5px] font-semibold truncate ${estChoisie ? 'text-peony' : 'text-espresso'}`}>{p.label}</p>
+            <p className={`text-[9px] mt-0.5 leading-snug ${estChoisie ? 'text-peony/70' : 'text-espresso/45'}`}>{p.desc}</p>
+          </div>
+        </button>
+      )
+    })}
+  </div>
+</SectionParametre>
 
           <SectionParametre titre="Notifications & accessibilité">
             <div className="flex items-center justify-between mb-3">
