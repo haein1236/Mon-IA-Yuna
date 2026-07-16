@@ -1,33 +1,16 @@
+// ============================================================
+// SERVICE JOURNAL
+// Persiste TOUT le tableau d'entrées d'un coup — plus simple que
+// des fonctions dédiées, puisque le composant JournalScreen gère
+// déjà sa propre logique de fusion/mise à jour des entrées en state.
+// ============================================================
 const CLE_JOURNAL = 'yuna-journal'
-
-export const HUMEURS = [
-  { id: 'super', emoji: '😄', label: 'Super' },
-  { id: 'bien', emoji: '🙂', label: 'Bien' },
-  { id: 'neutre', emoji: '😐', label: 'Neutre' },
-  { id: 'difficile', emoji: '😔', label: 'Difficile' },
-  { id: 'dur', emoji: '😢', label: 'Dur' },
-]
 
 export function chargerEntreesJournal() {
   const donnees = localStorage.getItem(CLE_JOURNAL)
   return donnees ? JSON.parse(donnees) : []
 }
 
-export function obtenirEntreeDuJour(dateStr) {
-  return chargerEntreesJournal().find((e) => e.date === dateStr) || null
-}
-
-export function sauvegarderEntreeJournal(entree) {
-  const entrees = chargerEntreesJournal()
-  const index = entrees.findIndex((e) => e.date === entree.date)
-  if (index !== -1) entrees[index] = entree
-  else entrees.unshift(entree)
+export function sauvegarderEntreesJournal(entrees) {
   localStorage.setItem(CLE_JOURNAL, JSON.stringify(entrees))
-  return entrees
-}
-
-export function supprimerEntreeJournal(date) {
-  const entrees = chargerEntreesJournal().filter((e) => e.date !== date)
-  localStorage.setItem(CLE_JOURNAL, JSON.stringify(entrees))
-  return entrees
 }

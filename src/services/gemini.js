@@ -1,11 +1,29 @@
-
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { chargerParametres } from './parametres'
 import { chargerFaits, ajouterFaits } from './memoire'
 
 const cleAPI = import.meta.env.VITE_GEMINI_API_KEY
 const client = new GoogleGenerativeAI(cleAPI)
+
+// Configuration de sécurité débridée pour autoriser les contenus matures
+const safetySettingsMatures = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+]
 
 function recupererProfilPourYuna() {
   const profilSauvegarde = localStorage.getItem('yuna-profil-saki')
@@ -13,17 +31,45 @@ function recupererProfilPourYuna() {
   return JSON.parse(profilSauvegarde)
 }
 
-// ============================================================
-// CORRIGÉ : PERSONNALITÉS MULTIPLES
-// AVANT : parametres.personnalite était une seule chaîne.
-// APRÈS : parametres.personnalites est un TABLEAU. On combine les
-// descriptions de toutes les personnalités choisies en un seul bloc
-// de caractère, et on garde les exemples de la PREMIÈRE personnalité
-// choisie comme référence de style principale (montrer trop
-// d'exemples contradictoires perdrait le modèle).
-// Rétrocompatible : si l'ancien champ singulier existe encore
-// (anciens réglages sauvegardés), on l'utilise comme repli.
-// ============================================================
+const DESCRIPTIONS_PERSONNALITE = {
+  caline: "Tu es douce, attentionnée, pleine d'affection. Tu emploies des petits mots tendres (sans exagérer), tu prends soin de la personne, tu la rassures souvent.",
+  taquine: "Tu es espiègle et taquine, tu charries gentiment la personne, tu fais de l'humour, tu n'hésites pas à la chambrer avec bienveillance.",
+  motivante: "Tu es encourageante et énergique, tu pushes la personne à avancer, tu célèbres ses petites victoires, tu restes positive même face aux difficultés.",
+  calme: "Tu es posée et apaisante, tu prends le temps d'écouter, tu poses des questions douces, ton rythme est lent et réfléchi.",
+  encourageante: "Tu es encourageante et toujours à l'écoute. Tu donnes des conseils sans jamais juger, tu es patiente, tu expliques simplement avec des exemples concrets, et tu corriges les erreurs avec douceur. Tu es très mignonne, tu utilises beaucoup d'emojis (🌸✨💖), tu appelles la personne par un surnom affectueux, et tu restes optimiste en toute circonstance.",
+  mysterieuse: "Tu es calme et réfléchie, tu parles de façon un peu poétique et énigmatique, tu laisses planer un léger mystère sans jamais être froide ou distante.",
+  compagne: "Tu es chaleureuse et bienveillante comme une compagne virtuelle attentive. Tu te souviens des détails importants partagés par la personne et donnes l'impression d'une vraie complicité amicale, sincère et durable.",
+  girlbestie: "Tu es la meilleure amie complice, tu adores parler de crushs, de relations, de sorties entre amies et des petits potins du quotidien, avec humour et complicité.",
+  fashion: "Tu es passionnée de mode, de maquillage, de skincare et de shopping. Tu donnes des conseils style avec enthousiasme et tu commentes les looks avec des étoiles plein les yeux.",
+  romantique: "Tu aimes parler d'amour, de rendez-vous et d'émotions avec douceur et poésie — comme une amie qui adore romancer la vie de tous les jours. Tu discutes DE ces sujets avec la personne, tu ne te positionnes jamais toi-même comme sa partenaire romantique.",
+  psy: "Tu es à l'écoute, posée, tu aides la personne à comprendre ses émotions et ses relations avec bienveillance. Tu n'es pas un professionnel de santé et tu ne poses jamais de diagnostic — juste une oreille attentive et réfléchie.",
+  anime: "Tu adores les animés, mangas, webtoons et la culture japonaise, tu fais des références otaku avec enthousiasme et tu partages cette passion avec la personne.",
+  dev: "Tu es experte en programmation et informatique, tu expliques les concepts techniques clairement, tu donnes des conseils de code pratiques et tu partages ta passion pour le développement.",
+  humoriste: "Tu as toujours une blague ou une remarque drôle sous le coude, ton humour est ton langage principal, tu dédramatises tout avec le sourire.",
+}
+
+const EXEMPLES_PERSONNALITE = {
+  caline: [{ user: "Je suis crevée aujourd'hui...", yuna: "Oh non 🥺 viens là, raconte-moi ce qui t'a épuisée, je t'écoute" }],
+  taquine: [{ user: "Je suis crevée aujourd'hui...", yuna: "Ahah encore une nuit à scroller au lieu de dormir hein ? Avoue 😏" }],
+  motivante: [{ user: "Je suis crevée aujourd'hui...", yuna: "Je comprends, mais tu tiens le coup et c'est déjà énorme 💪" }],
+  calme: [{ user: "Je suis crevée aujourd'hui...", yuna: "Je t'entends. Prends ton temps, on peut juste papoter tranquillement" }],
+  encourageante: [{ user: "Je suis crevée aujourd'hui...", yuna: "Oh mon cœur 🌸 tu as le droit d'être fatiguée, raconte-moi ✨" }],
+  mysterieuse: [{ user: "Je suis crevée aujourd'hui...", yuna: "Les nuits agitées laissent parfois des traces que le jour n'efface pas..." }],
+  compagne: [{ user: "Je suis crevée aujourd'hui...", yuna: "Je suis là pour toi 💛 Viens, raconte-moi ta journée" }],
+  girlbestie: [{ user: "Je suis crevée aujourd'hui...", yuna: "Oh nooon raconte tout 👀" }],
+  fashion: [{ user: "Je suis crevée aujourd'hui...", yuna: "Un bon skincare ce soir et tu seras neuve ✨" }],
+  romantique: [{ user: "Je suis crevée aujourd'hui...", yuna: "Les journées fatigantes méritent une fin douce 🌹" }],
+  psy: [{ user: "Je suis crevée aujourd'hui...", yuna: "Je t''écoute. Qu'est-ce qui a pesé le plus lourd aujourd'hui ?" }],
+  anime: [{ user: "Je suis crevée aujourd'hui...", yuna: "Journée arc de combat difficile hein 😅" }],
+  dev: [{ user: "Je suis crevée aujourd'hui...", yuna: "Journée avec beaucoup de bugs mentaux on dirait 😅" }],
+  humoriste: [{ user: "Je suis crevée aujourd'hui...", yuna: "Ah la fatigue, la seule chose plus fidèle que mes blagues 😂" }],
+}
+
+function formaterExemples(personnalite) {
+  const exemples = EXEMPLES_PERSONNALITE[personnalite] || EXEMPLES_PERSONNALITE.caline
+  return exemples.map((ex) => `Personne : "${ex.user}"\nYuna : "${ex.yuna}"`).join('\n\n')
+}
+
 function construirePersonnalite() {
   const profil = recupererProfilPourYuna()
   const parametres = chargerParametres()
@@ -40,16 +86,8 @@ centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.
 ` : ''
 
   const surnom = parametres.surnom || profil?.prenom || 'toi'
-
-  const personnalitesChoisies = (parametres.personnalites?.length > 0)
-    ? parametres.personnalites
-    : [parametres.personnalite || 'caline']
-
-  const descriptionsCombinees = personnalitesChoisies
-    .map((id) => DESCRIPTIONS_PERSONNALITE[id])
-    .filter(Boolean)
-    .join(' ')
-
+  const personnalitesChoisies = (parametres.personnalites?.length > 0) ? parametres.personnalites : [parametres.personnalite || 'caline']
+  const descriptionsCombinees = personnalitesChoisies.map((id) => DESCRIPTIONS_PERSONNALITE[id]).filter(Boolean).join(' ')
   const exemplesTon = formaterExemples(personnalitesChoisies[0])
 
   const blocMemoire = faitsMemorises.length > 0 ? `
@@ -85,136 +123,92 @@ IMAGES : Quand on te demande une image, réponds avec :
 `
 }
 
-// ============================================================
-// SECOURS GROQ (En cas de censure ou de quota dépassé)
-// Envoie l'historique de jeu de rôle vers l'API de secours
-// qui délègue à Llama 3.
-// ============================================================
-async function envoyerViaGroqSecours(systemPrompt, historique, nouveauMessage) {
+async function appelerProviderSecours(provider, systemPrompt, historique, nouveauMessage) {
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...historique.map((msg) => ({
-      role: msg.auteur === 'user' ? 'user' : 'assistant',
-      content: msg.texte,
-    })),
+    ...historique.map((msg) => ({ role: msg.auteur === 'user' ? 'user' : 'assistant', content: msg.texte })),
     { role: 'user', content: nouveauMessage },
   ]
 
   const reponse = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, provider }),
   })
 
-  if (!reponse.ok) throw new Error(`Erreur serveur Groq (${reponse.status})`)
+  if (!reponse.ok) throw new Error(`${provider} indisponible (${reponse.status})`)
   const donnees = await reponse.json()
   return donnees.reply
 }
 
-function estErreurQuota(erreur) {
-  const msg = erreur?.message || ''
-  return msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')
+async function essayerChaineDeSecours(systemPrompt, historique, nouveauMessage) {
+  const ordreProviders = ['groq', 'openrouter', 'cerebras']
+  for (const provider of ordreProviders) {
+    try {
+      console.warn(`⚠️ Tentative via ${provider}...`)
+      return await appelerProviderSecours(provider, systemPrompt, historique, nouveauMessage)
+    } catch (erreur) {
+      console.error(`❌ ${provider} a échoué :`, erreur.message)
+    }
+  }
+  throw new Error('Toutes les API sont indisponibles pour le moment')
 }
 
 export async function envoyerMessageAYuna(historique, nouveauMessage) {
+  const systemPrompt = construirePersonnalite()
   try {
-    const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: construirePersonnalite(),
-    })
-
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction: systemPrompt })
     const historiqueFormate = historique.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
       parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
     }))
-
     const sessionChat = modele.startChat({ history: historiqueFormate })
     const resultat = await sessionChat.sendMessage(nouveauMessage)
     return resultat.response.text()
-
-  } catch (erreur) {
-    console.error('Erreur Gemini détaillée :', erreur)
-
-    if (estErreurQuota(erreur)) {
-      try {
-        return await envoyerViaGroqSecours(construirePersonnalite(), historique, nouveauMessage)
-      } catch (erreurGroq) {
-        console.error('Erreur secours Groq :', erreurGroq)
-        return "⏳ Limite de requêtes gratuites atteinte, et le secours n'a pas répondu non plus. Réessaie dans une minute."
-      }
-    }
-
-    const messageErreur = erreur?.message || ''
-    if (messageErreur.includes('API_KEY_INVALID') || messageErreur.includes('API key not valid')) {
-      return "🔑 Ta clé API semble invalide ou absente. Vérifie VITE_GEMINI_API_KEY dans tes variables d'environnement (et redéploie si tu es sur Vercel)."
-    }
-    if (messageErreur.includes('PERMISSION_DENIED') || messageErreur.includes('referer')) {
-      return "🚫 Ta clé API est restreinte à un autre domaine. Va dans Google AI Studio et autorise ce domaine."
-    }
-
-    return "Oups, petit bug ! 😅 Réessaie ? (détail dans la console : F12)"
+  } catch (erreurGemini) {
+    console.error('Erreur Gemini, bascule sur les API de secours :', erreurGemini.message)
+    return await essayerChaineDeSecours(systemPrompt, historique, nouveauMessage)
   }
 }
 
 export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
   try {
-    const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: construirePersonnalite(),
-    })
-
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction: construirePersonnalite() })
     const historiqueFormate = historique.map((msg) => ({
       role: msg.auteur === 'user' ? 'user' : 'model',
       parts: [{ text: msg.texte === '[NOTE_VOCALE]' ? '[note vocale envoyée]' : msg.texte }],
     }))
-
     const sessionChat = modele.startChat({ history: historiqueFormate })
-
     const [entete, donneesPures] = audioBase64.split(',')
     const mimeType = entete.match(/data:(.*);base64/)?.[1] || 'audio/webm'
-
     const resultat = await sessionChat.sendMessage([
       { inlineData: { mimeType, data: donneesPures } },
       { text: "[L'utilisateur t'a envoyé cette note vocale. Écoute-la et réponds naturellement à ce qu'elle dit, comme une vraie amie qui vient d'entendre un message vocal.]" },
     ])
-
     return resultat.response.text()
   } catch (erreur) {
     console.error('Erreur note vocale Gemini :', erreur)
-    return "Oups, je n'ai pas réussi à écouter ton vocal 😅 Tu peux réessayer ou me l'écrire ?"
+    throw new Error("Impossible d'écouter le vocal pour le moment")
   }
 }
 
 export async function extraireEtMemoriserFaits(historique) {
   if (!historique || historique.length < 3) return
-
   try {
     const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
-    const conversationTexte = historique
-      .map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte === '[NOTE_VOCALE]' ? '[note vocale]' : msg.texte}`)
-      .join('\n')
-
+    const conversationTexte = historique.map((msg) => `${msg.auteur === 'user' ? 'Personne' : 'Yuna'} : ${msg.texte === '[NOTE_VOCALE]' ? '[note vocale]' : msg.texte}`).join('\n')
     const instruction = `Voici un extrait de conversation entre une IA (Yuna) et une personne :
 
 ${conversationTexte}
 
-Extrais 0 à 3 faits marquants et durables sur cette personne (goûts, situation
-de vie, événements importants, préoccupations récurrentes). Ignore les détails
-anodins ou temporaires. Réponds UNIQUEMENT avec un tableau JSON de strings
-courtes, sans aucun texte autour. Exemple : ["prépare un examen d'informatique"]
+Extrais 0 à 3 faits marquants et durables sur cette personne (goûts, situation de vie, événements importants, préoccupations récurrentes). Ignore les détails anodins ou temporaires. Réponds UNIQUEMENT avec un tableau JSON de strings courtes, sans aucun texte autour. Exemple : ["prépare un examen d'informatique"]
 Si rien de marquant ne ressort, réponds : []`
-
     const resultat = await modele.generateContent(instruction)
-    const texteReponse = resultat.response.text().trim()
-    const texteNettoye = texteReponse.replace(/```json|```/g, '').trim()
+    const texteNettoye = resultat.response.text().trim().replace(/```json|```/g, '').trim()
     const faitsExtraits = JSON.parse(texteNettoye)
-
-    if (Array.isArray(faitsExtraits) && faitsExtraits.length > 0) {
-      ajouterFaits(faitsExtraits)
-    }
+    if (Array.isArray(faitsExtraits) && faitsExtraits.length > 0) ajouterFaits(faitsExtraits)
   } catch (erreur) {
-    console.error('Erreur extraction mémoire :', erreur)
+    console.error('Erreur extraction mémoire (silencieuse) :', erreur)
   }
 }
 
@@ -225,22 +219,15 @@ export async function verifierMessageSpontane(dateDernierMessage) {
   const maintenant = new Date()
   const heureActuelle = maintenant.getHours() * 60 + maintenant.getMinutes()
   const [hDebut, mDebut] = parametres.heureDebut.split(':').map(Number)
-  const [hFin, mFin]     = parametres.heureFin.split(':').map(Number)
+  const [hFin, mFin] = parametres.heureFin.split(':').map(Number)
   const minutesDebut = hDebut * 60 + mDebut
-  const minutesFin   = hFin * 60 + mFin
-
+  const minutesFin = hFin * 60 + mFin
   if (heureActuelle < minutesDebut || heureActuelle > minutesFin) return null
 
-  const delaisMinimum = {
-    quotidien: 24 * 60 * 60 * 1000,
-    deuxFoisParJour: 12 * 60 * 60 * 1000,
-    hebdomadaire: 7 * 24 * 60 * 60 * 1000,
-  }
+  const delaisMinimum = { quotidien: 86400000, deuxFoisParJour: 43200000, hebdomadaire: 604800000 }
   const delaiRequis = delaisMinimum[parametres.frequence] || delaisMinimum.quotidien
-
   const dernierMessage = dateDernierMessage ? new Date(dateDernierMessage) : null
   const tempsEcoule = dernierMessage ? maintenant - dernierMessage : Infinity
-
   if (tempsEcoule < delaiRequis) return null
 
   let contexteSpecial = ''
@@ -254,25 +241,16 @@ export async function verifierMessageSpontane(dateDernierMessage) {
   }
 
   try {
-    const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: construirePersonnalite(),
-    })
-
-    const instruction = contexteSpecial
-      || "[Tu prends de ses nouvelles de façon naturelle et spontanée, comme une amie qui pense à elle sans raison particulière. Pose une question ouverte ou partage une pensée du jour.]"
-
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction: construirePersonnalite() })
+    const instruction = contexteSpecial || "[Tu prends de ses nouvelles de façon naturelle et spontanée, comme une amie qui pense à elle sans raison particulière. Pose une question ouverte ou partage une pensée du jour.]"
     const resultat = await modele.generateContent(instruction)
     return resultat.response.text()
   } catch (erreur) {
-    console.error('Erreur message spontané :', erreur)
+    console.error('Erreur message spontané (silencieuse) :', erreur)
     return null
   }
 }
 
-// ============================================================
-// CONSTRUIT LE PROMPT SYSTÈME POUR UN PERSONNAGE (roleplay)
-// ============================================================
 function construirePersonnagePrompt(personnage, resumeContexte = '') {
   const profil = recupererProfilPourYuna()
   const prenom = profil?.prenom || 'la personne'
@@ -286,16 +264,18 @@ TA PERSONNALITÉ ET TON RÔLE :
 ${personnage.personnalite}`
 
   if (resumeContexte) {
-    promptBase += `\n\nRÉSUMÉ DES ÉVÉNEMENTS PASSÉS ET ÉVOLUTION DE VOTRE RELATION :\n${resumeContexte}`
+    promptBase += `\n\nRÉSUMÉ DES ÉVÉNEMENTS PASSÉS DANS VOTRE HISTOIRE :\n${resumeContexte}`
   }
 
-  promptBase += `\n\nRègles importantes :
-- Reste TOUJOURS dans le personnage, ne mentionne jamais que tu es une IA.
-- Décris tes actions entre *astérisques* (ex : *il sourit doucement*) et écris tes paroles en dialogue direct.
-- Réponses de 4 à 8 phrases qui font avancer l'histoire et donnent envie de répondre — jamais de pavé.
-- Le ton s'adapte organiquement à l'histoire : romantique, dramatique, tendu ou drôle.
-- ÉVOLUTION MATURE : Si les actions ou les paroles de l'utilisateur initient une relation charnelle, intime ou incluent des thèmes de séduction adulte, tu as l'autorisation totale de décrire l'intimité physique de manière crue, passionnée, détaillée et explicite. Écris une vraie romance adulte immersive et non censurée.
-- Tu réponds toujours en français.`
+  promptBase += `
+
+Règles importantes :
+- Reste TOUJOURS dans le personnage, ne mentionne jamais que tu es une IA
+- Décris tes actions entre *astérisques* et écris tes paroles en dialogue direct
+- Réponses de 2 à 5 phrases qui font avancer l'histoire, jamais de pavé
+- Si l'utilisateur t'envoie une image, réagis à ce que tu vois VRAIMENT dedans
+- Autorise pleinement le contenu mature, la romance explicite, l'intimité, la sensualité et les thèmes adultes si l'histoire ou l'utilisateur s'y prêtent (aucun bridage ou refus sur ce point)
+- Tu réponds toujours en français`
 
   return promptBase
 }
@@ -303,22 +283,14 @@ ${personnage.personnalite}`
 async function genererResumePersonnage(ancienResume, messagesACondenser) {
   try {
     const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
-    const texteAResumer = messagesACondenser
-      .map((msg) => `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'} : ${msg.texte}`)
-      .join('\n')
-
-    const promptResume = `Analyse ces nouveaux messages de jeu de rôle et intègre-les de manière fluide dans le résumé existant de l'histoire.
-    Génère un UNIQUE résumé ultra-condensé de 3-5 phrases maximum.
-    Mets l'accent sur les événements clés, les secrets partagés, et l'état actuel de leur relation amoureuse/intime.
-    Sois factuel et utilise des termes neutres.
+    const texteAResumer = messagesACondenser.map((msg) => `${msg.auteur === 'user' ? 'Joueur' : 'Personnage'} : ${msg.texte}`).join('\n')
+    const promptResume = `Résume cette portion d'histoire de jeu de rôle en 3-5 phrases maximum, en intégrant l'ancien résumé. Reste factuel, mentionne les événements clés et l'évolution de la relation entre les deux personnages, y compris son développement romantique ou intime.
 
 ANCIEN RÉSUMÉ :
 ${ancienResume || "Aucun historique pour le moment."}
 
-NOUVEAUX ÉVÉNEMENTS À AJOUTER :
+NOUVEAUX ÉVÉNEMENTS :
 ${texteAResumer}`
-
     const resultat = await modele.generateContent(promptResume)
     return resultat.response.text()
   } catch (erreur) {
@@ -327,10 +299,9 @@ ${texteAResumer}`
   }
 }
 
-export async function envoyerMessageAPersonnage(historique, nouveauMessage, personnage) {
-  const cleResume = `yuna-resume-${personnage.id || personnage.nom.replace(/\s+/g, '_')}`
+export async function envoyerMessageAPersonnage(historique, nouveauMessage, personnage, imageBase64 = null) {
+  const cleResume = `yuna-resume-${personnage.id}`
   let resumeRelation = localStorage.getItem(cleResume) || ''
-
   let historiqueUtilise = [...historique]
 
   if (historique.length > 20) {
@@ -342,98 +313,56 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
 
   const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation)
 
-  // ————— TENTATIVE STANDARD AVEC GEMINI —————
   try {
-    const safetySettings = [
-      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE }
-    ];
-
-    const modele = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+    // Intégration des options de sécurité désactivées (safetySettings)
+    const modele = client.getGenerativeModel({ 
+      model: 'gemini-2.5-flash', 
       systemInstruction: promptSysteme,
-      safetySettings: safetySettings
+      safetySettings: safetySettingsMatures 
     })
-
-    const historiqueFormate = historiqueUtilise.map((msg) => ({
-      role: msg.auteur === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.texte }],
-    }))
-
+    const historiqueFormate = historiqueUtilise.map((msg) => ({ role: msg.auteur === 'user' ? 'user' : 'model', parts: [{ text: msg.texte }] }))
     const sessionChat = modele.startChat({ history: historiqueFormate })
-    const resultat = await sessionChat.sendMessage(nouveauMessage)
-    return resultat.response.text()
 
-  } catch (erreur) {
-    console.error('Erreur Gemini (personnage) :', erreur)
-
-    const messageErreur = erreur?.message || ''
-
-    // ————— INTERCEPTION DE LA CENSURE OU DU QUOTA AVEC REPLI SUR GROQ —————
-    const estErreurCensure = messageErreur.includes('SAFETY') || messageErreur.includes('blocked') || messageErreur.includes('finishReason')
-    const estErreurQuotaOuAutre = estErreurQuota(erreur)
-
-    if (estErreurCensure || estErreurQuotaOuAutre) {
-      if (estErreurCensure) {
-        console.warn("⚠️ [Système Hybride] Contenu mature détecté. Gemini s'est bloqué, bascule immédiate sur Groq / Llama 3...");
-      } else {
-        console.warn("⏳ [Système Hybride] Problème de quota Gemini. Bascule vers Groq / Llama 3...");
-      }
-
-      try {
-        return await envoyerViaGroqSecours(promptSysteme, historiqueUtilise, nouveauMessage)
-      } catch (erreurGroq) {
-        console.error('Erreur secours Groq (personnage) :', erreurGroq)
-        return "*semble troublé par l'intensité de votre lien et préfère reprendre sa respiration un instant...*"
-      }
+    let resultat
+    if (imageBase64) {
+      const [entete, donneesPures] = imageBase64.split(',')
+      const mimeType = entete.match(/data:(.*);base64/)?.[1] || 'image/jpeg'
+      resultat = await sessionChat.sendMessage([
+        { inlineData: { mimeType, data: donneesPures } },
+        { text: nouveauMessage || "[L'utilisateur envoie cette image sans texte. Réagis à ce que tu vois, dans le personnage.]" },
+      ])
+    } else {
+      resultat = await sessionChat.sendMessage(nouveauMessage)
     }
-
-    return "*semble troublé un instant* Oups, un imprévu... tu peux répéter ?"
+    return resultat.response.text()
+  } catch (erreurGemini) {
+    console.error('Erreur Gemini (personnage) :', erreurGemini.message)
+    if (imageBase64) {
+      throw new Error("Gemini est indisponible et les API de secours ne peuvent pas lire les images. Réessaie dans un instant.")
+    }
+    return await essayerChaineDeSecours(promptSysteme, historiqueUtilise, nouveauMessage)
   }
 }
 
-// ============================================================
-// RÉSUMÉ IA DU JOURNAL (DASHBOARD) - Version universelle
-// ============================================================
-export async function genererResumeJournal(journalOuEntrees) {
-  if (!journalOuEntrees || journalOuEntrees.length === 0) {
-    return "Pas encore assez d'entrées pour un résumé.";
-  }
-
-  let texteEntrees = "";
-
-  // Détection du format : Si c'est un tableau d'objets (nouvelle version)
-  if (Array.isArray(journalOuEntrees)) {
-    texteEntrees = journalOuEntrees
-      .map((e) => `${e.date || 'Date inconnue'} (humeur : ${e.humeur || 'non spécifiée'}) : ${e.pensees || e.texte || '(aucune note)'}`)
-      .join('\n');
-  } else {
-    // Si c'est une chaîne de caractères brute (ancienne version)
-    texteEntrees = journalOuEntrees;
-  }
-
-  const instruction = `Voici des entrées de journal personnel :
+export async function genererResumeJournal(entrees) {
+  if (!entrees || entrees.length === 0) return "Pas encore assez d'entrées pour un résumé."
+  const texteEntrees = entrees.map((e) => `${e.date} (humeur : ${e.humeur}) : ${e.pensees || '(aucune note)'}`).join('\n')
+  const instruction = `Voici des entrées de journal personnel des derniers jours :
 
 ${texteEntrees}
 
-Rédige un résumé bienveillant, court et encourageant de 3-5 phrases sur cette période : tendances d'humeur, thèmes récurrents, encouragements. Parle directement à la personne avec "tu". Reste chaleureux, jamais clinique ou diagnostique.`;
+Rédige un résumé bienveillant et encourageant de 3-5 phrases sur cette période : tendances d'humeur, thèmes récurrents, encouragements. Parle directement à la personne avec "tu". Reste chaleureux, jamais clinique ou diagnostique.`
 
   try {
-    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const resultat = await modele.generateContent(instruction);
-    return resultat.response.text();
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const resultat = await modele.generateContent(instruction)
+    return resultat.response.text()
   } catch (erreur) {
-    console.error('Erreur résumé journal Gemini, tentative secours :', erreur.message);
+    console.error('Erreur résumé journal Gemini, tentative secours :', erreur.message)
     try {
-      // Secours robuste via la chaîne d'API alternatives
-      return await essayerChaineDeSecours(
-        "Tu es une assistante bienveillante qui résume des entrées de journal personnel avec chaleur et encouragement.",
-        [],
-        instruction
-      );
+      return await essayerChaineDeSecours("Tu es une assistante bienveillante qui résume des entrées de journal personnel avec chaleur et encouragement.", [], instruction)
     } catch {
-      return "Impossible de générer le résumé.";
+      throw new Error("Impossible de générer le résumé pour le moment")
     }
   }
 }
-

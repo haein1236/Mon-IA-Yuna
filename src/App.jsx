@@ -61,7 +61,7 @@ function App() {
   return (
     <>
       <NotificationHost />
-      <div className="hauteur-app overflow-hidden flex flex-col md:flex-row">
+      <div className="hauteur-app overflow-hidden flex flex-col lg:flex-row">
         <Sidebar ecranActuel={ecranActuel} onChangerEcran={gererChangerEcran} />
 
         {/* ============================================================
@@ -73,7 +73,7 @@ function App() {
           sa vraie place dans le flux — donc aucun risque qu'elle
           cache quoi que ce soit en bas de l'écran.
           ============================================================ */}
-        <div className="order-1 md:order-2 flex-1 min-h-0 overflow-hidden">
+        <div className="order-1 lg:order-2 flex-1 min-h-0 overflow-hidden">
           {ecranActuel === "accueil" && (
             <HomeScreen onChangerEcran={gererChangerEcran} />
           )}

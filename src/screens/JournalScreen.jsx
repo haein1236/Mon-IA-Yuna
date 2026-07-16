@@ -1,913 +1,646 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { chargerEntreesJournal, sauvegarderEntreeJournal, obtenirEntreeDuJour, HUMEURS } from '../services/journal'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import {
+  Plus, Check, Sparkles, Search, Download, Camera, Flame, X,
+  Clock, ImagePlus, Heart, TrendingUp, Feather, ChevronLeft,
+  ChevronRight, Wand2, NotebookPen, Star,
+} from 'lucide-react'
+import { chargerEntreesJournal, sauvegarderEntreesJournal } from '../services/journal'
 import { genererResumeJournal } from '../services/gemini'
-import { notifierErreur, notifierSucces } from '../services/notifications'
-import { fichierVersBase64 } from '../services/images'
+import { notifierErreur } from '../services/notifications'
 
-// ============================================================
-// UTILITAIRES DATE
-// ============================================================
-function formaterDateISO(date) {
-  return date.toISOString().slice(0, 10)
+const C = {
+  cream: '#FAF6F0', sable: '#F1E9DE', sableBorder: 'rgba(62,39,35,0.10)',
+  espresso: '#3E2723', encreDoux: 'rgba(62,39,35,0.52)', encreFaible: 'rgba(62,39,35,0.35)',
+  peony: '#F6D8DE', peonyDeep: '#C98A93', sauge: '#7C8F6E',
 }
 
-function formaterDateLongue(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00')
-  const texte = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  return texte.charAt(0).toUpperCase() + texte.slice(1)
-}
+const HUMEURS = [
+  { id: 'radieuse', emoji: '✨', label: 'Radieuse' },
+  { id: 'bien', emoji: '🙂', label: 'Bien' },
+  { id: 'sereine', emoji: '😌', label: 'Sereine' },
+  { id: 'fatiguee', emoji: '😴', label: 'Fatiguée' },
+  { id: 'stressee', emoji: '😰', label: 'Stressée' },
+  { id: 'triste', emoji: '😔', label: 'Triste' },
+]
 
-function obtenirSalutation(heure) {
-  if (heure < 5) return 'Encore réveillée à cette heure'
-  if (heure < 12) return 'Bonjour'
-  if (heure < 18) return 'Bon après-midi'
-  if (heure < 22) return 'Bonsoir'
+const PROMPTS = [
+  "Si aujourd'hui avait une couleur, laquelle serait-elle ?",
+  "Qu'est-ce qui ferait de cette semaine une réussite pour toi ?",
+  'Pour qui ressens-tu de la gratitude aujourd’hui ?',
+  "Quel petit moment t'a fait sourire récemment ?",
+  'De quoi as-tu besoin pour te sentir plus légère demain ?',
+  'Qu’as-tu appris sur toi cette semaine ?',
+]
+
+const CITATIONS = [
+  'Chaque jour est une page blanche ; écris-la avec douceur envers toi-même.',
+  'Tu n’as pas besoin d’être parfaite pour avoir de la valeur.',
+  'Les petits pas comptent autant que les grands bonds.',
+  'Prendre soin de soi n’est jamais un luxe, c’est une nécessité.',
+  'Il est normal de ne pas être normale.',
+  'Le repos fait partie du chemin, pas une pause dans le chemin.',
+  'Ce que tu construis en silence finit toujours par se voir.',
+]
+
+const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+
+function iso(d) { return d.toISOString().slice(0, 10) }
+function dateLongue(str) {
+  const d = new Date(str + 'T00:00:00')
+  const t = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+function salutation(h) {
+  if (h < 5) return 'Encore réveillée à cette heure'
+  if (h < 12) return 'Bonjour'
+  if (h < 18) return 'Bon après-midi'
+  if (h < 22) return 'Bonsoir'
   return 'Bonne nuit'
 }
-
-// ============================================================
-// ICÔNES LOCALES
-// ============================================================
-const IconPlus = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>)
-const IconCheck = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><polyline points="20 6 9 17 4 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>)
-const IconEtoiles = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5l2 2M15.5 15.5l2 2M17.5 6.5l-2 2M8.5 15.5l-2 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>)
-const IconRecherche = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" /><line x1="21" y1="21" x2="16.5" y2="16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>)
-const IconTag = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><path d="M20.5 12.5l-8-8H4v8.5l8 8a1.5 1.5 0 0 0 2.1 0l6.4-6.4a1.5 1.5 0 0 0 0-2.1z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" /></svg>)
-const IconPlay = (props) => (<svg viewBox="0 0 24 24" fill="currentColor" {...props}><polygon points="6 3 20 12 6 21 6 3" /></svg>)
-const IconPause = (props) => (<svg viewBox="0 0 24 24" fill="currentColor" {...props}><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>)
-const IconTelechargement = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><path d="M12 3v13m0 0l-4.5-4.5M12 16l4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 19h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>)
-const IconCamera = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><circle cx="12" cy="14" r="3.2" stroke="currentColor" strokeWidth="1.8" /></svg>)
-const IconFeu = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><path d="M12 22c4.5 0 7-2.7 7-6.5C19 11 15 8 14 4c-.5 2.5-2 3.5-3 5-1.3 1.8-4 3-4 6.5C7 19.3 7.5 22 12 22z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>)
-const IconGraphique = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><path d="M4 20V10M10 20V4M16 20v-7M22 20v-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>)
-const IconCroix = (props) => (<svg viewBox="0 0 24 24" fill="none" {...props}><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>)
-
-// ============================================================
-// CITATIONS DU JOUR — une par jour, choisie de façon déterministe
-// (même citation toute la journée, change le lendemain)
-// ============================================================
-const CITATIONS = [
-  "Chaque jour est une page blanche ; écris-la avec douceur envers toi-même.",
-  "Tu n'as pas besoin d'être parfaite pour avoir de la valeur.",
-  "Les petits pas comptent autant que les grands bonds.",
-  "Ce que tu ressens aujourd'hui n'est pas ce que tu ressentiras toujours.",
-  "Prendre soin de soi n'est jamais un luxe, c'est une nécessité.",
-  "Ta présence à toi-même est le plus beau cadeau que tu puisses te faire.",
-  "Il est normal de ne pas être normale.",
-  "Respire. Tu fais déjà de ton mieux.",
-  "La patience envers soi-même est une forme de courage.",
-  "Chaque page de ce journal est une preuve que tu avances.",
-  "Le repos fait partie du chemin, pas une pause dans le chemin.",
-  "Tu as le droit de ralentir sans culpabiliser.",
-  "Ce que tu construis en silence finit toujours par se voir.",
-  "Sois aussi bienveillante envers toi qu'envers celles et ceux que tu aimes.",
-]
-
-function citationDuJour(dateISO) {
-  const jourDeAnnee = Math.floor(new Date(dateISO + 'T00:00:00') / 86400000)
-  return CITATIONS[jourDeAnnee % CITATIONS.length]
+function citationDuJour(dateStr) {
+  const j = Math.floor(new Date(dateStr + 'T00:00:00') / 86400000)
+  return CITATIONS[((j % CITATIONS.length) + CITATIONS.length) % CITATIONS.length]
 }
 
-// ============================================================
-// MÉTÉO SIMULÉE — génère une météo "pseudo-aléatoire" mais stable
-// pour une date donnée (même météo toute la journée). Prévu pour
-// être remplacé plus tard par un vrai appel API (voir commentaire
-// dans le composant WidgetMeteo plus bas).
-// ============================================================
-const CONDITIONS_METEO = [
-  { icone: '☀️', label: 'Ensoleillé', tempMin: 22, tempMax: 32 },
-  { icone: '⛅', label: 'Éclaircies', tempMin: 16, tempMax: 24 },
-  { icone: '☁️', label: 'Nuageux', tempMin: 12, tempMax: 19 },
-  { icone: '🌧️', label: 'Pluvieux', tempMin: 9, tempMax: 15 },
-  { icone: '🌙', label: 'Nuit claire', tempMin: 8, tempMax: 14 },
-]
-
-function meteoSimuleeDuJour(dateISO) {
-  // Petit hash déterministe à partir de la date, pour ne pas changer
-  // à chaque re-render mais changer chaque jour.
-  let hash = 0
-  for (const char of dateISO) hash = (hash * 31 + char.charCodeAt(0)) % 997
-  const condition = CONDITIONS_METEO[hash % CONDITIONS_METEO.length]
-  const temperature = condition.tempMin + (hash % (condition.tempMax - condition.tempMin + 1))
-  return { ...condition, temperature }
-}
-
-// ============================================================
-// STATISTIQUES — calculées à partir de TOUTES les entrées
-// ============================================================
-function calculerStatistiques(entrees) {
-  const dates = new Set(entrees.map((e) => e.date))
-  const joursEcrits = entrees.length
-
-  // Série actuelle : on remonte jour par jour depuis aujourd'hui
-  let streakActuel = 0
-  const curseur = new Date()
-  while (dates.has(formaterDateISO(curseur))) {
-    streakActuel++
-    curseur.setDate(curseur.getDate() - 1)
-  }
-
-  // Plus longue série jamais atteinte
-  const datesTriees = [...dates].sort()
-  let streakMax = 0
-  let streakCourante = 0
-  let dernierJour = null
-  for (const dateStr of datesTriees) {
-    const jour = new Date(dateStr + 'T00:00:00')
-    streakCourante = dernierJour && Math.round((jour - dernierJour) / 86400000) === 1 ? streakCourante + 1 : 1
-    streakMax = Math.max(streakMax, streakCourante)
-    dernierJour = jour
-  }
-
-  // Humeur la plus fréquente
-  const comptage = {}
-  entrees.forEach((e) => { if (e.humeur) comptage[e.humeur] = (comptage[e.humeur] || 0) + 1 })
-  const humeurDominanteId = Object.entries(comptage).sort((a, b) => b[1] - a[1])[0]?.[0]
-
-  // Pourcentage d'objectifs réalisés, toutes entrées confondues
-  let totalObjectifs = 0, objectifsFaits = 0
-  entrees.forEach((e) => (e.objectifs || []).forEach((o) => { totalObjectifs++; if (o.fait) objectifsFaits++ }))
-  const pourcentageObjectifs = totalObjectifs ? Math.round((objectifsFaits / totalObjectifs) * 100) : 0
-
-  return { joursEcrits, streakActuel, streakMax, humeurDominanteId, pourcentageObjectifs }
-}
-
-// ============================================================
-// PETIT COMPOSANT : carte "glassmorphique" réutilisable
-// (fond translucide + flou + bordure fine + ombre douce)
-// ============================================================
-function CarteVerre({ children, className = '', style }) {
+function Carte({ children, className = '', style, delay = 0 }) {
   return (
     <div
-      className={`rounded-2xl border border-espresso/10 bg-white/70 backdrop-blur-md p-5 transition-all duration-300 ${className}`}
-      style={{ boxShadow: '0 8px 30px rgba(62,39,35,0.06)', ...style }}
+      className={`anim-in hover-lift rounded-3xl border p-5 md:p-6 ${className}`}
+      style={{ background: 'rgba(255,255,255,0.72)', borderColor: C.sableBorder, boxShadow: '0 10px 28px rgba(62,39,35,0.06)', animationDelay: `${delay}s`, ...style }}
     >
       {children}
     </div>
   )
 }
 
-// ============================================================
-// PETIT COMPOSANT : bouton avec effet "ripple" au clic (aucune
-// librairie — juste un span animé ajouté/retiré au clic)
-// ============================================================
-function BoutonRipple({ onClick, className = '', children, style, ...props }) {
-  const [ripples, setRipples] = useState([])
-
-  const gererClic = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const taille = Math.max(rect.width, rect.height) * 2
-    const nouveauRipple = {
-      id: Date.now(),
-      x: e.clientX - rect.left - taille / 2,
-      y: e.clientY - rect.top - taille / 2,
-      taille,
-    }
-    setRipples((r) => [...r, nouveauRipple])
-    setTimeout(() => setRipples((r) => r.filter((rp) => rp.id !== nouveauRipple.id)), 600)
-    onClick?.(e)
-  }
-
+function Eyebrow({ children, icon: Icon }) {
   return (
-    <button
-      onClick={gererClic}
-      className={`relative overflow-hidden ${className}`}
-      style={style}
-      {...props}
-    >
+    <p className="flex items-center gap-1.5 mb-3 uppercase" style={{ fontSize: '10px', letterSpacing: '0.09em', color: C.encreFaible, fontWeight: 700 }}>
+      {Icon && <Icon size={12} strokeWidth={2.3} />}
       {children}
-      {ripples.map((r) => (
-        <span
-          key={r.id}
-          className="absolute rounded-full pointer-events-none"
-          style={{
-            left: r.x, top: r.y, width: r.taille, height: r.taille,
-            background: 'currentColor', opacity: 0.18,
-            animation: 'rippleAnim 0.6s ease-out forwards',
-          }}
-        />
-      ))}
-    </button>
+    </p>
   )
 }
 
-function JournalScreen() {
-  const [dateChoisie, setDateChoisie] = useState(() => formaterDateISO(new Date()))
-  const [entrees, setEntrees] = useState([])
-  const [chargement, setChargement] = useState(true)
+export default function JournalScreen() {
+  // ⬅️ CONNECTÉ : charge les vraies entrées sauvegardées au démarrage
+  // au lieu de partir d'un tableau vide à chaque rechargement
+  const [entrees, setEntrees] = useState(() => chargerEntreesJournal())
+  const [dateChoisie, setDateChoisie] = useState(() => iso(new Date()))
+  const [horloge, setHorloge] = useState(new Date())
+  const [mois, setMois] = useState(() => new Date())
 
   const [humeur, setHumeur] = useState('bien')
   const [pensees, setPensees] = useState('')
-  const [objectifs, setObjectifs] = useState([])
-  const [nouvelObjectif, setNouvelObjectif] = useState('')
-
   const [tags, setTags] = useState([])
   const [nouveauTag, setNouveauTag] = useState('')
-  const [tagsFiltre, setTagsFiltre] = useState([])
-
+  const [objectifs, setObjectifs] = useState([])
+  const [nouvelObjectif, setNouvelObjectif] = useState('')
   const [energie, setEnergie] = useState(70)
   const [gratitude, setGratitude] = useState(['', '', ''])
-  const [photo, setPhoto] = useState(null)
-
-  const [resume, setResume] = useState('')
-  const [chargementResume, setChargementResume] = useState(false)
-
   const [recherche, setRecherche] = useState('')
-  const [sauvegardeAnimee, setSauvegardeAnimee] = useState(false)
-
-  const [lectureEnCours, setLectureEnCours] = useState(false)
-  const [progressionLecture, setProgressionLecture] = useState(0)
-
+  const [enregistre, setEnregistre] = useState(false)
   const inputPhotoRef = useRef(null)
-  const minuteurLectureRef = useRef(null)
-  const horlogeRef = useRef(new Date())
-  const [, forcerRafraichissement] = useState(0)
 
-  // ===== HORLOGE TEMPS RÉEL — tick chaque seconde =====
-  useEffect(() => {
-    const intervalle = setInterval(() => {
-      horlogeRef.current = new Date()
-      forcerRafraichissement((n) => n + 1)
-    }, 1000)
-    return () => clearInterval(intervalle)
-  }, [])
-  const maintenant = horlogeRef.current
+  // ⬅️ NOUVEAU : résumé généré par la vraie IA (Yuna), en plus du
+  // résumé "local" instantané déjà présent dans ton design
+  const [resumeIA, setResumeIA] = useState('')
+  const [chargementResumeIA, setChargementResumeIA] = useState(false)
 
-  // ===== CHARGEMENT INITIAL (avec un court skeleton, effet premium) =====
+  const promptDuJour = PROMPTS[new Date(dateChoisie + 'T00:00:00').getDate() % PROMPTS.length]
+  const citation = citationDuJour(dateChoisie)
+
   useEffect(() => {
-    setEntrees(chargerEntreesJournal())
-    const timer = setTimeout(() => setChargement(false), 380)
-    return () => clearTimeout(timer)
+    const t = setInterval(() => setHorloge(new Date()), 1000)
+    return () => clearInterval(t)
   }, [])
 
-  // Charge l'entrée existante quand on change de date
+  // ⬅️ NOUVEAU : sauvegarde automatiquement à CHAQUE changement du
+  // tableau d'entrées — plus besoin d'action manuelle, rien ne se
+  // perd même si l'utilisateur ferme l'onglet sans cliquer "Enregistrer"
   useEffect(() => {
-    const entree = obtenirEntreeDuJour(dateChoisie)
-    if (entree) {
-      setHumeur(entree.humeur || 'bien')
-      setPensees(entree.pensees || '')
-      setObjectifs(entree.objectifs || [])
-      setTags(entree.tags || [])
-      setEnergie(entree.energie ?? 70)
-      setGratitude(entree.gratitude?.length === 3 ? entree.gratitude : ['', '', ''])
-      setPhoto(entree.photo || null)
-    } else {
-      setHumeur('bien')
-      setPensees('')
-      setObjectifs([])
-      setTags([])
-      setEnergie(70)
-      setGratitude(['', '', ''])
-      setPhoto(null)
-    }
-  }, [dateChoisie])
-
-  // ===== LECTEUR MUSICAL — simulation front-end. Pour brancher un
-  // vrai fichier audio relaxant : ajoute-le dans /public/audio/ puis
-  // remplace ce setInterval par les événements d'un vrai <audio> :
-  // ontimeupdate, onended, currentTime/duration.
-  useEffect(() => {
-    if (lectureEnCours) {
-      minuteurLectureRef.current = setInterval(() => {
-        setProgressionLecture((p) => (p >= 100 ? 0 : p + 0.6))
-      }, 200)
-    } else {
-      clearInterval(minuteurLectureRef.current)
-    }
-    return () => clearInterval(minuteurLectureRef.current)
-  }, [lectureEnCours])
-
-  // ===== STATISTIQUES (recalculées seulement si les entrées changent) =====
-  const stats = useMemo(() => calculerStatistiques(entrees), [entrees])
-  const humeurDominante = HUMEURS.find((h) => h.id === stats.humeurDominanteId)
-
-  // Tous les tags existants, pour proposer des filtres
-  const tousLesTags = useMemo(() => {
-    const ensemble = new Set()
-    entrees.forEach((e) => (e.tags || []).forEach((t) => ensemble.add(t)))
-    return [...ensemble]
+    sauvegarderEntreesJournal(entrees)
   }, [entrees])
 
-  // Résultats de recherche (pensées + objectifs + tags), combinés au
-  // filtre de tags actif
-  const entreesFiltrees = useMemo(() => {
-    return entrees.filter((e) => {
-      const correspondTags = tagsFiltre.length === 0 || (e.tags || []).some((t) => tagsFiltre.includes(t))
-      if (!correspondTags) return false
-      if (!recherche.trim()) return true
-      const q = recherche.toLowerCase()
-      const dansPensees = (e.pensees || '').toLowerCase().includes(q)
-      const dansObjectifs = (e.objectifs || []).some((o) => o.texte.toLowerCase().includes(q))
-      const dansTags = (e.tags || []).some((t) => t.toLowerCase().includes(q))
-      return dansPensees || dansObjectifs || dansTags
+  useEffect(() => {
+    const e = entrees.find((x) => x.date === dateChoisie)
+    setHumeur(e?.humeur || 'bien')
+    setPensees(e?.pensees || '')
+    setTags(e?.tags || [])
+    setObjectifs(e?.objectifs || [])
+    setEnergie(e?.energie ?? 70)
+    setGratitude(e?.gratitude?.length === 3 ? e.gratitude : ['', '', ''])
+    setResumeIA('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateChoisie])
+
+  const stats = useMemo(() => {
+    const dates = new Set(entrees.map((e) => e.date))
+    let streak = 0
+    const cur = new Date()
+    while (dates.has(iso(cur))) { streak++; cur.setDate(cur.getDate() - 1) }
+    const compte = {}
+    entrees.forEach((e) => { if (e.humeur) compte[e.humeur] = (compte[e.humeur] || 0) + 1 })
+    const dominanteId = Object.entries(compte).sort((a, b) => b[1] - a[1])[0]?.[0]
+    let total = 0, faits = 0
+    entrees.forEach((e) => (e.objectifs || []).forEach((o) => { total++; if (o.fait) faits++ }))
+    return {
+      joursEcrits: entrees.length,
+      streak,
+      dominante: HUMEURS.find((h) => h.id === dominanteId),
+      pctObjectifs: total ? Math.round((faits / total) * 100) : 0,
+    }
+  }, [entrees])
+
+  const semaine = useMemo(() => {
+    const lundi = new Date()
+    lundi.setDate(lundi.getDate() - ((lundi.getDay() + 6) % 7))
+    const dates = new Set(entrees.map((e) => e.date))
+    return JOURS_SEMAINE.map((label, i) => {
+      const d = new Date(lundi); d.setDate(d.getDate() + i)
+      return { label, actif: dates.has(iso(d)), estAujourdhui: iso(d) === iso(new Date()) }
     })
-  }, [entrees, recherche, tagsFiltre])
+  }, [entrees])
 
-  const activiteRecente = useMemo(() =>
-    [...entreesFiltrees].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6),
-  [entreesFiltrees])
+  const joursDuMois = useMemo(() => {
+    const y = mois.getFullYear(), m = mois.getMonth()
+    const nb = new Date(y, m + 1, 0).getDate()
+    const premierJour = (new Date(y, m, 1).getDay() + 6) % 7
+    const jours = Array.from({ length: nb }, (_, i) => {
+      const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
+      const e = entrees.find((x) => x.date === dStr)
+      return { jour: i + 1, date: dStr, humeur: e?.humeur, aEntree: !!e }
+    })
+    return { vides: premierJour, jours }
+  }, [mois, entrees])
 
-  // ===== SAUVEGARDE =====
-  const sauvegarder = () => {
-    const nouvelleEntree = { date: dateChoisie, humeur, pensees, objectifs, tags, energie, gratitude, photo }
-    setEntrees(sauvegarderEntreeJournal(nouvelleEntree))
-    notifierSucces('Entrée du journal enregistrée 📝')
-    setSauvegardeAnimee(true)
-    setTimeout(() => setSauvegardeAnimee(false), 900)
+  const toutesPhotos = useMemo(() =>
+    [...entrees].sort((a, b) => b.date.localeCompare(a.date)).flatMap((e) => (e.photos || []).map((src) => ({ src, date: e.date }))),
+  [entrees])
+
+  const entreesFiltrees = useMemo(() => {
+    const q = recherche.trim().toLowerCase()
+    return [...entrees]
+      .filter((e) => !q || (e.pensees || '').toLowerCase().includes(q) || (e.tags || []).some((t) => t.includes(q)))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 6)
+  }, [entrees, recherche])
+
+  const motYuna = useMemo(() => {
+    const dernieres = [...entrees].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7)
+    if (dernieres.length === 0) {
+      return { resume: 'Écris ta première entrée pour que je puisse commencer à t’accompagner ici.', humeur: '—', progres: 'Ton parcours commence aujourd’hui, une première page à la fois.', encouragement: 'Chaque petite étape construit une grande évolution.' }
+    }
+    return {
+      resume: resumeIA || (dernieres.length >= 3
+        ? 'Cette semaine, tu as pris le temps d’écrire régulièrement, continue à noter ce qui compte pour toi.'
+        : 'Tu viens de commencer à écrire ici — reviens quand tu en ressens le besoin.'),
+      humeur: stats.dominante?.label || '—',
+      progres: stats.streak > 1 ? `Tu tiens une série de ${stats.streak} jours d’affilée, continue ainsi.` : 'Tu poses les bases d’une belle habitude d’écriture.',
+      encouragement: 'Chaque petite étape construit une grande évolution.',
+    }
+  }, [entrees, stats, resumeIA])
+
+  // ⬅️ NOUVEAU : demande un VRAI résumé généré par Yuna (via Gemini,
+  // avec la chaîne de secours Groq/OpenRouter/Cerebras en cas d'échec)
+  const demanderResumeYuna = async () => {
+    const dernieres = [...entrees].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7)
+    if (dernieres.length === 0) return
+    setChargementResumeIA(true)
+    try {
+      const texte = await genererResumeJournal(dernieres)
+      setResumeIA(texte)
+    } catch (erreur) {
+      notifierErreur(erreur.message || "Impossible de générer le résumé pour le moment")
+    } finally {
+      setChargementResumeIA(false)
+    }
   }
 
+  const sparkline = useMemo(() => {
+    const ordre = HUMEURS.map((h) => h.id)
+    const jours = []
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i)
+      const e = entrees.find((x) => x.date === iso(d))
+      const idx = e ? ordre.indexOf(e.humeur) : -1
+      jours.push(idx === -1 ? null : idx)
+    }
+    return jours
+  }, [entrees])
+
+  const sauvegarder = () => {
+    setEntrees((prev) => {
+      const reste = prev.filter((e) => e.date !== dateChoisie)
+      const existante = prev.find((e) => e.date === dateChoisie)
+      return [...reste, { ...(existante || { photos: [] }), date: dateChoisie, humeur, pensees, tags, objectifs, energie, gratitude }]
+    })
+    setEnregistre(true)
+    setTimeout(() => setEnregistre(false), 1400)
+  }
+  const ajouterTag = () => {
+    const v = nouveauTag.trim().toLowerCase()
+    if (!v || tags.includes(v)) return
+    setTags([...tags, v]); setNouveauTag('')
+  }
   const ajouterObjectif = () => {
     if (!nouvelObjectif.trim()) return
     setObjectifs([...objectifs, { texte: nouvelObjectif.trim(), fait: false }])
     setNouvelObjectif('')
   }
-  const toggleObjectif = (index) => setObjectifs(objectifs.map((o, i) => i === index ? { ...o, fait: !o.fait } : o))
-  const supprimerObjectif = (index) => setObjectifs(objectifs.filter((_, i) => i !== index))
+  const toggleObjectif = (i) => setObjectifs(objectifs.map((o, idx) => idx === i ? { ...o, fait: !o.fait } : o))
+  const supprimerObjectif = (i) => setObjectifs(objectifs.filter((_, idx) => idx !== i))
   const progressionObjectifs = objectifs.length ? Math.round((objectifs.filter((o) => o.fait).length / objectifs.length) * 100) : 0
 
-  // ===== TAGS DE L'ENTRÉE =====
-  const ajouterTag = () => {
-    const valeur = nouveauTag.trim().toLowerCase()
-    if (!valeur || tags.includes(valeur)) return
-    setTags([...tags, valeur])
-    setNouveauTag('')
-  }
-  const supprimerTag = (tag) => setTags(tags.filter((t) => t !== tag))
-  const toggleFiltreTag = (tag) => setTagsFiltre((actuels) => actuels.includes(tag) ? actuels.filter((t) => t !== tag) : [...actuels, tag])
-
-  // ===== GRATITUDE =====
-  const modifierGratitude = (index, valeur) => {
-    const copie = [...gratitude]
-    copie[index] = valeur
-    setGratitude(copie)
-  }
-
-  // ===== PHOTO =====
-  const gererUploadPhoto = async (e) => {
+  const ajouterPhoto = (e) => {
     const fichier = e.target.files[0]
     e.target.value = ''
     if (!fichier) return
-    const base64 = await fichierVersBase64(fichier)
-    setPhoto(base64)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setEntrees((prev) => {
+        const existante = prev.find((x) => x.date === dateChoisie)
+        const reste = prev.filter((x) => x.date !== dateChoisie)
+        const base = existante || { date: dateChoisie, humeur, pensees, tags, objectifs, energie, gratitude, photos: [] }
+        return [...reste, { ...base, photos: [...(base.photos || []), reader.result] }]
+      })
+    }
+    reader.readAsDataURL(fichier)
   }
 
-  // ===== EXPORT =====
-  const telechargerFichier = (contenu, nomFichier, type) => {
+  const telecharger = (contenu, nom, type) => {
     const blob = new Blob([contenu], { type })
     const url = URL.createObjectURL(blob)
-    const lien = document.createElement('a')
-    lien.href = url
-    lien.download = nomFichier
-    lien.click()
+    const a = document.createElement('a')
+    a.href = url; a.download = nom; a.click()
     URL.revokeObjectURL(url)
   }
+  const exporterJSON = () => telecharger(JSON.stringify(entrees, null, 2), 'journal.json', 'application/json')
+  const exporterTXT = () => telecharger(
+    [...entrees].sort((a, b) => a.date.localeCompare(b.date)).map((e) => `${dateLongue(e.date)}\n${e.pensees || ''}`).join('\n\n'),
+    'journal.txt', 'text/plain'
+  )
 
-  const exporterJSON = () => {
-    telechargerFichier(JSON.stringify(entrees, null, 2), `journal-${dateChoisie}.json`, 'application/json')
-    notifierSucces('Export JSON téléchargé')
-  }
-
-  const exporterTXT = () => {
-    const texte = [...entrees].sort((a, b) => a.date.localeCompare(b.date)).map((e) => {
-      const humeurInfo = HUMEURS.find((h) => h.id === e.humeur)
-      const objectifsTxt = (e.objectifs || []).map((o) => `  ${o.fait ? '[x]' : '[ ]'} ${o.texte}`).join('\n')
-      return `${formaterDateLongue(e.date)}\nHumeur : ${humeurInfo?.label || e.humeur || '—'}\n\n${e.pensees || '(aucune pensée notée)'}\n\nObjectifs :\n${objectifsTxt || '  (aucun)'}\n`
-    }).join('\n' + '─'.repeat(40) + '\n\n')
-    telechargerFichier(texte, `journal-complet.txt`, 'text/plain')
-    notifierSucces('Export TXT téléchargé')
-  }
-
-  const exporterPDF = () => {
-    // Le PDF n'est pas encore branché ici pour ne pas ajouter de
-    // dépendance sans validation. Il suffit d'installer `jspdf`
-    // (npm install jspdf) puis de générer le PDF à partir du même
-    // texte que exporterTXT() ci-dessus.
-    notifierErreur("L'export PDF arrive bientôt — utilise JSON ou TXT pour l'instant")
-  }
-
-  // ===== RÉSUMÉ IA =====
-  const genererResume = async () => {
-    setChargementResume(true)
-    try {
-      const entrees7DerniersJours = chargerEntreesJournal().slice(0, 7)
-      const texte = await genererResumeJournal(entrees7DerniersJours)
-      setResume(texte)
-    } catch (erreur) {
-      notifierErreur(erreur.message || 'Impossible de générer le résumé pour le moment')
-    } finally {
-      setChargementResume(false)
-    }
-  }
-
-  // ===== MINI CALENDRIER DU MOIS EN COURS =====
-  const anneeMois = dateChoisie.slice(0, 7)
-  const [annee, mois] = anneeMois.split('-').map(Number)
-  const nbJours = new Date(annee, mois, 0).getDate()
-  const joursDuMois = Array.from({ length: nbJours }, (_, i) => {
-    const jour = i + 1
-    const dateStr = `${anneeMois}-${String(jour).padStart(2, '0')}`
-    const entree = entrees.find((e) => e.date === dateStr)
-    return { jour, dateStr, humeur: entree?.humeur, aUneEntree: !!entree }
-  })
-
-  // ===== MINI GRAPHIQUE (SPARKLINE SVG) DES 14 DERNIERS JOURS =====
-  const ORDRE_HUMEURS = HUMEURS.map((h) => h.id)
-  const sparklineDonnees = useMemo(() => {
-    const jours = []
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      const dateStr = formaterDateISO(d)
-      const entree = entrees.find((e) => e.date === dateStr)
-      const indexHumeur = entree ? ORDRE_HUMEURS.indexOf(entree.humeur) : -1
-      jours.push({ dateStr, valeur: indexHumeur === -1 ? null : indexHumeur })
-    }
-    return jours
-  }, [entrees])
-
-  const meteo = meteoSimuleeDuJour(dateChoisie)
-  const citation = citationDuJour(dateChoisie)
   const compteurMots = pensees.trim() ? pensees.trim().split(/\s+/).length : 0
 
-  // ============================================================
-  // SKELETON — affiché brièvement au chargement initial
-  // ============================================================
-  if (chargement) {
-    return (
-      <div className="h-full min-h-0 w-full overflow-hidden bg-cream p-4 md:p-8">
-        <style>{`@keyframes pulseSkeleton { 0%,100% { opacity: 0.5 } 50% { opacity: 0.9 } }`}</style>
-        <div className="max-w-[1100px] mx-auto space-y-5">
-          <div className="h-16 rounded-2xl bg-espresso/8" style={{ animation: 'pulseSkeleton 1.4s ease-in-out infinite' }} />
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-40 rounded-2xl bg-espresso/8" style={{ animation: `pulseSkeleton 1.4s ease-in-out infinite`, animationDelay: `${i * 0.08}s` }} />
-            ))}
+  return (
+    // ⬅️ CHANGÉ : "min-h-full" → "h-full min-h-0 overflow-y-auto
+    // scroll-suave" pour s'intégrer correctement au système de scroll
+    // fluide déjà en place sur tous les autres écrans de l'app
+    <div className="h-full min-h-0 overflow-y-auto scroll-suave w-full" style={{ background: C.cream, fontFamily: "'Manrope', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+        @keyframes entree { from { opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);} }
+        @keyframes halo { 0%,100% { transform: translate(0,0) scale(1); opacity:.5; } 50% { transform: translate(10px,-14px) scale(1.08); opacity:.78; } }
+        @keyframes scintille { 0%,100% { opacity:.2; transform: scale(.8);} 50% { opacity:1; transform: scale(1.15);} }
+        @keyframes pop { 0% { transform: scale(.7); opacity:0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity:1; } }
+        .anim-in { animation: entree .5s cubic-bezier(.2,.7,.3,1) both; }
+        .halo { animation: halo 7s ease-in-out infinite; }
+        .etoile { animation: scintille 2.4s ease-in-out infinite; }
+        .pop-in { animation: pop .35s ease-out both; }
+        .hover-lift { transition: transform .25s ease, box-shadow .25s ease; }
+        .hover-lift:hover { transform: translateY(-3px); box-shadow: 0 16px 32px rgba(62,39,35,0.09); }
+        @media (prefers-reduced-motion: reduce) { .anim-in, .halo, .etoile, .pop-in { animation: none !important; } }
+      `}</style>
+
+      <div className="border-b sticky top-0 z-20 backdrop-blur-md" style={{ borderColor: C.sableBorder, background: 'rgba(250,246,240,0.86)' }}>
+        <div className="max-w-[1240px] mx-auto flex items-center justify-between px-4 md:px-8 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.espresso }}>
+              <Feather size={15} color={C.peony} />
+            </div>
+            <span style={{ color: C.espresso, fontFamily: "'Cormorant Garamond', serif", fontSize: '19px', fontWeight: 600 }}>Mon Journal de Vie</span>
+          </div>
+          <div className="hidden sm:flex rounded-2xl px-4 py-2 items-center gap-2" style={{ background: C.espresso, color: C.peony, fontVariantNumeric: 'tabular-nums' }}>
+            <Clock size={13} />
+            <span className="text-sm font-semibold tracking-wide">
+              {horloge.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
           </div>
         </div>
       </div>
-    )
-  }
 
-  return (
-    <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
-      <style>{`
-        @keyframes rippleAnim { to { transform: scale(1); opacity: 0; } }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeCitation { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes flotter { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-        @keyframes checkPop { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
-        .anim-entree { animation: fadeInUp 0.35s ease-out both; }
-        .anim-citation { animation: fadeCitation 0.6s ease-out both; }
-        .anim-flotter { animation: flotter 3.5s ease-in-out infinite; }
-        .anim-check { animation: checkPop 0.4s ease-out both; }
-      `}</style>
+      <div className="max-w-[1240px] mx-auto px-4 md:px-8 py-6 md:py-8">
 
-      <div className="px-4 md:px-8 py-6 md:py-8 max-w-[1200px] mx-auto">
-
-        {/* ============================================================
-            HEADER — date/heure dynamique + salutation + recherche
-            ============================================================ */}
-        <CarteVerre className="mb-5 anim-entree">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <p className="text-[10px] text-espresso/45 uppercase tracking-wide mb-1">
-                {obtenirSalutation(maintenant.getHours())}
-              </p>
-              <h1 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '26px' }}>
-                Mon Journal de Vie
-              </h1>
-              <p className="text-[11px] text-espresso/50 mt-1">{formaterDateLongue(formaterDateISO(maintenant))}</p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Horloge temps réel */}
-              <div
-                className="rounded-2xl px-4 py-2.5 text-center flex-shrink-0"
-                style={{ background: 'var(--color-espresso)', color: 'var(--color-peony)', fontVariantNumeric: 'tabular-nums' }}
-                aria-label="Heure actuelle"
-              >
-                <span className="text-[20px] font-semibold tracking-wide">
-                  {maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-              </div>
-            </div>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 anim-in">
+          <div>
+            <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '30px', color: C.espresso, fontWeight: 600 }}>{salutation(horloge.getHours())}.</h1>
+            <p className="text-sm mt-1" style={{ color: C.encreDoux }}>{dateLongue(iso(horloge))} · comment te sens-tu aujourd'hui ?</p>
           </div>
+          <p className="text-[12.5px] italic max-w-sm" style={{ color: C.encreDoux }}>« {citation} »</p>
+        </div>
 
-          {/* Barre de recherche */}
-          <div className="relative mt-4">
-            <IconRecherche style={{ width: '14px', height: '14px' }} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-espresso/35" />
-            <input
-              type="text"
-              value={recherche}
-              onChange={(e) => setRecherche(e.target.value)}
-              placeholder="Rechercher dans tes pensées, objectifs ou tags..."
-              aria-label="Rechercher dans le journal"
-              className="w-full bg-white border border-espresso/10 rounded-full pl-9 pr-4 py-2.5 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus-visible:ring-2 focus-visible:ring-espresso/30 transition-all duration-200"
-            />
-          </div>
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
 
-          {tousLesTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {tousLesTags.map((tag) => {
-                const actif = tagsFiltre.includes(tag)
-                return (
-                  <button
-                    key={tag}
-                    onClick={() => toggleFiltreTag(tag)}
-                    className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full transition-all duration-200 focus-visible:ring-2 focus-visible:ring-espresso/30"
-                    style={actif
-                      ? { background: 'var(--color-espresso)', color: 'var(--color-peony)' }
-                      : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)' }}
-                  >
-                    <IconTag style={{ width: '9px', height: '9px' }} />
-                    {tag}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </CarteVerre>
+          <div className="flex flex-col gap-5 min-w-0">
 
-        {/* ============================================================
-            GRILLE PRINCIPALE — 1 col mobile / 2 col tablette / 3 col desktop
-            ============================================================ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-          {/* ===== CALENDRIER ===== */}
-          <CarteVerre className="anim-entree md:col-span-2 xl:col-span-1">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">
-              {new Date(annee, mois - 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {joursDuMois.map(({ jour, dateStr, humeur: humeurJour, aUneEntree }) => {
-                const estChoisi = dateStr === dateChoisie
-                const humeurInfo = HUMEURS.find((h) => h.id === humeurJour)
-                return (
-                  <button
-                    key={jour}
-                    onClick={() => setDateChoisie(dateStr)}
-                    aria-label={`${jour} ${aUneEntree ? '(entrée écrite)' : ''}`}
-                    aria-pressed={estChoisi}
-                    className="relative flex flex-col items-center justify-center rounded-xl flex-shrink-0 transition-all duration-150 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-espresso/40"
-                    style={{
-                      width: '38px', height: '46px',
-                      background: estChoisi ? 'var(--color-espresso)' : humeurJour ? 'var(--color-peony-light)' : '#F0EEEB',
-                    }}
-                  >
-                    <span className={`text-[10px] font-medium ${estChoisi ? 'text-peony' : 'text-espresso/60'}`}>{jour}</span>
-                    <span className="text-[11px]">{humeurInfo?.emoji || ''}</span>
-                    {aUneEntree && !estChoisi && (
-                      <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ background: 'var(--color-espresso)' }} />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </CarteVerre>
-
-          {/* ===== STATISTIQUES ===== */}
-          <CarteVerre className="anim-entree">
-            <div className="flex items-center gap-2 mb-3">
-              <IconGraphique style={{ width: '14px', height: '14px' }} className="text-espresso/50" />
-              <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Statistiques</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-[20px] font-semibold text-espresso">{stats.joursEcrits}</p>
-                <p className="text-[9.5px] text-espresso/45">Jours écrits</p>
-              </div>
-              <div>
-                <p className="text-[20px] font-semibold text-espresso flex items-center gap-1">
-                  {stats.streakActuel}
-                  {stats.streakActuel > 0 && <IconFeu style={{ width: '13px', height: '13px' }} className="text-espresso/50" />}
-                </p>
-                <p className="text-[9.5px] text-espresso/45">Série actuelle</p>
-              </div>
-              <div>
-                <p className="text-[20px] font-semibold text-espresso">{stats.streakMax}</p>
-                <p className="text-[9.5px] text-espresso/45">Meilleure série</p>
-              </div>
-              <div>
-                <p className="text-[20px] font-semibold text-espresso">{stats.pourcentageObjectifs}%</p>
-                <p className="text-[9.5px] text-espresso/45">Objectifs atteints</p>
-              </div>
-            </div>
-            {humeurDominante && (
-              <div className="mt-3 pt-3 border-t border-espresso/8 flex items-center gap-2">
-                <span className="text-[16px]">{humeurDominante.emoji}</span>
-                <span className="text-[10.5px] text-espresso/55">Humeur dominante : {humeurDominante.label}</span>
-              </div>
-            )}
-
-            {/* Sparkline des 14 derniers jours */}
-            <div className="mt-4">
-              <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1.5">14 derniers jours</p>
-              <svg viewBox="0 0 140 30" className="w-full h-8" preserveAspectRatio="none" aria-hidden="true">
-                <polyline
-                  points={sparklineDonnees.map((j, i) => `${i * 10},${j.valeur === null ? 30 : 28 - (j.valeur / Math.max(1, ORDRE_HUMEURS.length - 1)) * 26}`).join(' ')}
-                  fill="none" stroke="var(--color-espresso)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.55"
-                />
-                {sparklineDonnees.map((j, i) => j.valeur !== null && (
-                  <circle key={i} cx={i * 10} cy={28 - (j.valeur / Math.max(1, ORDRE_HUMEURS.length - 1)) * 26} r="1.8" fill="var(--color-espresso)" />
-                ))}
-              </svg>
-            </div>
-          </CarteVerre>
-
-          {/* ===== CITATION DU JOUR ===== */}
-          <CarteVerre className="anim-entree flex flex-col justify-center" key={citation}>
-            <IconEtoiles style={{ width: '16px', height: '16px' }} className="text-espresso/40 mb-2 anim-flotter" />
-            <p className="anim-citation text-[12.5px] text-espresso/70 italic leading-relaxed">« {citation} »</p>
-          </CarteVerre>
-
-          {/* ===== MÉTÉO SIMULÉE ===== */}
-          <CarteVerre className="anim-entree">
-            {/* Pour brancher une vraie API météo : remplace
-                meteoSimuleeDuJour(dateChoisie) par un fetch vers, par
-                exemple, OpenWeatherMap avec ta clé API, et mappe la
-                réponse sur { icone, label, temperature }. */}
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Météo du jour</p>
-            <div className="flex items-center gap-4">
-              <span className="text-[36px] anim-flotter">{meteo.icone}</span>
-              <div>
-                <p className="text-[22px] font-semibold text-espresso">{meteo.temperature}°C</p>
-                <p className="text-[10.5px] text-espresso/50">{meteo.label}</p>
-              </div>
-            </div>
-          </CarteVerre>
-
-          {/* ===== HUMEUR + PENSÉES ===== */}
-          <CarteVerre className="anim-entree md:col-span-2">
-            <input
-              type="date"
-              value={dateChoisie}
-              onChange={(e) => setDateChoisie(e.target.value)}
-              max={formaterDateISO(new Date())}
-              aria-label="Choisir une date"
-              className="text-[12px] text-espresso bg-[#F0EEEB] rounded-xl px-3 py-2 outline-none border border-espresso/15 mb-4 focus-visible:ring-2 focus-visible:ring-espresso/30"
-            />
-
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Comment tu te sens</p>
-            <div className="flex gap-2 mb-5 flex-wrap">
-              {HUMEURS.map((h) => (
-                <button
-                  key={h.id}
-                  onClick={() => setHumeur(h.id)}
-                  aria-pressed={humeur === h.id}
-                  aria-label={h.label}
-                  className="flex-1 min-w-[60px] flex flex-col items-center gap-1 rounded-xl py-2.5 transition-all duration-150 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-espresso/30"
-                  style={{ background: humeur === h.id ? 'var(--color-espresso)' : '#F0EEEB' }}
-                >
-                  <span className="text-[18px]">{h.emoji}</span>
-                  <span className={`text-[8px] ${humeur === h.id ? 'text-peony' : 'text-espresso/50'}`}>{h.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Tes pensées</label>
-              <span className="text-[9px] text-espresso/35">{compteurMots} mot{compteurMots > 1 ? 's' : ''}</span>
-            </div>
-            <textarea
-              value={pensees}
-              onChange={(e) => setPensees(e.target.value)}
-              placeholder="Écris ce que tu as sur le cœur aujourd'hui..."
-              rows={5}
-              aria-label="Tes pensées du jour"
-              className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[12.5px] text-espresso outline-none border border-espresso/15 focus-visible:ring-2 focus-visible:ring-espresso/30 resize-y mb-4 leading-relaxed"
-            />
-
-            {/* Tags de l'entrée */}
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Tags</p>
-            <div className="flex gap-2 mb-2">
-              <input
-                value={nouveauTag}
-                onChange={(e) => setNouveauTag(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), ajouterTag())}
-                placeholder="Ex : travail, famille, gratitude..."
-                aria-label="Ajouter un tag"
-                className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus-visible:ring-2 focus-visible:ring-espresso/30"
-              />
-              <BoutonRipple onClick={ajouterTag} aria-label="Ajouter le tag" className="w-9 h-9 rounded-full bg-espresso flex items-center justify-center flex-shrink-0">
-                <IconPlus style={{ width: '13px', height: '13px' }} className="text-peony" />
-              </BoutonRipple>
-            </div>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {tags.map((tag) => (
-                  <span key={tag} className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full" style={{ background: `${'#3E2723'}12`, color: '#3E2723' }}>
-                    #{tag}
-                    <button onClick={() => supprimerTag(tag)} aria-label={`Retirer le tag ${tag}`} className="hover:opacity-60">
-                      <IconCroix style={{ width: '8px', height: '8px' }} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <BoutonRipple
-              onClick={sauvegarder}
-              className="w-full rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-espresso/40 flex items-center justify-center gap-2"
-            >
-              {sauvegardeAnimee ? (
-                <span className="anim-check flex items-center gap-2"><IconCheck style={{ width: '14px', height: '14px' }} /> Enregistré</span>
-              ) : 'Enregistrer cette entrée'}
-            </BoutonRipple>
-          </CarteVerre>
-
-          {/* ===== OBJECTIFS ===== */}
-          <CarteVerre className="anim-entree">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Objectifs du jour</p>
-
-            <div className="flex gap-2 mb-3">
-              <input
-                value={nouvelObjectif}
-                onChange={(e) => setNouvelObjectif(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && ajouterObjectif()}
-                placeholder="Ajouter un objectif..."
-                aria-label="Ajouter un objectif"
-                className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus-visible:ring-2 focus-visible:ring-espresso/30"
-              />
-              <BoutonRipple onClick={ajouterObjectif} aria-label="Ajouter l'objectif" className="w-9 h-9 rounded-full bg-espresso flex items-center justify-center flex-shrink-0">
-                <IconPlus style={{ width: '14px', height: '14px' }} className="text-peony" />
-              </BoutonRipple>
-            </div>
-
-            {objectifs.length > 0 && (
-              <div className="h-1.5 rounded-full bg-[#F0EEEB] mb-3 overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressionObjectifs}%`, background: 'var(--color-espresso)' }} />
-              </div>
-            )}
-
-            <div className="flex flex-col gap-1.5">
-              {objectifs.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun objectif pour aujourd'hui</p>}
-              {objectifs.map((obj, index) => (
-                <div key={index} className="flex items-center gap-2 bg-[#F0EEEB] rounded-xl px-3 py-2">
-                  <button
-                    onClick={() => toggleObjectif(index)}
-                    aria-label={obj.fait ? 'Marquer comme non fait' : 'Marquer comme fait'}
-                    className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-espresso/30"
-                    style={{ background: obj.fait ? 'var(--color-espresso)' : 'white', border: '1.5px solid rgba(62,39,35,0.2)' }}
-                  >
-                    {obj.fait && <IconCheck style={{ width: '10px', height: '10px' }} className="text-peony" />}
-                  </button>
-                  <span className={`flex-1 text-[11.5px] transition-all duration-200 ${obj.fait ? 'text-espresso/35 line-through' : 'text-espresso'}`}>{obj.texte}</span>
-                  <button onClick={() => supprimerObjectif(index)} aria-label="Supprimer l'objectif" className="text-espresso/30 hover:text-red-400 text-[14px] flex-shrink-0">×</button>
+            <Carte delay={0.02}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl" style={{ background: C.sable }}>
+                    {HUMEURS.find((h) => h.id === humeur)?.emoji}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '10px', color: C.encreFaible, fontWeight: 700, letterSpacing: '.06em' }}>NIVEAU D'ÉNERGIE</p>
+                    <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px', color: C.espresso, fontWeight: 600 }}>{energie}%</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </CarteVerre>
+                <div className="flex-1 min-w-[160px]">
+                  <p className="text-xs" style={{ color: C.encreDoux }}>
+                    {energie > 70 ? "Tu débordes d'énergie, profites-en." : energie > 40 ? "Un rythme stable aujourd'hui." : 'Sois douce avec toi, ralentis un peu.'}
+                  </p>
+                  <input type="range" min="0" max="100" value={energie} onChange={(e) => setEnergie(Number(e.target.value))} className="w-full mt-2 cursor-pointer" style={{ accentColor: C.espresso }} />
+                </div>
+              </div>
+            </Carte>
 
-          {/* ===== ÉNERGIE ===== */}
-          <CarteVerre className="anim-entree">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Niveau d'énergie</p>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="text-[18px]">🔋</span>
-              <span className="text-[18px] font-semibold text-espresso">{energie}%</span>
-            </div>
-            <input
-              type="range"
-              min="0" max="100" value={energie}
-              onChange={(e) => setEnergie(Number(e.target.value))}
-              aria-label="Niveau d'énergie"
-              className="w-full accent-espresso cursor-pointer"
-            />
-            <div className="flex justify-between text-[9px] text-espresso/35 mt-1">
-              <span>Épuisée</span>
-              <span>En pleine forme</span>
-            </div>
-          </CarteVerre>
+            <Carte delay={0.05}>
+              <Eyebrow icon={Wand2}>Inspiration du jour</Eyebrow>
+              <div className="grid sm:grid-cols-3 gap-2.5">
+                {PROMPTS.slice(0, 3).map((p) => (
+                  <button key={p} onClick={() => setPensees((v) => (v ? v : p + '\n'))}
+                    className="text-left rounded-2xl p-3.5 text-xs leading-relaxed transition-opacity hover:opacity-75"
+                    style={{ background: C.sable, color: C.encreDoux }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </Carte>
 
-          {/* ===== GRATITUDE ===== */}
-          <CarteVerre className="anim-entree">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Gratitude du jour — 3 choses positives</p>
-            <div className="flex flex-col gap-2">
-              {gratitude.map((valeur, i) => (
-                <input
-                  key={i}
-                  value={valeur}
-                  onChange={(e) => modifierGratitude(i, e.target.value)}
-                  placeholder={`${i + 1}. Quelque chose qui t'a fait du bien...`}
-                  aria-label={`Gratitude ${i + 1}`}
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3 py-2 text-[11.5px] text-espresso outline-none border border-espresso/15 focus-visible:ring-2 focus-visible:ring-espresso/30"
-                />
-              ))}
-            </div>
-          </CarteVerre>
+            <Carte delay={0.08}>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <Eyebrow icon={NotebookPen}>Tes pensées</Eyebrow>
+                <input type="date" value={dateChoisie} max={iso(new Date())} onChange={(e) => setDateChoisie(e.target.value)}
+                  className="text-xs rounded-xl px-3 py-1.5 outline-none border" style={{ background: C.sable, borderColor: C.sableBorder, color: C.espresso }} />
+              </div>
 
-          {/* ===== PHOTO DU JOUR ===== */}
-          <CarteVerre className="anim-entree">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Photo du jour</p>
-            <input ref={inputPhotoRef} type="file" accept="image/*" onChange={gererUploadPhoto} className="hidden" />
-            {photo ? (
-              <div className="relative">
-                <img src={photo} alt="Photo du journal" className="w-full h-32 object-cover rounded-xl" />
-                <button
-                  onClick={() => setPhoto(null)}
-                  aria-label="Retirer la photo"
-                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-espresso/80 text-peony flex items-center justify-center"
-                >
-                  <IconCroix style={{ width: '11px', height: '11px' }} />
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {HUMEURS.map((h) => (
+                  <button key={h.id} onClick={() => setHumeur(h.id)}
+                    className="flex-1 min-w-[64px] flex flex-col items-center gap-1 rounded-2xl py-2.5 transition-all hover:-translate-y-0.5"
+                    style={{ background: humeur === h.id ? C.espresso : C.sable }}>
+                    <span className="text-lg">{h.emoji}</span>
+                    <span className="text-[10px] font-semibold" style={{ color: humeur === h.id ? C.peony : C.encreDoux }}>{h.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold uppercase" style={{ color: C.encreFaible, letterSpacing: '.06em' }}>Écris librement</span>
+                <span className="text-[10px]" style={{ color: C.encreFaible }}>{compteurMots} mot{compteurMots > 1 ? 's' : ''}</span>
+              </div>
+              <textarea value={pensees} onChange={(e) => setPensees(e.target.value)} rows={5} placeholder={promptDuJour}
+                className="w-full rounded-2xl px-4 py-3 text-sm outline-none border resize-y leading-relaxed mb-4"
+                style={{ background: C.sable, borderColor: C.sableBorder, color: C.espresso }} />
+
+              <div className="flex gap-2 mb-2">
+                <input value={nouveauTag} onChange={(e) => setNouveauTag(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ajouterTag()}
+                  placeholder="Ajouter un tag…" className="flex-1 rounded-xl px-3 py-2 text-xs outline-none border" style={{ background: C.sable, borderColor: C.sableBorder, color: C.espresso }} />
+                <button onClick={ajouterTag} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.espresso }}>
+                  <Plus size={14} color={C.peony} />
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={() => inputPhotoRef.current?.click()}
-                className="w-full h-32 rounded-xl border-2 border-dashed border-espresso/15 flex flex-col items-center justify-center gap-1.5 text-espresso/40 hover:border-espresso/30 hover:text-espresso/60 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-espresso/30"
-              >
-                <IconCamera style={{ width: '20px', height: '20px' }} />
-                <span className="text-[10.5px]">Ajouter une photo</span>
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {tags.map((t) => (
+                    <span key={t} className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full" style={{ background: C.peony, color: C.peonyDeep }}>
+                      #{t}
+                      <button onClick={() => setTags(tags.filter((x) => x !== t))}><X size={9} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <button onClick={sauvegarder} className="w-full rounded-2xl py-3 text-xs font-bold transition-transform hover:-translate-y-0.5 active:scale-[0.98] flex items-center justify-center gap-2" style={{ background: C.espresso, color: C.peony }}>
+                {enregistre ? <span className="pop-in flex items-center gap-2"><Check size={14} /> Enregistré</span> : 'Enregistrer cette entrée'}
               </button>
-            )}
-          </CarteVerre>
+            </Carte>
 
-          {/* ===== LECTEUR MUSICAL ===== */}
-          <CarteVerre className="anim-entree">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Musique relaxante</p>
-            <div className="flex items-center gap-3">
-              <BoutonRipple
-                onClick={() => setLectureEnCours((l) => !l)}
-                aria-label={lectureEnCours ? 'Mettre en pause' : 'Lire'}
-                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 text-peony focus-visible:ring-2 focus-visible:ring-espresso/40"
-                style={{ background: 'var(--color-espresso)' }}
-              >
-                {lectureEnCours ? <IconPause style={{ width: '15px', height: '15px' }} /> : <IconPlay style={{ width: '15px', height: '15px', marginLeft: '2px' }} />}
-              </BoutonRipple>
-              <div className="flex-1">
-                <p className="text-[11px] text-espresso/70 mb-1.5">{lectureEnCours ? 'Ambiance douce — en cours' : 'Ambiance douce'}</p>
-                <div className="h-1.5 rounded-full bg-[#F0EEEB] overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${progressionLecture}%`, background: 'var(--color-espresso)', transition: lectureEnCours ? 'none' : 'width 0.3s' }} />
+            <div className="grid sm:grid-cols-2 gap-5">
+              <Carte delay={0.1}>
+                <Eyebrow icon={Check}>Objectifs du jour</Eyebrow>
+                <div className="flex gap-2 mb-3">
+                  <input value={nouvelObjectif} onChange={(e) => setNouvelObjectif(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ajouterObjectif()}
+                    placeholder="Ajouter un objectif…" className="flex-1 rounded-xl px-3 py-2 text-xs outline-none border" style={{ background: C.sable, borderColor: C.sableBorder, color: C.espresso }} />
+                  <button onClick={ajouterObjectif} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.espresso }}>
+                    <Plus size={14} color={C.peony} />
+                  </button>
+                </div>
+                {objectifs.length > 0 && (
+                  <div className="h-1.5 rounded-full overflow-hidden mb-3" style={{ background: C.sable }}>
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressionObjectifs}%`, background: C.sauge }} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {objectifs.length === 0 && <p className="text-xs italic" style={{ color: C.encreFaible }}>Aucun objectif pour l'instant</p>}
+                  {objectifs.map((o, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: C.sable }}>
+                      <button onClick={() => toggleObjectif(i)} className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border" style={{ background: o.fait ? C.sauge : 'white', borderColor: 'rgba(62,39,35,0.15)' }}>
+                        {o.fait && <Check size={10} color="white" />}
+                      </button>
+                      <span className="flex-1 text-xs" style={{ color: o.fait ? C.encreFaible : C.espresso, textDecoration: o.fait ? 'line-through' : 'none' }}>{o.texte}</span>
+                      <button onClick={() => supprimerObjectif(i)} style={{ color: 'rgba(62,39,35,0.3)' }}><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </Carte>
+
+              <Carte delay={0.12}>
+                <Eyebrow icon={Heart}>Gratitude — 3 belles choses</Eyebrow>
+                <div className="flex flex-col gap-2">
+                  {gratitude.map((v, i) => (
+                    <input key={i} value={v} onChange={(e) => setGratitude(gratitude.map((g, idx) => idx === i ? e.target.value : g))}
+                      placeholder={`${i + 1}. Quelque chose qui t'a fait du bien…`}
+                      className="rounded-xl px-3 py-2 text-xs outline-none border" style={{ background: C.sable, borderColor: C.sableBorder, color: C.espresso }} />
+                  ))}
+                </div>
+              </Carte>
+            </div>
+
+            <Carte delay={0.14}>
+              <div className="flex items-center justify-between mb-4">
+                <Eyebrow>Calendrier des humeurs</Eyebrow>
+                <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.espresso }}>
+                  <button onClick={() => setMois(new Date(mois.getFullYear(), mois.getMonth() - 1, 1))}><ChevronLeft size={15} /></button>
+                  {mois.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                  <button onClick={() => setMois(new Date(mois.getFullYear(), mois.getMonth() + 1, 1))}><ChevronRight size={15} /></button>
+                </div>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+                {JOURS_SEMAINE.map((j) => <p key={j} className="text-center text-[9px] font-bold" style={{ color: C.encreFaible }}>{j}</p>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1.5">
+                {Array.from({ length: joursDuMois.vides }).map((_, i) => <div key={'v' + i} />)}
+                {joursDuMois.jours.map(({ jour, date, humeur: hj, aEntree }) => {
+                  const choisi = date === dateChoisie
+                  const hInfo = HUMEURS.find((h) => h.id === hj)
+                  return (
+                    <button key={jour} onClick={() => setDateChoisie(date)}
+                      className="relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all hover:-translate-y-0.5"
+                      style={{ background: choisi ? C.espresso : hj ? C.peony : C.sable }}>
+                      <span className="text-[10px] font-semibold" style={{ color: choisi ? C.peony : C.encreDoux }}>{jour}</span>
+                      <span className="text-[11px] leading-none">{hInfo?.emoji || ''}</span>
+                      {aEntree && !choisi && <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ background: C.espresso }} />}
+                    </button>
+                  )
+                })}
+              </div>
+              {stats.joursEcrits === 0 && (
+                <p className="text-[11px] italic mt-3" style={{ color: C.encreFaible }}>Aucune entrée pour l'instant — chaque jour rempli ajoutera sa couleur ici.</p>
+              )}
+            </Carte>
+
+            <Carte delay={0.16}>
+              <div className="flex items-center justify-between mb-4">
+                <Eyebrow icon={ImagePlus}>Galerie photo</Eyebrow>
+                <button onClick={() => inputPhotoRef.current?.click()} className="flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-3 py-1.5" style={{ background: C.sable, color: C.espresso }}>
+                  <Camera size={12} /> Ajouter
+                </button>
+                <input ref={inputPhotoRef} type="file" accept="image/*" onChange={ajouterPhoto} className="hidden" />
+              </div>
+              {toutesPhotos.length === 0 ? (
+                <button onClick={() => inputPhotoRef.current?.click()} className="w-full h-32 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5" style={{ borderColor: 'rgba(62,39,35,0.15)', color: C.encreFaible }}>
+                  <Camera size={20} />
+                  <span className="text-xs">Ajoute ta première photo</span>
+                </button>
+              ) : (
+                <div style={{ columnCount: toutesPhotos.length === 1 ? 1 : 3, columnGap: '10px' }} className="sm:[column-count:3]">
+                  {toutesPhotos.map((p, i) => (
+                    <div key={i} className="mb-2.5 rounded-2xl overflow-hidden hover-lift" style={{ breakInside: 'avoid' }}>
+                      <img src={p.src} alt="" className="w-full h-auto block" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Carte>
+
+            <Carte delay={0.18}>
+              <Eyebrow icon={Download}>Exporter mon journal</Eyebrow>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button onClick={exporterJSON} className="flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold" style={{ background: C.sable, color: C.espresso }}>
+                  <Download size={13} /> Export JSON
+                </button>
+                <button onClick={exporterTXT} className="flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold" style={{ background: C.sable, color: C.espresso }}>
+                  <Download size={13} /> Export TXT
+                </button>
+              </div>
+            </Carte>
+          </div>
+
+          <div className="flex flex-col gap-5 min-w-0">
+
+            <Carte delay={0.04}>
+              <div className="flex items-center justify-between mb-4">
+                <Eyebrow icon={Flame}>Série de la semaine</Eyebrow>
+                <span className="text-xs font-bold" style={{ color: C.espresso }}>{stats.streak}j</span>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5">
+                {semaine.map((j) => (
+                  <div key={j.label} className="flex flex-col items-center gap-1.5">
+                    <div className="w-full aspect-square rounded-xl flex items-center justify-center" style={{ background: j.actif ? C.espresso : C.sable }}>
+                      <Flame size={13} style={{ color: j.actif ? C.peony : 'rgba(62,39,35,0.2)' }} />
+                    </div>
+                    <span className="text-[9px] font-semibold" style={{ color: j.estAujourdhui ? C.espresso : C.encreFaible }}>{j.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t" style={{ borderColor: C.sableBorder }}>
+                <div><p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '19px', fontWeight: 600, color: C.espresso }}>{stats.joursEcrits}</p><p className="text-[9px]" style={{ color: C.encreFaible }}>Jours écrits</p></div>
+                <div><p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '19px', fontWeight: 600, color: C.espresso }}>{stats.pctObjectifs}%</p><p className="text-[9px]" style={{ color: C.encreFaible }}>Objectifs</p></div>
+                <div><p className="text-base">{stats.dominante?.emoji || '—'}</p><p className="text-[9px]" style={{ color: C.encreFaible }}>Humeur clé</p></div>
+              </div>
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: C.sableBorder }}>
+                <p className="text-[9px] uppercase font-bold tracking-wide mb-1.5" style={{ color: C.encreFaible }}>14 derniers jours</p>
+                {sparkline.every((v) => v === null) ? (
+                  <p className="text-[10px] italic" style={{ color: C.encreFaible }}>Ta courbe d'humeur apparaîtra ici dès ta première entrée.</p>
+                ) : (
+                  <svg viewBox="0 0 140 30" className="w-full h-8" preserveAspectRatio="none">
+                    <polyline points={sparkline.map((v, i) => `${i * 10.7},${v === null ? 30 : 28 - (v / 5) * 26}`).join(' ')} fill="none" stroke={C.espresso} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+                    {sparkline.map((v, i) => v !== null && <circle key={i} cx={i * 10.7} cy={28 - (v / 5) * 26} r="1.8" fill={C.espresso} />)}
+                  </svg>
+                )}
+              </div>
+            </Carte>
+
+            <div className="anim-in hover-lift relative rounded-3xl p-6 overflow-hidden" style={{ animationDelay: '.07s', background: `linear-gradient(150deg, #2A1712 0%, ${C.espresso} 55%, #5A362E 100%)`, boxShadow: '0 20px 45px rgba(42,23,18,0.35)' }}>
+              <div className="halo absolute -top-10 -right-10 w-44 h-44 rounded-full blur-3xl" style={{ background: 'rgba(246,216,222,0.35)' }} />
+              <div className="halo absolute -bottom-16 -left-10 w-40 h-40 rounded-full blur-3xl" style={{ background: 'rgba(201,138,147,0.28)', animationDelay: '2s' }} />
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} size={8} fill={C.peony} className="etoile absolute" style={{ color: C.peony, top: `${12 + i * 16}%`, left: `${70 + (i % 3) * 8}%`, animationDelay: `${i * 0.4}s` }} />
+              ))}
+              <div className="relative">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                      <Sparkles size={14} color={C.peony} />
+                    </div>
+                    <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '17px', color: C.peony, fontWeight: 600 }}>Le mot de Yuna</p>
+                  </div>
+                  {/* ⬅️ NOUVEAU : bouton pour demander un vrai résumé IA */}
+                  {entrees.length > 0 && (
+                    <button
+                      onClick={demanderResumeYuna}
+                      disabled={chargementResumeIA}
+                      className="text-[9px] font-semibold px-2.5 py-1 rounded-full disabled:opacity-50"
+                      style={{ background: 'rgba(255,255,255,0.14)', color: C.peony }}
+                    >
+                      {chargementResumeIA ? '...' : (resumeIA ? 'Régénérer' : 'Demander à Yuna')}
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-3.5">
+                  {[
+                    { icon: NotebookPen, label: 'Résumé de la semaine', texte: motYuna.resume },
+                    { icon: Sparkles, label: 'Humeur dominante', chip: motYuna.humeur },
+                    { icon: TrendingUp, label: 'Progrès observés', texte: motYuna.progres },
+                    { icon: Heart, label: 'Encouragement', texte: motYuna.encouragement },
+                  ].map(({ icon: Icon, label, texte, chip }) => (
+                    <div className="flex gap-2.5" key={label}>
+                      <Icon size={14} className="flex-shrink-0 mt-0.5" color="rgba(246,216,222,0.75)" />
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'rgba(246,216,222,0.75)' }}>{label}</p>
+                        {chip ? (
+                          <span className="inline-block mt-1 text-[10px] font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.14)', color: C.peony }}>{chip}</span>
+                        ) : (
+                          <p className="text-xs leading-relaxed mt-0.5" style={{ color: 'rgba(246,216,222,0.92)' }}>{texte}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-            <p className="text-[8.5px] text-espresso/30 mt-2">Branche ton propre fichier audio dans /public pour une vraie lecture.</p>
-          </CarteVerre>
 
-          {/* ===== ACTIVITÉ RÉCENTE ===== */}
-          <CarteVerre className="anim-entree md:col-span-2 xl:col-span-1">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">
-              Activité récente {(recherche || tagsFiltre.length > 0) && `(${entreesFiltrees.length} résultat${entreesFiltrees.length > 1 ? 's' : ''})`}
-            </p>
-            <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto scroll-suave">
-              {activiteRecente.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucune entrée à afficher</p>}
-              {activiteRecente.map((e) => {
-                const humeurInfo = HUMEURS.find((h) => h.id === e.humeur)
-                return (
-                  <button
-                    key={e.date}
-                    onClick={() => setDateChoisie(e.date)}
-                    className="flex items-center gap-2.5 text-left rounded-xl px-3 py-2 hover:bg-[#F0EEEB] transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-espresso/30"
-                  >
-                    <span className="text-[16px] flex-shrink-0">{humeurInfo?.emoji || '📝'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10.5px] font-medium text-espresso truncate">{formaterDateLongue(e.date)}</p>
-                      <p className="text-[9.5px] text-espresso/45 truncate">{e.pensees || 'Pas de pensée notée'}</p>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </CarteVerre>
-
-          {/* ===== EXPORT ===== */}
-          <CarteVerre className="anim-entree">
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Exporter mon journal</p>
-            <div className="flex flex-col gap-2">
-              <BoutonRipple onClick={exporterJSON} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-semibold text-espresso bg-[#F0EEEB] hover:bg-espresso/10 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-espresso/30">
-                <IconTelechargement style={{ width: '13px', height: '13px' }} /> Export JSON
-              </BoutonRipple>
-              <BoutonRipple onClick={exporterTXT} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-semibold text-espresso bg-[#F0EEEB] hover:bg-espresso/10 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-espresso/30">
-                <IconTelechargement style={{ width: '13px', height: '13px' }} /> Export TXT
-              </BoutonRipple>
-              <BoutonRipple onClick={exporterPDF} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-semibold text-espresso/50 bg-[#F0EEEB]/50 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-espresso/30">
-                <IconTelechargement style={{ width: '13px', height: '13px' }} /> Export PDF (bientôt)
-              </BoutonRipple>
-            </div>
-          </CarteVerre>
-
-          {/* ===== RÉSUMÉ IA ===== */}
-          <CarteVerre className="anim-entree md:col-span-2 xl:col-span-1" style={{ background: 'var(--color-espresso)', border: 'none' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <IconEtoiles style={{ width: '15px', height: '15px' }} className="text-peony/60" />
-              <p className="text-[9px] text-peony/60 uppercase tracking-wide">Résumé de ta semaine par Yuna</p>
-            </div>
-            {resume ? (
-              <p className="text-[12px] text-peony leading-relaxed italic">{resume}</p>
-            ) : (
-              <p className="text-[11px] text-peony/50 italic mb-3">Génère un résumé bienveillant de tes 7 dernières entrées</p>
-            )}
-            <BoutonRipple
-              onClick={genererResume}
-              disabled={chargementResume}
-              className="mt-3 text-[10.5px] font-semibold text-espresso bg-peony rounded-full px-4 py-1.5 transition-all duration-200 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-peony/50"
-            >
-              {chargementResume ? 'Génération...' : (resume ? 'Régénérer' : 'Générer le résumé')}
-            </BoutonRipple>
-          </CarteVerre>
-
+            <Carte delay={0.1}>
+              <Eyebrow icon={Search}>Entrées récentes</Eyebrow>
+              <div className="relative mb-3">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.encreFaible }} />
+                <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher…"
+                  className="w-full rounded-full pl-8 pr-3 py-2 text-xs outline-none border" style={{ background: C.sable, borderColor: C.sableBorder, color: C.espresso }} />
+              </div>
+              <div className="flex flex-col gap-1 max-h-72 overflow-y-auto pr-1">
+                {entreesFiltrees.length === 0 && (
+                  <p className="text-xs italic" style={{ color: C.encreFaible }}>
+                    {entrees.length === 0 ? 'Ton journal est encore vierge — enregistre ta première entrée pour la voir apparaître ici.' : 'Aucune entrée'}
+                  </p>
+                )}
+                {entreesFiltrees.map((e) => {
+                  const h = HUMEURS.find((x) => x.id === e.humeur)
+                  return (
+                    <button key={e.date} onClick={() => setDateChoisie(e.date)} className="flex items-center gap-2.5 text-left rounded-xl px-2.5 py-2 transition-colors hover:opacity-80" style={{ background: e.date === dateChoisie ? C.sable : 'transparent' }}>
+                      <span className="text-base flex-shrink-0">{h?.emoji || '📝'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold truncate" style={{ color: C.espresso }}>{dateLongue(e.date)}</p>
+                        <p className="text-[10px] truncate" style={{ color: C.encreFaible }}>{e.pensees || 'Pas de pensée notée'}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </Carte>
+          </div>
         </div>
       </div>
     </div>
   )
 }
-
-export default JournalScreen
