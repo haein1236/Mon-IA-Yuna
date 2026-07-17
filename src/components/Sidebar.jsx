@@ -1,4 +1,14 @@
-import { IconHome, IconChat, IconGallery, IconProfile, IconSettings, IconClock, IconPersonnages, IconJournal } from './Icons' // Ajoute IconLocalisation à l'import existant
+import {
+  IconHome,
+  IconChat,
+  IconGallery,
+  IconProfile,
+  IconSettings,
+  IconClock,
+  IconPersonnages,
+  IconJournal,
+  IconLocalisation
+} from './Icons'
 
 
 function Sidebar({ ecranActuel, onChangerEcran }) {
