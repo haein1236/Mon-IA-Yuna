@@ -33,8 +33,9 @@ function NotificationHost() {
           key={notif.id}
           className="rounded-2xl px-4 py-3 text-[11.5px] font-medium shadow-lg pointer-events-auto animate-[fadeSlideUp_0.3s_ease]"
           style={{
-            background: notif.type === 'erreur' ? '#3E2723' : '#4ade80',
-            color: notif.type === 'erreur' ? '#F4C9D6' : '#1a3a1a',
+           // Dans le style du toast, remplace la ligne "background:" par :
+                background: notif.type === 'erreur' ? '#3E2723' : notif.type === 'info' ? 'var(--color-espresso)' : '#4ade80',
+                color: notif.type === 'erreur' ? '#F4C9D6' : notif.type === 'info' ? 'var(--color-peony)' : '#1a3a1a',
           }}
         >
           {notif.message}

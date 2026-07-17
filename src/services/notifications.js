@@ -21,3 +21,8 @@ export function notifierErreur(message) {
 export function notifierSucces(message) {
   notifier(message, 'succes')
 }
+
+// Notification "info" — pour l'accueil de Yuna, pas une erreur
+export function notifierInfo(message) {
+  notifier(message, 'info')
+}

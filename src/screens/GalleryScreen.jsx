@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { IconHeart } from '../components/Icons'
+import { enregistrerVisite } from '../services/suivi'
 import {
   chargerImages,
   sauvegarderImage,
@@ -185,6 +186,10 @@ function GalleryScreen() {
     setErreurCommentaire('')
     setPanneauOuvert(false)
   }, [indexOuvert])
+
+  useEffect(() => {
+  enregistrerVisite('galerie')
+  }, [])
 
   const toggleFavori = (id) => {
     const imagesSauvegardees = chargerImages()

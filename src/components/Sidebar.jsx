@@ -1,14 +1,17 @@
-import { IconHome, IconChat, IconGallery, IconProfile, IconSettings, IconClock, IconPersonnages, IconJournal } from './Icons'
+import { IconHome, IconChat, IconGallery, IconProfile, IconSettings, IconClock, IconPersonnages, IconJournal } from './Icons' // Ajoute IconLocalisation à l'import existant
+
 
 function Sidebar({ ecranActuel, onChangerEcran }) {
 
+// Dans le tableau onglets, ajoute cette ligne (où tu veux dans l'ordre)
   const onglets = [
-    { id: 'chat',        Icone: IconChat        },
-    { id: 'personnages', Icone: IconPersonnages },
-    { id: 'historique',  Icone: IconClock        },
-    { id: 'galerie',     Icone: IconGallery      },
-    { id: 'journal',     Icone: IconJournal      },
-    { id: 'profil',      Icone: IconProfile      },
+  { id: 'chat',         Icone: IconChat        },
+  { id: 'personnages',  Icone: IconPersonnages },
+  { id: 'historique',   Icone: IconClock        },
+  { id: 'galerie',      Icone: IconGallery      },
+  { id: 'journal',      Icone: IconJournal      },
+  { id: 'localisation', Icone: IconLocalisation }, // ⬅️ NOUVEAU
+  { id: 'profil',       Icone: IconProfile      },
   ]
 
   return (

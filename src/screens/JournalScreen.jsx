@@ -4,6 +4,7 @@ import {
   Clock, ImagePlus, Heart, TrendingUp, Feather, ChevronLeft,
   ChevronRight, Wand2, NotebookPen, Star,
 } from 'lucide-react'
+import { enregistrerVisite } from '../services/suivi'
 import { chargerEntreesJournal, sauvegarderEntreesJournal } from '../services/journal'
 import { genererResumeJournal } from '../services/gemini'
 import { notifierErreur } from '../services/notifications'
@@ -89,7 +90,6 @@ export default function JournalScreen() {
   const [dateChoisie, setDateChoisie] = useState(() => iso(new Date()))
   const [horloge, setHorloge] = useState(new Date())
   const [mois, setMois] = useState(() => new Date())
-
   const [humeur, setHumeur] = useState('bien')
   const [pensees, setPensees] = useState('')
   const [tags, setTags] = useState([])
@@ -235,6 +235,7 @@ export default function JournalScreen() {
       const existante = prev.find((e) => e.date === dateChoisie)
       return [...reste, { ...(existante || { photos: [] }), date: dateChoisie, humeur, pensees, tags, objectifs, energie, gratitude }]
     })
+    enregistrerVisite('journal')
     setEnregistre(true)
     setTimeout(() => setEnregistre(false), 1400)
   }
