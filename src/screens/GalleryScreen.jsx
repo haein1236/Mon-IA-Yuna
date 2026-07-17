@@ -96,6 +96,20 @@ const IconBulle = (props) => (
     <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.3 8.3 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
   </svg>
 )
+// Icône œil — pour la barre "Voir" qui glisse au survol des cartes,
+// façon Harmonia (icônes qui montent depuis le bas de l'image)
+const IconOeil = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+  </svg>
+)
+// Icône guillemet — pour les cartes "avis" façon Harmonia
+const IconGuillemet = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M7 6c-2.8 1.6-4 4-4 6.8V18h6v-6H6.2C6.4 9.8 7.6 8.2 9.4 7L7 6zm10 0c-2.8 1.6-4 4-4 6.8V18h6v-6h-2.8c.2-2.2 1.4-3.8 3.2-5L17 6z" />
+  </svg>
+)
 
 const imagesInitiales = [
   // { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
@@ -289,6 +303,10 @@ function GalleryScreen() {
 
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .anim-pop { animation: popIn 0.25s ease-out both; }
+      `}</style>
       <div className="w-full">
 
         <div
@@ -358,7 +376,7 @@ function GalleryScreen() {
               {images.slice(0, 3).map((img) => (
                 <div
                   key={img.id}
-                  className="relative rounded-2xl overflow-hidden cursor-pointer"
+                  className="relative rounded-2xl overflow-hidden cursor-pointer transition-transform duration-300 hover:-translate-y-1"
                   style={{ height: '90px', background: img.bg, border: '3px solid var(--color-cream)', boxShadow: '0 6px 16px rgba(62,39,35,0.15)' }}
                   onClick={() => setIndexOuvert(imagesFiltrees.indexOf(img))}
                 >
@@ -379,13 +397,13 @@ function GalleryScreen() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-            <div className="rounded-2xl border border-espresso/10 bg-espresso/[0.03] px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
+            <div className="rounded-2xl border border-espresso/10 bg-espresso/[0.03] px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between transition-all duration-300 hover:border-espresso/20 hover:shadow-[0_6px_18px_rgba(62,39,35,0.08)]">
               <span className="text-espresso/45 text-[10.5px] uppercase tracking-[0.08em]">Maintenant</span>
               <span className="font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px', color: 'var(--color-accent)' }}>
                 {h}:{m}:{s}
               </span>
             </div>
-            <div className="sm:col-span-2 rounded-2xl border border-espresso/10 bg-espresso/[0.03] px-5 sm:px-6 py-4 sm:py-5">
+            <div className="sm:col-span-2 rounded-2xl border border-espresso/10 bg-espresso/[0.03] px-5 sm:px-6 py-4 sm:py-5 transition-all duration-300 hover:border-espresso/20 hover:shadow-[0_6px_18px_rgba(62,39,35,0.08)]">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-3">
                 {moods.map((mo) => (
                   <div key={mo.label}>
@@ -402,7 +420,7 @@ function GalleryScreen() {
           <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap">
             <button
               onClick={() => setFiltreActif(filtreActif === 'favoris' ? 'tout' : 'favoris')}
-              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200"
+              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200 hover:-translate-y-0.5"
               style={{
                 border: filtreActif === 'favoris' ? '1.5px solid var(--color-accent)' : '1px solid rgba(62,39,35,0.1)',
                 background: filtreActif === 'favoris' ? 'var(--color-peony-light)' : 'transparent',
@@ -418,7 +436,7 @@ function GalleryScreen() {
                 setImages((old) => [...old].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)))
                 setFiltreActif('tout')
               }}
-              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full border border-espresso/10 px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200 hover:border-espresso/30"
+              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full border border-espresso/10 px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200 hover:border-espresso/30 hover:-translate-y-0.5"
               style={{ color: 'rgba(62,39,35,0.7)' }}
             >
               <span>🕘</span>
@@ -427,7 +445,7 @@ function GalleryScreen() {
 
             <button
               onClick={() => setFiltreActif(filtreActif === 'yuna' ? 'tout' : 'yuna')}
-              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200"
+              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200 hover:-translate-y-0.5"
               style={{
                 border: filtreActif === 'yuna' ? '1.5px solid var(--color-espresso)' : '1px solid rgba(62,39,35,0.1)',
                 background: filtreActif === 'yuna' ? 'var(--color-espresso)' : 'transparent',
@@ -443,7 +461,7 @@ function GalleryScreen() {
 
             <button
               onClick={() => inputFichierRef.current?.click()}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-[10.5px] sm:text-[11px] font-medium transition-all duration-200 hover:opacity-90"
+              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-[10.5px] sm:text-[11px] font-medium transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5"
               style={{ background: 'var(--color-espresso)', color: 'var(--color-peony)', border: 'none' }}
             >
               <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -461,7 +479,7 @@ function GalleryScreen() {
               <button
                 key={f.id}
                 onClick={() => setFiltreActif(f.id)}
-                className="rounded-full text-[10.5px] sm:text-[11px] font-medium px-3.5 sm:px-4 py-2 cursor-pointer transition-all duration-200"
+                className="rounded-full text-[10.5px] sm:text-[11px] font-medium px-3.5 sm:px-4 py-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
                 style={{
                   border: filtreActif === f.id ? '1.5px solid var(--color-espresso)' : '1px solid rgba(62,39,35,0.15)',
                   background: filtreActif === f.id ? 'var(--color-espresso)' : 'transparent',
@@ -479,21 +497,31 @@ function GalleryScreen() {
             </p>
           )}
 
+          {/* ============================================================
+              GRILLE DE CARTES PHOTO — esprit "boutique chill" façon
+              Harmonia : zoom doux de l'image au survol, badge catégorie
+              en pastille, et une barre "Voir" qui glisse depuis le bas
+              de l'image au survol (desktop), comme les icônes qui
+              montent sur les cartes produits de Harmonia.
+              ============================================================ */}
           <div className="mb-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3.5 md:gap-4">
             {imagesFiltrees.map((img, i) => (
               <div
                 key={img.id}
                 onClick={() => setIndexOuvert(i)}
-                className="rounded-2xl overflow-hidden bg-espresso cursor-pointer transition-all duration-300"
+                className="group rounded-2xl overflow-hidden bg-espresso cursor-pointer transition-all duration-300 hover:-translate-y-1"
                 style={{ boxShadow: '0 4px 16px rgba(62,39,35,0.15)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 10px 22px rgba(62,39,35,0.25)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(62,39,35,0.15)' }}
               >
-                <div className="relative h-[120px] sm:h-[160px] md:h-[200px] lg:h-[180px]" style={{ background: img.bg }}>
+                <div className="relative h-[120px] sm:h-[160px] md:h-[200px] lg:h-[180px] overflow-hidden" style={{ background: img.bg }}>
                   {img.url ? (
-                    <img src={img.url} alt={img.titre} className="absolute inset-0 w-full h-full" style={{ objectFit: 'cover' }} />
+                    <img
+                      src={img.url}
+                      alt={img.titre}
+                      className="absolute inset-0 w-full h-full transition-transform duration-500 ease-out group-hover:scale-110"
+                      style={{ objectFit: 'cover' }}
+                    />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-110">
                       {img.Icone && <img.Icone style={{ width: '22px', height: '22px' }} className="text-cream/95" />}
                     </div>
                   )}
@@ -527,19 +555,37 @@ function GalleryScreen() {
                   </button>
 
                   {img.reactions?.length > 0 && (
-                    <div className="absolute bottom-2 right-2 bg-espresso/70 rounded-full px-1.5 py-0.5 text-[10px]">
+                    <div className="absolute bottom-2 right-2 bg-espresso/70 rounded-full px-1.5 py-0.5 text-[10px] z-10">
                       {img.reactions.slice(0, 3).join('')}
                     </div>
                   )}
 
-                  <p className="hidden sm:block absolute bottom-2 left-2.5 right-2.5 text-[9px] text-cream/90 italic leading-snug" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                  <p className="hidden sm:block absolute bottom-2 left-2.5 right-2.5 text-[9px] text-cream/90 italic leading-snug transition-opacity duration-200 group-hover:opacity-0" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
                     {img.texte}
                   </p>
+
+                  {/* Barre "Voir" qui glisse depuis le bas au survol (desktop
+                      uniquement — sur mobile ça reste caché, comme dans
+                      l'original Harmonia où le hover n'existe qu'au pointeur) */}
+                  <div className="hidden sm:flex absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out">
+                    <span
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-medium text-cream"
+                      style={{ background: 'color-mix(in srgb, var(--color-accent) 88%, transparent)' }}
+                    >
+                      <IconOeil style={{ width: '12px', height: '12px' }} />
+                      Voir la photo
+                    </span>
+                  </div>
                 </div>
 
                 <div className="bg-cream px-2.5 sm:px-3 py-1.5 sm:py-2">
-                  <p className="text-[7.5px] sm:text-[8px] uppercase tracking-[0.06em] text-espresso/45">{img.mood}</p>
-                  <p className="font-semibold text-espresso mt-0.5 overflow-hidden whitespace-nowrap text-ellipsis text-[11px] sm:text-[12px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                  <span
+                    className="inline-block text-[7.5px] sm:text-[8px] font-medium uppercase tracking-[0.06em] rounded-full px-1.5 py-0.5"
+                    style={{ background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', color: 'var(--color-accent)' }}
+                  >
+                    {img.mood}
+                  </span>
+                  <p className="font-semibold text-espresso mt-1 overflow-hidden whitespace-nowrap text-ellipsis text-[11px] sm:text-[12px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
                     {img.titre}
                   </p>
                   <p className="text-[7.5px] sm:text-[8.5px] text-espresso/45 mt-0.5">{img.sous}</p>
@@ -548,6 +594,11 @@ function GalleryScreen() {
             ))}
           </div>
 
+          {/* ============================================================
+              CARTES "AVIS" — restylées façon review card Harmonia :
+              icône guillemet, texte italique, séparateur, mini
+              "avatar" rond, compteur de cœurs.
+              ============================================================ */}
           <div className="rounded-2xl border border-espresso/10 bg-espresso/[0.03] p-5 sm:p-7">
             <div className="flex items-center gap-3 mb-5">
               <div
@@ -562,23 +613,29 @@ function GalleryScreen() {
                 </p>
                 <div className="flex gap-1 mt-1">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <svg key={i} viewBox="0 0 24 24" style={{ width: '12px', height: '12px' }}>
-                      <path d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z" fill="var(--color-accent)" />
-                    </svg>
+                    <IconHeart key={i} style={{ width: '12px', height: '12px' }} className="text-accent" />
                   ))}
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-espresso/10">
               {reactionsDecoratives.map((r, i) => (
-                <div key={i} className="rounded-xl bg-cream px-4 py-3.5">
-                  <p className="text-[12px] text-espresso/70">{r.texte}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-[9.5px] text-espresso/35">{r.date}</span>
+                <div
+                  key={i}
+                  className="rounded-2xl bg-cream border border-espresso/8 px-4 py-4 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(62,39,35,0.1)]"
+                >
+                  <IconGuillemet style={{ width: '16px', height: '16px' }} className="opacity-40 text-accent" />
+                  <p className="text-[12px] text-espresso/70 leading-relaxed italic flex-1">{r.texte}</p>
+                  <div className="flex items-center gap-2.5 pt-3 border-t border-espresso/8">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'var(--color-peony-light)', border: '2px solid var(--color-peony)' }}
+                    >
+                      <span className="text-[12px]">💌</span>
+                    </div>
+                    <span className="flex-1 text-[9.5px] text-espresso/35">{r.date}</span>
                     <span className="flex items-center gap-1 text-[9.5px]" style={{ color: 'var(--color-accent)' }}>
-                      <svg viewBox="0 0 24 24" style={{ width: '9px', height: '9px' }}>
-                        <path d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z" fill="var(--color-accent)" />
-                      </svg>
+                      <IconHeart style={{ width: '9px', height: '9px' }} className="text-accent" />
                       {r.coeurs}
                     </span>
                   </div>
@@ -618,6 +675,10 @@ function GalleryScreen() {
           d'adresse mobile qui apparaît/disparaît.
           Sur PC (md: et plus), on repasse à un comportement souple
           (h-auto + max-h) car il y a largement la place.
+
+          PANNEAU COMMENTAIRE : restylé façon formulaire Harmonia —
+          bloc d'intro avec bordure gauche colorée, champ texte avec
+          libellé au-dessus, halo lumineux au focus.
           ============================================================ */}
       {indexOuvert !== null && imagesFiltrees[indexOuvert] && (() => {
         const imageActuelle = imagesFiltrees[indexOuvert]
@@ -660,7 +721,7 @@ function GalleryScreen() {
             {/* Boîte modale : hauteur FIXE sur mobile/tablette (92dvh),
                 souple sur PC (h-auto, plafonnée à 92dvh) */}
             <div
-              className="w-full max-w-[900px] h-[92dvh] md:h-auto md:max-h-[92dvh] bg-espresso rounded-3xl overflow-hidden flex flex-col md:flex-row"
+              className="w-full max-w-[900px] h-[92dvh] md:h-auto md:max-h-[92dvh] bg-espresso rounded-3xl overflow-hidden flex flex-col md:flex-row anim-pop"
               onClick={(e) => e.stopPropagation()}
             >
               {/* ===== Zone image — hauteur FIXE sur mobile (38dvh),
@@ -741,7 +802,7 @@ function GalleryScreen() {
                   {/* ===== BOUTON qui ouvre/ferme le panneau ===== */}
                   <button
                     onClick={() => setPanneauOuvert(!panneauOuvert)}
-                    className="flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold border border-peony/30 text-peony transition-all duration-200 hover:bg-white/5"
+                    className="flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold border border-peony/30 text-peony transition-all duration-200 hover:bg-white/5 hover:-translate-y-0.5"
                   >
                     <IconBulle style={{ width: '14px', height: '14px' }} />
                     {panneauOuvert ? 'Fermer' : 'Commenter et réagir'}
@@ -773,11 +834,19 @@ function GalleryScreen() {
                     si panneauOuvert est vrai. La zone parente défile
                     (overflow-y-auto) donc ce panneau reste toujours
                     atteignable même sur petit écran avec grande image.
-                    Le champ de texte est en text-base (16px) pour éviter
-                    le zoom automatique de Safari iOS au focus.
+                    Restylé façon formulaire Harmonia : bloc d'intro à
+                    bordure gauche colorée, libellé + champ, halo au focus.
                     ============================================================ */}
                 {panneauOuvert && (
-                  <div className="mt-3 pt-4 border-t border-peony/15">
+                  <div className="mt-3 pt-4 border-t border-peony/15 anim-pop">
+
+                    {/* Bloc d'intro, façon .form-intro de Harmonia */}
+                    <div
+                      className="rounded-r-xl px-3.5 py-2.5 mb-4 text-[10.5px] leading-relaxed text-peony/70 italic"
+                      style={{ background: 'rgba(255,255,255,0.05)', borderLeft: '3px solid var(--color-accent)' }}
+                    >
+                      Une réaction rapide, ou un petit mot — ce que tu ressens face à cette image 🌸
+                    </div>
 
                     <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
                       Réagis à cette image
@@ -801,14 +870,14 @@ function GalleryScreen() {
                     </div>
 
                     <label className="text-[9px] text-peony/40 uppercase tracking-wide block mb-2">
-                      Ton petit mot sur cette photo
+                      💬 Ton petit mot sur cette photo
                     </label>
                     <textarea
                       value={commentaireEnEdition}
                       onChange={(e) => setCommentaireEnEdition(e.target.value)}
                       placeholder="Écris ce que cette image représente pour toi..."
                       rows={3}
-                      className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-base md:text-[12px] text-peony placeholder:text-peony/30 outline-none focus:border-peony/50 transition-colors duration-200 resize-none"
+                      className="w-full bg-white/5 border border-peony/20 rounded-xl px-3 py-2.5 text-base md:text-[12px] text-peony placeholder:text-peony/30 outline-none transition-all duration-200 resize-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
                     />
                     <button
                       onClick={sauvegarderCommentaire}

@@ -1,4 +1,6 @@
 const CLE_LOCALISATION = 'yuna-derniere-position'
+const CLE_HISTORIQUE = 'yuna-historique-positions'
+const CLE_LIEUX_FAVORIS = 'yuna-lieux-favoris'
 
 export function chargerDernierePosition() {
   const donnees = localStorage.getItem(CLE_LOCALISATION)
@@ -7,6 +9,50 @@ export function chargerDernierePosition() {
 
 export function sauvegarderPosition(position) {
   localStorage.setItem(CLE_LOCALISATION, JSON.stringify(position))
+  // Garde aussi une trace dans l'historique (50 dernières positions
+  // max, pour ne pas faire grossir le localStorage indéfiniment)
+  const historique = chargerHistoriquePositions()
+  historique.unshift(position)
+  localStorage.setItem(CLE_HISTORIQUE, JSON.stringify(historique.slice(0, 50)))
+}
+
+export function chargerHistoriquePositions() {
+  const donnees = localStorage.getItem(CLE_HISTORIQUE)
+  return donnees ? JSON.parse(donnees) : []
+}
+
+// ============================================================
+// LIEUX FAVORIS (maison, travail, etc.) — enregistrés localement,
+// utiles pour calculer une distance ou lancer un itinéraire rapide
+// ============================================================
+export function chargerLieuxFavoris() {
+  const donnees = localStorage.getItem(CLE_LIEUX_FAVORIS)
+  return donnees ? JSON.parse(donnees) : []
+}
+
+export function sauvegarderLieuFavori(lieu) {
+  const lieux = chargerLieuxFavoris()
+  lieux.unshift({ id: Date.now(), ...lieu })
+  localStorage.setItem(CLE_LIEUX_FAVORIS, JSON.stringify(lieux))
+  return lieux
+}
+
+export function supprimerLieuFavori(id) {
+  const lieux = chargerLieuxFavoris().filter((l) => l.id !== id)
+  localStorage.setItem(CLE_LIEUX_FAVORIS, JSON.stringify(lieux))
+  return lieux
+}
+
+// ============================================================
+// DISTANCE ENTRE DEUX POINTS (formule de Haversine) — renvoie des km
+// ============================================================
+export function calculerDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 // ============================================================
@@ -26,6 +72,9 @@ export function obtenirPositionActuelle() {
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
         precision: Math.round(pos.coords.accuracy),
+        // km/h si dispo (souvent null à l'arrêt ou sur desktop)
+        vitesse: pos.coords.speed != null ? Math.round(pos.coords.speed * 3.6) : null,
+        altitude: pos.coords.altitude != null ? Math.round(pos.coords.altitude) : null,
         date: new Date().toISOString(),
       }),
       (erreur) => {
