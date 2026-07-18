@@ -11,7 +11,10 @@ import JournalScreen    from './screens/JournalScreen'
 import LocalisationScreen from './screens/LocalisationScreen'
 import Sidebar          from './components/Sidebar'
 import NotificationHost from './components/NotificationHost'
+import { synchroniserAuDemarrage } from './services/sync'
 import AccesProtege     from './components/AccesProtege'
+import ConnexionScreen from './screens/ConnexionScreen'
+import { surveillerConnexion } from './services/authentification'
 import { creerNouvelleConversation } from './services/conversations'
 import { useHauteurEcran } from './hooks/useHauteurEcran'
 import { chargerSuivi, enregistrerVisite, joursDepuis } from './services/suivi'
@@ -21,6 +24,24 @@ import { notifierInfo } from './services/notifications'
 function App() {
   const [ecranActuel, setEcranActuel]               = useState('splash')
   const [conversationActive, setConversationActive] = useState(null)
+  const [utilisateur, setUtilisateur] = useState(null)
+  const [verificationAuthTerminee, setVerificationAuthTerminee] = useState(false)
+
+
+
+  useEffect(() => {
+  const desabonner = surveillerConnexion(async (user) => {
+    setUtilisateur(user)
+    if (user) {
+      // ⬅️ NOUVEAU : synchronise Profil + Paramètres dès la connexion
+      await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
+      await synchroniserAuDemarrage('yuna-parametres', 'parametres')
+    }
+    setVerificationAuthTerminee(true)
+  })
+  return () => desabonner()
+}, [])
+
 
   useHauteurEcran()
 
@@ -112,7 +133,8 @@ function App() {
   const gererNouvelleConversation = (conv) => setConversationActive(conv)
 
   if (ecranActuel === 'splash') return <SplashScreen />
-
+  if (!verificationAuthTerminee) return <SplashScreen />
+  if (!utilisateur) return <ConnexionScreen />
   return (
     <>
       <NotificationHost />

@@ -1,15 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import {
-  chargerPersonnages,
-  sauvegarderPersonnage,
-  supprimerPersonnage,
-  togglerFavoriPersonnage,
-  creerPersonnageVide,
-  chargerMessagesPersonnage,
-  sauvegarderMessagesPersonnage,
-  reinitialiserConversationPersonnage,
-  CATEGORIES_PERSONNAGES,
-} from '../services/personnages'
+import { chargerPersonnages, sauvegarderPersonnage, supprimerPersonnage, togglerFavoriPersonnage, creerPersonnageVide, chargerMessagesPersonnage, sauvegarderMessagesPersonnage, reinitialiserConversationPersonnage, CATEGORIES_PERSONNAGES, TRAITS_PERSONNAGE, obtenirTraits } from '../services/personnages'
 import { envoyerMessageAPersonnage } from '../services/gemini'
 import { fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
@@ -450,6 +440,14 @@ function PersonnagesScreen() {
       return { ...ancien, categories: nouvelles }
     })
   }
+
+  const toggleTraitEdition = (id) => {
+  setPersonnageEnEdition((ancien) => {
+    const actuels = ancien.traits || []
+    const nouveaux = actuels.includes(id) ? actuels.filter((t) => t !== id) : [...actuels, id]
+    return { ...ancien, traits: nouveaux }
+  })
+}
   const gererUploadAvatar = async (e) => {
     const fichier = e.target.files[0]
     if (!fichier) return
@@ -848,6 +846,31 @@ function PersonnagesScreen() {
                   )
                 })}
               </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Traits de caractère (facultatif, mais recommandé pour des réponses plus vivantes)</label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {TRAITS_PERSONNAGE.map((trait) => {
+                  const choisi = (personnageEnEdition.traits || []).includes(trait.id)
+                  return (
+                    <button
+                      key={trait.id}
+                      type="button"
+                      onClick={() => toggleTraitEdition(trait.id)}
+                      title={trait.description}
+                      className="flex items-center gap-1 rounded-full text-[11px] font-medium px-3 py-1.5 transition-all duration-200 border"
+                      style={choisi
+                        ? { background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }
+                        : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}
+                    >
+                      {choisi && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                      {trait.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[9px] text-espresso/35 mt-1.5">Survole un trait pour voir sa description exacte</p>
             </div>
 
             <div className="mb-4">

@@ -1,3 +1,6 @@
+import { synchroniserVersFirestore } from './sync'
+
+
 const CLE_PARAMETRES = 'yuna-parametres'
 
 export const FONDS_CHAT_DISPONIBLES = [
@@ -42,6 +45,9 @@ export function chargerParametres() {
 
 export function sauvegarderParametres(parametres) {
   localStorage.setItem(CLE_PARAMETRES, JSON.stringify(parametres))
+  // ⬅️ NOUVEAU : synchronise aussi vers Firestore, en arrière-plan
+  // (pas de "await" ici volontairement — ne ralentit jamais l'interface)
+  synchroniserVersFirestore('parametres', parametres)
 }
 
 export { parametresParDefaut }

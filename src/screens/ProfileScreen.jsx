@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { chargerImages } from '../services/images'
+import { chargerProfil, sauvegarderProfil as sauvegarderProfilService } from '../services/profil'
 import AIAvatar from '../components/AIAvatar'
 
 const IconPhoto = (props) => (
@@ -95,15 +96,16 @@ function ProfileScreen({ onChangerEcran }) {
   const [imagesGalerie, setImagesGalerie] = useState([])
 
   useEffect(() => {
-    const profilSauvegarde = localStorage.getItem(CLE_PROFIL)
-    if (profilSauvegarde) setProfil(JSON.parse(profilSauvegarde))
+    const profilCharge = chargerProfil()
+    if (profilCharge) setProfil(profilCharge)
+
     setImagesGalerie(chargerImages())
   }, [])
 
-  const sauvegarderProfil = () => {
-    localStorage.setItem(CLE_PROFIL, JSON.stringify(profil))
-    setModeEdition(false)
-  }
+ const sauvegarderProfil = () => {
+  sauvegarderProfilService(profil)
+  setModeEdition(false)
+}
 
   const modifierChamp = (champ, valeur) => setProfil((a) => ({ ...a, [champ]: valeur }))
 
@@ -117,7 +119,7 @@ function ProfileScreen({ onChangerEcran }) {
   const choisirPhotoProfil = (urlImage) => {
     const profilMisAJour = { ...profil, photoUrl: urlImage }
     setProfil(profilMisAJour)
-    localStorage.setItem(CLE_PROFIL, JSON.stringify(profilMisAJour))
+    sauvegarderProfilService(profilMisAJour)
     setAfficherSelecteurPhoto(false)
   }
 
