@@ -5,7 +5,7 @@ import {
   ChevronRight, Wand2, NotebookPen, Star,
 } from 'lucide-react'
 import { enregistrerVisite } from '../services/suivi'
-import { chargerEntreesJournal, sauvegarderEntreesJournal } from '../services/journal'
+import { chargerEntreesJournal, sauvegarderEntreesJournal, HUMEURS } from '../services/journal'
 import { genererResumeJournal } from '../services/gemini'
 import { notifierErreur } from '../services/notifications'
 
@@ -14,15 +14,6 @@ const C = {
   espresso: '#3E2723', encreDoux: 'rgba(62,39,35,0.52)', encreFaible: 'rgba(62,39,35,0.35)',
   peony: '#F6D8DE', peonyDeep: '#C98A93', sauge: '#7C8F6E',
 }
-
-const HUMEURS = [
-  { id: 'radieuse', emoji: '✨', label: 'Radieuse' },
-  { id: 'bien', emoji: '🙂', label: 'Bien' },
-  { id: 'sereine', emoji: '😌', label: 'Sereine' },
-  { id: 'fatiguee', emoji: '😴', label: 'Fatiguée' },
-  { id: 'stressee', emoji: '😰', label: 'Stressée' },
-  { id: 'triste', emoji: '😔', label: 'Triste' },
-]
 
 const PROMPTS = [
   "Si aujourd'hui avait une couleur, laquelle serait-elle ?",

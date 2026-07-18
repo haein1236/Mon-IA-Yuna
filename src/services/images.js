@@ -56,6 +56,21 @@ export function ajouterCommentaireImage(id, commentaire) {
 }
 
 // ============================================================
+// METTRE À JOUR N'IMPORTE QUEL CHAMP D'UNE IMAGE EXISTANTE
+// (utilisé par exemple par la légende générée par IA, qui doit
+// modifier l'image en place plutôt que d'en créer une nouvelle —
+// contrairement à sauvegarderImage() qui fait toujours un unshift)
+// ============================================================
+export function mettreAJourImage(id, changements) {
+  const images = chargerImages()
+  const imagesMaj = images.map((img) =>
+    img.id === id ? { ...img, ...changements } : img
+  )
+  localStorage.setItem(CLE_IMAGES, JSON.stringify(imagesMaj))
+  return imagesMaj
+}
+
+// ============================================================
 // BASCULER UNE RÉACTION SUR UNE IMAGE
 // "reactions" est stocké comme un tableau d'emojis actifs sur cette
 // image (ex: ['❤️', '✨']). Toucher un emoji déjà actif le retire
