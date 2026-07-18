@@ -76,6 +76,16 @@ function tempsEcoule(dateISO) {
   return `il y a ${Math.round(diffH / 24)} j`
 }
 
+// Petite carte d'info réutilisable, pour garder un rythme visuel cohérent
+function CarteInfo({ label, children, className = '' }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-espresso/10 p-4 ${className}`}>
+      <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">{label}</p>
+      {children}
+    </div>
+  )
+}
+
 function LocalisationScreen() {
   const [position, setPosition] = useState(() => chargerDernierePosition())
   const [adresse, setAdresse] = useState(null)
@@ -195,10 +205,10 @@ function LocalisationScreen() {
 
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
-      <div className="px-4 md:px-8 py-6 md:py-8 max-w-[800px] mx-auto">
+      <div className="px-4 sm:px-6 md:px-8 py-6 md:py-8 max-w-[1100px] mx-auto">
 
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-full bg-espresso/8 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-espresso/8 flex items-center justify-center flex-shrink-0">
             <IconPin style={{ width: '17px', height: '17px' }} className="text-espresso" />
           </div>
           <div>
@@ -215,7 +225,7 @@ function LocalisationScreen() {
             données partagée) avec leur consentement explicite, ce
             n'est pas quelque chose que localStorage peut faire.
             ============================================================ */}
-        <p className="text-[10.5px] text-espresso/40 leading-relaxed mb-6 italic">
+        <p className="text-[10.5px] text-espresso/40 leading-relaxed mb-6 italic max-w-[640px]">
           Pour l'instant, seule ta propre position est affichée ici — le partage de position entre amis demande un vrai système de comptes et un serveur partagé (pas seulement ce fichier), avec leur consentement explicite. Prochaine étape possible si tu veux t'y mettre.
         </p>
 
@@ -226,168 +236,190 @@ function LocalisationScreen() {
         )}
 
         {position ? (
-          <>
-            <div className="bg-white rounded-2xl border border-espresso/10 overflow-hidden mb-3 relative">
-              <iframe
-                title="Carte de ma position"
-                src={urlCarte}
-                className="w-full"
-                style={{ height: '320px', border: 'none' }}
-                loading="lazy"
-              />
-              {centreCarte && position && centreCarte !== position && (centreCarte.latitude !== position.latitude || centreCarte.longitude !== position.longitude) && (
-                <button
-                  onClick={() => setCentreCarte(position)}
-                  className="absolute top-3 right-3 text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow"
-                >
-                  Revenir à ma position
+          <div className="lg:grid lg:grid-cols-[1.45fr_1fr] lg:gap-5 lg:items-start">
+            {/* ===== COLONNE GAUCHE : carte + actions rapides (fixe au scroll sur desktop) ===== */}
+            <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-3 lg:mb-0">
+              <div className="bg-white rounded-2xl border border-espresso/10 overflow-hidden relative">
+                <iframe
+                  title="Carte de ma position"
+                  src={urlCarte}
+                  className="w-full h-[280px] sm:h-[340px] lg:h-[440px]"
+                  style={{ border: 'none' }}
+                  loading="lazy"
+                />
+                {centreCarte && position && centreCarte !== position && (centreCarte.latitude !== position.latitude || centreCarte.longitude !== position.longitude) && (
+                  <button
+                    onClick={() => setCentreCarte(position)}
+                    className="absolute top-3 right-3 text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                  >
+                    Revenir à ma position
+                  </button>
+                )}
+              </div>
+
+              {/* Actions rapides */}
+              <div className="grid grid-cols-3 gap-2">
+                <button onClick={copierCoordonnees} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 hover:border-espresso/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
+                  <IconCopier style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
+                  <span className="text-[9.5px] text-espresso/55">Copier</span>
                 </button>
-              )}
-            </div>
-
-            {/* Actions rapides */}
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              <button onClick={copierCoordonnees} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 transition-colors duration-150">
-                <IconCopier style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
-                <span className="text-[9.5px] text-espresso/55">Copier</span>
-              </button>
-              <button onClick={partagerPosition} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 transition-colors duration-150">
-                <IconPartager style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
-                <span className="text-[9.5px] text-espresso/55">Partager</span>
-              </button>
-              <button onClick={() => ouvrirItineraire(position.latitude, position.longitude)} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 transition-colors duration-150">
-                <IconItineraire style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
-                <span className="text-[9.5px] text-espresso/55">Itinéraire</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Coordonnées</p>
-                <p className="text-[13px] text-espresso font-medium tabular-nums">
-                  {position.latitude.toFixed(5)}, {position.longitude.toFixed(5)}
-                </p>
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: precisionInfo.couleur }} />
-                  <p className="text-[10px] text-espresso/45">Précision {precisionInfo.texte.toLowerCase()} (~{position.precision}m)</p>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Dernière mise à jour</p>
-                <p className="text-[13px] text-espresso font-medium">
-                  {new Date(position.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </p>
-                <p className="text-[10px] text-espresso/45 mt-1.5">{tempsEcoule(position.date)}</p>
-              </div>
-            </div>
-
-            {(position.vitesse != null || position.altitude != null) && (
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                {position.vitesse != null && (
-                  <div className="bg-white rounded-2xl border border-espresso/10 p-4">
-                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Vitesse</p>
-                    <p className="text-[13px] text-espresso font-medium">{position.vitesse} km/h</p>
-                  </div>
-                )}
-                {position.altitude != null && (
-                  <div className="bg-white rounded-2xl border border-espresso/10 p-4">
-                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Altitude</p>
-                    <p className="text-[13px] text-espresso font-medium">{position.altitude} m</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {adresse && (
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4 mb-5">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Adresse approximative</p>
-                <p className="text-[12.5px] text-espresso leading-relaxed">{adresse}</p>
-              </div>
-            )}
-
-            {/* ===== LIEUX FAVORIS ===== */}
-            <div className="bg-white rounded-2xl border border-espresso/10 p-4 mb-3">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Lieux favoris</p>
-                <button
-                  onClick={() => setAfficherFormFavori((a) => !a)}
-                  className="text-[10.5px] font-semibold text-espresso underline underline-offset-2"
-                >
-                  {afficherFormFavori ? 'Annuler' : '+ Enregistrer ici'}
+                <button onClick={partagerPosition} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 hover:border-espresso/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
+                  <IconPartager style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
+                  <span className="text-[9.5px] text-espresso/55">Partager</span>
+                </button>
+                <button onClick={() => ouvrirItineraire(position.latitude, position.longitude)} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 hover:border-espresso/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
+                  <IconItineraire style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
+                  <span className="text-[9.5px] text-espresso/55">Itinéraire</span>
                 </button>
               </div>
 
-              {afficherFormFavori && (
-                <div className="flex gap-2 mb-3">
+              {/* Sur desktop, le bouton d'actualisation reste avec la carte, bien visible sans scroller */}
+              <div className="hidden lg:block">
+                <button
+                  onClick={() => localiser()}
+                  disabled={chargement}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                >
+                  <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
+                  {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
+                </button>
+                <label className="flex items-center justify-center gap-2 mt-3 cursor-pointer">
                   <input
-                    value={nomNouveauFavori}
-                    onChange={(e) => setNomNouveauFavori(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && enregistrerFavori()}
-                    placeholder="Ex : Maison, Travail..."
-                    className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso"
+                    type="checkbox"
+                    checked={actualisationAuto}
+                    onChange={(e) => setActualisationAuto(e.target.checked)}
+                    className="accent-espresso"
                   />
-                  <button onClick={enregistrerFavori} className="rounded-xl px-3.5 text-[11px] font-semibold text-peony bg-espresso">
-                    Ajouter
+                  <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
+                </label>
+              </div>
+            </div>
+
+            {/* ===== COLONNE DROITE : informations détaillées ===== */}
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3">
+                <CarteInfo label="Coordonnées">
+                  <p className="text-[13px] text-espresso font-medium tabular-nums">
+                    {position.latitude.toFixed(5)}, {position.longitude.toFixed(5)}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: precisionInfo.couleur }} />
+                    <p className="text-[10px] text-espresso/45">Précision {precisionInfo.texte.toLowerCase()} (~{position.precision}m)</p>
+                  </div>
+                </CarteInfo>
+                <CarteInfo label="Dernière mise à jour">
+                  <p className="text-[13px] text-espresso font-medium">
+                    {new Date(position.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <p className="text-[10px] text-espresso/45 mt-1.5">{tempsEcoule(position.date)}</p>
+                </CarteInfo>
+              </div>
+
+              {(position.vitesse != null || position.altitude != null) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {position.vitesse != null && (
+                    <CarteInfo label="Vitesse">
+                      <p className="text-[13px] text-espresso font-medium">{position.vitesse} km/h</p>
+                    </CarteInfo>
+                  )}
+                  {position.altitude != null && (
+                    <CarteInfo label="Altitude">
+                      <p className="text-[13px] text-espresso font-medium">{position.altitude} m</p>
+                    </CarteInfo>
+                  )}
+                </div>
+              )}
+
+              {adresse && (
+                <CarteInfo label="Adresse approximative">
+                  <p className="text-[12.5px] text-espresso leading-relaxed">{adresse}</p>
+                </CarteInfo>
+              )}
+
+              {/* ===== LIEUX FAVORIS ===== */}
+              <div className="bg-white rounded-2xl border border-espresso/10 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Lieux favoris</p>
+                  <button
+                    onClick={() => setAfficherFormFavori((a) => !a)}
+                    className="text-[10.5px] font-semibold text-espresso underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 rounded"
+                  >
+                    {afficherFormFavori ? 'Annuler' : '+ Enregistrer ici'}
                   </button>
                 </div>
-              )}
 
-              {lieuxFavoris.length === 0 ? (
-                <p className="text-[10.5px] text-espresso/35 italic">Aucun lieu favori enregistré</p>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  {lieuxFavoris.map((lieu) => {
-                    const distance = calculerDistanceKm(position.latitude, position.longitude, lieu.latitude, lieu.longitude)
-                    return (
-                      <div
-                        key={lieu.id}
-                        onClick={() => setCentreCarte(lieu)}
-                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-[#F0EEEB] transition-colors duration-150 cursor-pointer"
-                      >
-                        <IconEtoile style={{ width: '13px', height: '13px' }} className="text-espresso/40 flex-shrink-0" fill="currentColor" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11.5px] font-medium text-espresso truncate">{lieu.nom}</p>
-                          <p className="text-[9.5px] text-espresso/45">{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`} de toi</p>
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); ouvrirItineraire(lieu.latitude, lieu.longitude) }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0"
-                          title="Itinéraire"
+                {afficherFormFavori && (
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      value={nomNouveauFavori}
+                      onChange={(e) => setNomNouveauFavori(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && enregistrerFavori()}
+                      placeholder="Ex : Maison, Travail..."
+                      className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso"
+                    />
+                    <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 text-[11px] font-semibold text-peony bg-espresso focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
+                      Ajouter
+                    </button>
+                  </div>
+                )}
+
+                {lieuxFavoris.length === 0 ? (
+                  <p className="text-[10.5px] text-espresso/35 italic">Aucun lieu favori enregistré</p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {lieuxFavoris.map((lieu) => {
+                      const distance = calculerDistanceKm(position.latitude, position.longitude, lieu.latitude, lieu.longitude)
+                      return (
+                        <div
+                          key={lieu.id}
+                          onClick={() => setCentreCarte(lieu)}
+                          className="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-[#F0EEEB] transition-colors duration-150 cursor-pointer"
                         >
-                          <IconItineraire style={{ width: '12px', height: '12px' }} className="text-espresso/50" />
-                        </button>
-                        <button onClick={(e) => retirerFavori(e, lieu.id)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0" title="Supprimer">
-                          <IconTrash style={{ width: '12px', height: '12px' }} className="text-espresso/40" />
-                        </button>
-                      </div>
-                    )
-                  })}
+                          <IconEtoile style={{ width: '13px', height: '13px' }} className="text-espresso/40 flex-shrink-0" fill="currentColor" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11.5px] font-medium text-espresso truncate">{lieu.nom}</p>
+                            <p className="text-[9.5px] text-espresso/45">{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`} de toi</p>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); ouvrirItineraire(lieu.latitude, lieu.longitude) }}
+                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                            title="Itinéraire"
+                          >
+                            <IconItineraire style={{ width: '12px', height: '12px' }} className="text-espresso/50" />
+                          </button>
+                          <button onClick={(e) => retirerFavori(e, lieu.id)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Supprimer">
+                            <IconTrash style={{ width: '12px', height: '12px' }} className="text-espresso/40" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ===== HISTORIQUE ===== */}
+              {historique.length > 1 && (
+                <div className="bg-white rounded-2xl border border-espresso/10 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <IconHistorique style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Historique des positions</p>
+                  </div>
+                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto scroll-suave">
+                    {historique.slice(0, 15).map((pos, i) => (
+                      <button
+                        key={pos.date + i}
+                        onClick={() => setCentreCarte(pos)}
+                        className="flex items-center justify-between text-left rounded-lg px-2.5 py-1.5 hover:bg-[#F0EEEB] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                      >
+                        <span className="text-[10.5px] text-espresso/60 tabular-nums">{pos.latitude.toFixed(4)}, {pos.longitude.toFixed(4)}</span>
+                        <span className="text-[9.5px] text-espresso/35 flex-shrink-0 ml-2">{tempsEcoule(pos.date)}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-
-            {/* ===== HISTORIQUE ===== */}
-            {historique.length > 1 && (
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4 mb-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <IconHistorique style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
-                  <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Historique des positions</p>
-                </div>
-                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto scroll-suave">
-                  {historique.slice(0, 15).map((pos, i) => (
-                    <button
-                      key={pos.date + i}
-                      onClick={() => setCentreCarte(pos)}
-                      className="flex items-center justify-between text-left rounded-lg px-2.5 py-1.5 hover:bg-[#F0EEEB] transition-colors duration-150"
-                    >
-                      <span className="text-[10.5px] text-espresso/60 tabular-nums">{pos.latitude.toFixed(4)}, {pos.longitude.toFixed(4)}</span>
-                      <span className="text-[9.5px] text-espresso/35">{tempsEcoule(pos.date)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         ) : (
           !chargement && !erreur && (
             <p className="text-center text-espresso/40 italic py-16 text-[12px]">
@@ -396,24 +428,29 @@ function LocalisationScreen() {
           )
         )}
 
-        <button
-          onClick={() => localiser()}
-          disabled={chargement}
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
-        >
-          <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
-          {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
-        </button>
+        {/* Sur mobile/tablette, les contrôles restent en bas de page, centrés et limités en largeur sur desktop */}
+        <div className={position ? 'lg:hidden mt-5' : 'mt-5'}>
+          <div className="max-w-[420px] mx-auto lg:max-w-none">
+            <button
+              onClick={() => localiser()}
+              disabled={chargement}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            >
+              <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
+              {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
+            </button>
 
-        <label className="flex items-center justify-center gap-2 mt-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={actualisationAuto}
-            onChange={(e) => setActualisationAuto(e.target.checked)}
-            className="accent-espresso"
-          />
-          <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
-        </label>
+            <label className="flex items-center justify-center gap-2 mt-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={actualisationAuto}
+                onChange={(e) => setActualisationAuto(e.target.checked)}
+                className="accent-espresso"
+              />
+              <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   )
