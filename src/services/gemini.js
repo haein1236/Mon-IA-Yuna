@@ -615,7 +615,7 @@ ${joursGalerie === Infinity ? "Elle n'a jamais encore visité sa galerie." : `El
 Écris un court message d'accueil (2-3 phrases maximum) dans ton propre style, qui exprime que tu es contente de la revoir. Tu peux mentionner UN de ces éléments si ça semble naturel, avec légèreté et bienveillance — jamais sur un ton de reproche ou de culpabilisation. Reste chaleureuse.`
 
   try {
-    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash-lite', systemInstruction: systemPrompt })
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction: systemPrompt })
     const resultat = await avecTimeout(modele.generateContent(instruction))
     return resultat.response.text()
   } catch (erreur) {
@@ -632,7 +632,7 @@ ${joursGalerie === Infinity ? "Elle n'a jamais encore visité sa galerie." : `El
 // mood pour qu'elle imagine quelque chose de cohérent.
 // ============================================================
 export async function genererLegendeImage(image) {
-  const modele = client.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+  const modele = client.getGenerativeModel({ model: "gemini-2.5-flash" });
   const instruction =
     "Regarde cette photo et écris une légende courte (une seule phrase, entre guillemets), poétique et chaleureuse, comme si Yuna la commentait avec tendresse. Réponds UNIQUEMENT avec la légende, sans aucun autre texte autour.";
 
