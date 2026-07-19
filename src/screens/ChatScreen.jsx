@@ -9,7 +9,7 @@ import { sauvegarderConversation, creerNouvelleConversation } from '../services/
 import { sauvegarderImage, fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
 
-function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation }) {
+function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation, onConversationMiseAJour }) {
 
   const [messages, setMessages] = useState(
     conversationActive?.messages || [{
@@ -43,11 +43,17 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
 
   useEffect(() => {
     if (!conversationActive) return
-    sauvegarderConversation({
+    const convMiseAJour = {
       ...conversationActive,
       messages,
       dateMiseAJour: new Date().toISOString(),
-    })
+    }
+    sauvegarderConversation(convMiseAJour)
+    // ⬅️ NOUVEAU : garde App.jsx informé de la vraie version à jour,
+    // pour que si le composant est détruit/recréé (changement d'écran),
+    // le prochain montage reparte des BONS messages, pas de l'ancien
+    // objet figé au moment de la création de la conversation
+    onConversationMiseAJour?.(convMiseAJour)
   }, [messages])
 
   useEffect(() => {
@@ -72,17 +78,33 @@ function ChatScreen({ conversationActive, onChangerEcran, onNouvelleConversation
     }
   }, [])
 
+  // ============================================================
+  // MÉMOIRE DE SECOURS À LA FERMETURE DU CHAT
+  // Si tu quittes l'écran Chat sans avoir atteint le seuil de 4
+  // messages (donc rien n'a encore été mémorisé), on force une
+  // dernière extraction sur tout ce qui reste — garantit qu'aucun
+  // morceau de conversation n'est jamais perdu pour la mémoire.
+  // ============================================================
+  useEffect(() => {
+    return () => {
+      if (messages.length - dernierIndexMemoriseRef.current >= 2) {
+        extraireEtMemoriserFaits(messages.slice(1))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleImageGeneree = (image) => sauvegarderImage(image)
 
   // ============================================================
   // NOUVEAU : mémoire périodique — appelée après chaque échange,
-  // se déclenche seulement si au moins 6 nouveaux messages sont
+  // se déclenche seulement si au moins 4 nouveaux messages sont
   // apparus depuis la dernière extraction (évite de spammer l'API
   // à chaque message, tout en garantissant que la mémoire se
   // construise même si l'utilisateur ne clique jamais "Nouvelle").
   // ============================================================
   const memoriserSiNecessaire = (messagesActuels) => {
-    if (messagesActuels.length - dernierIndexMemoriseRef.current >= 6) {
+    if (messagesActuels.length - dernierIndexMemoriseRef.current >= 4) {
       extraireEtMemoriserFaits(messagesActuels.slice(1))
       dernierIndexMemoriseRef.current = messagesActuels.length
     }

@@ -132,6 +132,12 @@ function App() {
 
   const gererNouvelleConversation = (conv) => setConversationActive(conv)
 
+  // ⬅️ NOUVEAU : garde conversationActive synchronisée avec les vraies
+  // données sauvegardées par ChatScreen (messages, dateMiseAJour), pour
+  // qu'un démontage/remontage de l'écran Chat ne reparte pas d'une
+  // version figée de la conversation
+  const mettreAJourConversationActive = (conv) => setConversationActive(conv)
+
   if (ecranActuel === 'splash') return <SplashScreen />
   if (!verificationAuthTerminee) return <SplashScreen />
   if (!utilisateur) return <ConnexionScreen />
@@ -149,6 +155,7 @@ function App() {
               conversationActive={conversationActive}
               onChangerEcran={gererChangerEcran}
               onNouvelleConversation={gererNouvelleConversation}
+              onConversationMiseAJour={mettreAJourConversationActive}
             />
           )}
           {ecranActuel === 'historique'   && (

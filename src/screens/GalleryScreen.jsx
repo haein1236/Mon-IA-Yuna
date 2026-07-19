@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
-import { IconHeart } from '../components/Icons'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { enregistrerVisite } from '../services/suivi'
 import {
   chargerImages,
   sauvegarderImage,
+  supprimerImage,
   toggleFavoriImage,
   fichierVersBase64,
   ajouterCommentaireImage,
@@ -14,6 +14,14 @@ import {
 import { genererLegendeImage } from '../services/gemini'
 import { chargerEntreesJournal, HUMEURS } from '../services/journal'
 import { notifierErreur, notifierSucces } from '../services/notifications'
+import {
+  chargerAlbums,
+  creerAlbum,
+  supprimerAlbum,
+  renommerAlbum,
+  togglePhotoDansAlbum,
+  retirerPhotoDeTousLesAlbums,
+} from '../services/albums'
 
 // ============================================================
 // LIEN AVEC LE JOURNAL — journal.js n'exporte pas de fonction dédiée
@@ -23,13 +31,6 @@ import { notifierErreur, notifierSucces } from '../services/notifications'
 function obtenirEntreeJournalDuJour(dateISO) {
   return chargerEntreesJournal().find((e) => e.date === dateISO) || null
 }
-import {
-  chargerAlbums,
-  creerAlbum,
-  supprimerAlbum,
-  renommerAlbum,
-  togglePhotoDansAlbum,
-} from '../services/albums'
 
 const IconFleur = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
@@ -170,6 +171,62 @@ const IconGrille = (props) => (
     <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
   </svg>
 )
+// Cœur local, fiable — remplace l'ancien import IconHeart dont on ne
+// connaissait pas l'implémentation exacte. currentColor garantit que
+// la couleur suit toujours className/style, sans mauvaise surprise.
+const IconCoeur = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z" />
+  </svg>
+)
+const IconRecherche = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+    <line x1="21" y1="21" x2="16.5" y2="16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+)
+const IconTri = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M7 4v16M7 4l-3 3M7 4l3 3M17 20V4M17 20l-3-3M17 20l3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+const IconTelechargement = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M12 3v13m0 0l-4.5-4.5M12 16l4.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4 19h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+)
+const IconPartage = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <circle cx="18" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="6" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="18" cy="19" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M8.2 10.7l7.6-4.4M8.2 13.3l7.6 4.4" stroke="currentColor" strokeWidth="1.7" />
+  </svg>
+)
+const IconTrash = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="1.7" />
+  </svg>
+)
+const IconPlay = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <polygon points="6 3 20 12 6 21 6 3" />
+  </svg>
+)
+const IconPause = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <rect x="6" y="4" width="4" height="16" rx="1" />
+    <rect x="14" y="4" width="4" height="16" rx="1" />
+  </svg>
+)
+const IconCamera = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <circle cx="12" cy="14" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+  </svg>
+)
 
 const imagesInitiales = [
   // { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
@@ -204,6 +261,50 @@ const reactionsDecoratives = [
   { texte: 'tellement apaisant ✨', date: 'hier', coeurs: 4 },
 ]
 
+const OPTIONS_TRI = [
+  { id: 'recent', label: 'Récentes' },
+  { id: 'ancien', label: 'Anciennes' },
+  { id: 'alpha', label: 'A → Z' },
+  { id: 'favoris', label: 'Favoris d\'abord' },
+]
+
+// ============================================================
+// PHOTO DU JOUR — choisie de façon déterministe (même photo mise en
+// avant toute la journée, change le lendemain), même principe que
+// citationDuJour dans JournalScreen.
+// ============================================================
+function choisirPhotoDuJour(images, dateISO) {
+  if (images.length === 0) return null
+  let hash = 0
+  for (const c of dateISO) hash = (hash * 31 + c.charCodeAt(0)) % 997
+  return images[hash % images.length]
+}
+
+// ============================================================
+// ESTIMATION DE L'ESPACE DE STOCKAGE UTILISÉ par les photos
+// (localStorage a généralement une limite de 5-10 Mo par domaine ;
+// on estime prudemment 5 Mo pour avertir avant que ça sature).
+// ============================================================
+function estimerStockage() {
+  try {
+    const donnees = localStorage.getItem('yuna-galerie-images') || ''
+    const octets = new Blob([donnees]).size
+    const quotaEstime = 5 * 1024 * 1024
+    return { octets, pourcentage: Math.min(100, Math.round((octets / quotaEstime) * 100)) }
+  } catch {
+    return { octets: 0, pourcentage: 0 }
+  }
+}
+function formaterTaille(octets) {
+  if (octets < 1024) return `${octets} o`
+  if (octets < 1024 * 1024) return `${(octets / 1024).toFixed(0)} Ko`
+  return `${(octets / (1024 * 1024)).toFixed(1)} Mo`
+}
+
+function formaterDateISO(date) {
+  return date.toISOString().slice(0, 10)
+}
+
 // GalleryScreen accepte un callback optionnel onOuvrirJournal(dateISO)
 // pour naviguer vers la page Journal à une date précise, si ton
 // système de navigation le permet. Sans ce prop, le lien "Ce jour-là
@@ -218,6 +319,11 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   const [commentaireEnEdition, setCommentaireEnEdition] = useState('')
   const [erreurCommentaire, setErreurCommentaire] = useState('')
   const [panneauOuvert, setPanneauOuvert] = useState(false)
+
+  // ===== RECHERCHE & TRI =====
+  const [recherche, setRecherche] = useState('')
+  const [tri, setTri] = useState('recent')
+  const [afficherTri, setAfficherTri] = useState(false)
 
   // ===== ALBUMS =====
   const [albums, setAlbums] = useState(() => chargerAlbums())
@@ -235,6 +341,13 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   // ===== LÉGENDE IA =====
   const [legendeEnCours, setLegendeEnCours] = useState(null)
 
+  // ===== DIAPORAMA =====
+  const [diaporamaActif, setDiaporamaActif] = useState(false)
+  const diaporamaRef = useRef(null)
+
+  // ===== UPLOAD =====
+  const [uploadEnCours, setUploadEnCours] = useState(false)
+
   const positionSwipeDebut = useRef(null)
 
   useEffect(() => {
@@ -247,15 +360,36 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
     }
   }, [])
 
-  const imagesFiltrees = images.filter((img) => {
-    if (filtreActif === 'favoris') return img.favori
-    if (filtreActif === 'yuna')    return img.source === 'yuna'
-    if (filtreActif.startsWith('album:')) {
-      const album = albums.find((a) => a.id === filtreActif.slice(6))
-      return album ? album.photoIds.includes(img.id) : false
+  // ===== FILTRAGE + RECHERCHE + TRI =====
+  const imagesFiltrees = useMemo(() => {
+    let resultat = images.filter((img) => {
+      if (filtreActif === 'favoris') return img.favori
+      if (filtreActif === 'yuna')    return img.source === 'yuna'
+      if (filtreActif.startsWith('album:')) {
+        const album = albums.find((a) => a.id === filtreActif.slice(6))
+        return album ? album.photoIds.includes(img.id) : false
+      }
+      return true
+    })
+
+    const q = recherche.trim().toLowerCase()
+    if (q) {
+      resultat = resultat.filter((img) =>
+        (img.titre || '').toLowerCase().includes(q) ||
+        (img.mood || '').toLowerCase().includes(q) ||
+        (img.texte || '').toLowerCase().includes(q) ||
+        (img.commentairePerso || '').toLowerCase().includes(q)
+      )
     }
-    return true
-  })
+
+    resultat = [...resultat]
+    if (tri === 'recent') resultat.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    else if (tri === 'ancien') resultat.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+    else if (tri === 'alpha') resultat.sort((a, b) => (a.titre || '').localeCompare(b.titre || ''))
+    else if (tri === 'favoris') resultat.sort((a, b) => (b.favori ? 1 : 0) - (a.favori ? 1 : 0))
+
+    return resultat
+  }, [images, filtreActif, albums, recherche, tri])
 
   useEffect(() => {
     if (indexOuvert === null) return
@@ -285,6 +419,24 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
     setPileIndex(0)
   }, [filtreActif, modeAffichage])
 
+  // ===== DIAPORAMA — avance automatiquement toutes les 3.5s tant
+  // que la visionneuse est ouverte et le diaporama actif. S'arrête
+  // proprement si la visionneuse se ferme.
+  useEffect(() => {
+    if (diaporamaActif && indexOuvert !== null) {
+      diaporamaRef.current = setInterval(() => {
+        setIndexOuvert((i) => (i === null ? null : (i + 1) % imagesFiltrees.length))
+      }, 3500)
+    } else {
+      clearInterval(diaporamaRef.current)
+    }
+    return () => clearInterval(diaporamaRef.current)
+  }, [diaporamaActif, indexOuvert, imagesFiltrees.length])
+
+  useEffect(() => {
+    if (indexOuvert === null) setDiaporamaActif(false)
+  }, [indexOuvert])
+
   useEffect(() => {
   enregistrerVisite('galerie')
   }, [])
@@ -308,30 +460,55 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
     }
   }
 
+  // ============================================================
+  // UPLOAD — corrigé : si le stockage est plein (QuotaExceededError),
+  // on avertit clairement au lieu de laisser planter silencieusement
+  // en pleine boucle, et on garde les photos déjà uploadées avec succès.
+  // ============================================================
   const handleUpload = async (e) => {
     const fichiers = Array.from(e.target.files)
     if (fichiers.length === 0) return
 
+    setUploadEnCours(true)
     const nouvellesImages = []
+    let erreurStockage = false
+
     for (const fichier of fichiers) {
-      const base64 = await fichierVersBase64(fichier)
-      const nouvelleImage = {
-        id: `${Date.now()}-${Math.random()}`,
-        titre: fichier.name.replace(/\.[^/.]+$/, ''),
-        mood: 'Photo',
-        texte: '"Un instant que j\'ai voulu garder."',
-        sous: `Moi · ${new Date().toLocaleDateString('fr-FR')}`,
-        source: 'moi',
-        favori: false,
-        url: base64,
-        bg: 'linear-gradient(135deg, #c9cdf4, #ebe4fb)',
-        Icone: IconFleur,
-        date: new Date().toISOString(),
+      try {
+        const base64 = await fichierVersBase64(fichier)
+        const nouvelleImage = {
+          id: `${Date.now()}-${Math.random()}`,
+          titre: fichier.name.replace(/\.[^/.]+$/, ''),
+          mood: 'Photo',
+          texte: '"Un instant que j\'ai voulu garder."',
+          sous: `Moi · ${new Date().toLocaleDateString('fr-FR')}`,
+          source: 'moi',
+          favori: false,
+          url: base64,
+          bg: 'linear-gradient(135deg, #c9cdf4, #ebe4fb)',
+          Icone: IconFleur,
+          date: new Date().toISOString(),
+        }
+        sauvegarderImage(nouvelleImage)
+        nouvellesImages.push(nouvelleImage)
+      } catch (erreur) {
+        console.error('Erreur upload photo :', erreur)
+        if (erreur.name === 'QuotaExceededError') {
+          erreurStockage = true
+          break
+        }
       }
-      sauvegarderImage(nouvelleImage)
-      nouvellesImages.push(nouvelleImage)
     }
-    setImages((old) => [...nouvellesImages, ...old])
+
+    if (nouvellesImages.length > 0) {
+      setImages((old) => [...nouvellesImages, ...old])
+    }
+    if (erreurStockage) {
+      notifierErreur('Stockage plein ! Supprime quelques photos pour libérer de la place avant d\'en ajouter d\'autres.')
+    } else if (nouvellesImages.length > 0) {
+      notifierSucces(`${nouvellesImages.length} photo${nouvellesImages.length > 1 ? 's' : ''} ajoutée${nouvellesImages.length > 1 ? 's' : ''} ✨`)
+    }
+    setUploadEnCours(false)
     e.target.value = ''
   }
 
@@ -368,7 +545,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
     } catch (erreur) {
       console.error('Erreur sauvegarde commentaire :', erreur)
       if (erreur.name === 'QuotaExceededError') {
-        setErreurCommentaire("Stockage plein ! Supprime quelques photos dans Paramètres pour libérer de la place.")
+        setErreurCommentaire("Stockage plein ! Supprime quelques photos pour libérer de la place.")
       } else {
         setErreurCommentaire("Le mot n'a pas pu être enregistré. Réessaie.")
       }
@@ -376,10 +553,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   }
 
   // ============================================================
-  // LÉGENDE GÉNÉRÉE PAR YUNA (IA) — regarde vraiment la photo si
-  // elle existe (image.url), sinon s'appuie sur le titre/mood.
-  // Utilise mettreAJourImage (pas sauvegarderImage) pour modifier
-  // l'image en place au lieu d'en créer une copie.
+  // LÉGENDE GÉNÉRÉE PAR YUNA (IA)
   // ============================================================
   const genererLegende = async (image) => {
     setLegendeEnCours(image.id)
@@ -392,6 +566,56 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
       notifierErreur(erreur.message || "Impossible de générer une légende pour l'instant")
     } finally {
       setLegendeEnCours(null)
+    }
+  }
+
+  // ============================================================
+  // SUPPRESSION D'UNE PHOTO — la fonction existait déjà dans
+  // images.js mais n'était jamais utilisée nulle part. On la
+  // branche enfin, avec confirmation et nettoyage des albums.
+  // ============================================================
+  const supprimerPhotoActuelle = (image) => {
+    if (!window.confirm(`Supprimer définitivement "${image.titre}" ? Cette action est irréversible.`)) return
+    supprimerImage(image.id)
+    setAlbums(retirerPhotoDeTousLesAlbums(image.id))
+    setImages((old) => old.filter((i) => i.id !== image.id))
+    setIndexOuvert(null)
+    notifierSucces('Photo supprimée')
+  }
+
+  // ============================================================
+  // TÉLÉCHARGEMENT & PARTAGE
+  // ============================================================
+  const telechargerPhoto = (image) => {
+    if (!image.url) {
+      notifierErreur("Cette image n'a pas de fichier à télécharger")
+      return
+    }
+    const lien = document.createElement('a')
+    lien.href = image.url
+    lien.download = `${(image.titre || 'photo').replace(/[^a-z0-9]/gi, '-')}.jpg`
+    lien.click()
+  }
+
+  const partagerPhoto = async (image) => {
+    try {
+      if (image.url && navigator.canShare) {
+        const reponse = await fetch(image.url)
+        const blob = await reponse.blob()
+        const fichier = new File([blob], `${image.titre || 'photo'}.jpg`, { type: blob.type })
+        if (navigator.canShare({ files: [fichier] })) {
+          await navigator.share({ files: [fichier], title: image.titre, text: image.texte })
+          return
+        }
+      }
+      if (navigator.share) {
+        await navigator.share({ title: image.titre, text: image.texte })
+        return
+      }
+      await navigator.clipboard.writeText(image.texte || image.titre)
+      notifierSucces('Légende copiée 📋')
+    } catch (erreur) {
+      if (erreur.name !== 'AbortError') notifierErreur("Impossible de partager cette photo pour l'instant")
     }
   }
 
@@ -443,6 +667,10 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   const m = String(heure.getMinutes()).padStart(2, '0')
   const s = String(heure.getSeconds()).padStart(2, '0')
 
+  const photoDuJour = useMemo(() => choisirPhotoDuJour(images, formaterDateISO(new Date())), [images])
+  const stockage = useMemo(() => estimerStockage(), [images])
+  const stockageCouleur = stockage.pourcentage > 85 ? '#C6564B' : stockage.pourcentage > 60 ? '#C99A2E' : 'var(--color-accent)'
+
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
@@ -450,7 +678,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
         .anim-pop { animation: popIn 0.25s ease-out both; }
       `}</style>
 
-      {/* Input caché partagé pour le changement de photo depuis la grille */}
+      {/* Input caché partagé pour l'ajout de photos depuis la grille */}
       <input ref={inputFichierRef} type="file" accept="image/*" multiple onChange={handleUpload} style={{ display: 'none' }} />
 
       <div className="w-full">
@@ -504,6 +732,33 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
               </p>
             </div>
           </div>
+
+          {/* ===== PHOTO DU JOUR ===== */}
+          {photoDuJour && (
+            <button
+              onClick={() => setIndexOuvert(imagesFiltrees.indexOf(photoDuJour) !== -1 ? imagesFiltrees.indexOf(photoDuJour) : 0)}
+              className="w-full flex items-center gap-3 rounded-2xl p-3 mb-6 text-left transition-all duration-300 hover:-translate-y-0.5"
+              style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, white)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}
+            >
+              <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0" style={{ background: photoDuJour.bg }}>
+                {photoDuJour.url ? (
+                  <img src={photoDuJour.url} alt={photoDuJour.titre} className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {photoDuJour.Icone && <photoDuJour.Icone style={{ width: '18px', height: '18px' }} className="text-cream/95" />}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <IconCamera style={{ width: '10px', height: '10px' }} className="text-accent" />
+                  <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-accent)' }}>Photo du jour</span>
+                </div>
+                <p className="text-[12.5px] font-semibold text-espresso truncate" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{photoDuJour.titre}</p>
+              </div>
+              <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: 'var(--color-accent)' }}>Voir →</span>
+            </button>
+          )}
 
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6">
             <div
@@ -563,6 +818,18 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
             </div>
           </div>
 
+          {/* ===== RECHERCHE ===== */}
+          <div className="relative mb-4">
+            <IconRecherche style={{ width: '14px', height: '14px' }} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-espresso/35" />
+            <input
+              type="text"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              placeholder="Rechercher par titre, mood ou mot-clé..."
+              className="w-full bg-white border border-espresso/10 rounded-full pl-9 pr-4 py-2.5 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus:border-espresso/30 transition-colors duration-200"
+            />
+          </div>
+
           {/* ===== FILTRES : tout / favoris / yuna / albums ===== */}
           <div className="flex items-center gap-2 sm:gap-3 mb-4 flex-wrap">
             <button
@@ -574,20 +841,8 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                 color: filtreActif === 'favoris' ? 'var(--color-accent)' : 'rgba(62,39,35,0.7)',
               }}
             >
-              <span style={{ color: 'var(--color-accent)' }}>❤</span>
+              <IconCoeur style={{ width: '11px', height: '11px' }} className="text-accent" />
               Favoris ({totalFavoris})
-            </button>
-
-            <button
-              onClick={() => {
-                setImages((old) => [...old].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)))
-                setFiltreActif('tout')
-              }}
-              className="flex items-center gap-2 text-[11px] sm:text-[12px] cursor-pointer rounded-full border border-espresso/10 px-3.5 sm:px-4 py-2 sm:py-2.5 transition-all duration-200 hover:border-espresso/30 hover:-translate-y-0.5"
-              style={{ color: 'rgba(62,39,35,0.7)' }}
-            >
-              <span>🕘</span>
-              Récemment ajoutées
             </button>
 
             <button
@@ -630,34 +885,43 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
           <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap">
             <button
               onClick={() => inputFichierRef.current?.click()}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-[10.5px] sm:text-[11px] font-medium transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5"
+              disabled={uploadEnCours}
+              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-[10.5px] sm:text-[11px] font-medium transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5 disabled:opacity-50"
               style={{ background: 'var(--color-espresso)', color: 'var(--color-peony)', border: 'none' }}
             >
               <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-              Ajouter des images
+              {uploadEnCours ? 'Ajout en cours...' : 'Ajouter des images'}
             </button>
 
-            {[
-              { id: 'tout', label: 'Tout' },
-              { id: 'favoris', label: '♡ Favoris' },
-              { id: 'yuna', label: 'Yuna' },
-            ].map((f) => (
+            {/* ===== Tri ===== */}
+            <div className="relative">
               <button
-                key={f.id}
-                onClick={() => setFiltreActif(f.id)}
-                className="rounded-full text-[10.5px] sm:text-[11px] font-medium px-3.5 sm:px-4 py-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-                style={{
-                  border: filtreActif === f.id ? '1.5px solid var(--color-espresso)' : '1px solid rgba(62,39,35,0.15)',
-                  background: filtreActif === f.id ? 'var(--color-espresso)' : 'transparent',
-                  color: filtreActif === f.id ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)',
-                }}
+                onClick={() => setAfficherTri((o) => !o)}
+                className="flex items-center gap-1.5 rounded-full text-[10.5px] sm:text-[11px] font-medium px-3.5 sm:px-4 py-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 border border-espresso/15"
+                style={{ color: 'rgba(62,39,35,0.7)' }}
               >
-                {f.label}
+                <IconTri style={{ width: '11px', height: '11px' }} />
+                {OPTIONS_TRI.find((o) => o.id === tri)?.label}
               </button>
-            ))}
+              {afficherTri && (
+                <div className="anim-pop absolute top-full left-0 mt-1.5 bg-white border border-espresso/10 rounded-2xl p-1.5 z-10 min-w-[150px]" style={{ boxShadow: '0 10px 24px rgba(62,39,35,0.12)' }}>
+                  {OPTIONS_TRI.map((o) => (
+                    <button
+                      key={o.id}
+                      onClick={() => { setTri(o.id); setAfficherTri(false) }}
+                      className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[11px] hover:bg-[#F0EEEB] transition-colors duration-150"
+                      style={{ color: tri === o.id ? 'var(--color-accent)' : 'rgba(62,39,35,0.7)', fontWeight: tri === o.id ? 600 : 400 }}
+                    >
+                      {tri === o.id && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* ===== Bascule Grille / Mode pile ===== */}
             <div className="ml-auto flex items-center gap-1 rounded-full border border-espresso/10 p-1">
@@ -682,7 +946,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
 
           {imagesFiltrees.length === 0 && (
             <p className="italic text-espresso/40 text-center py-16" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-              Aucune image dans cette catégorie
+              {recherche ? 'Aucune photo ne correspond à ta recherche' : 'Aucune image dans cette catégorie'}
             </p>
           )}
 
@@ -730,14 +994,10 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                       }}
                       title={img.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: '11px', height: '11px' }}>
-                        <path
-                          d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z"
-                          fill={img.favori ? 'var(--color-accent)' : 'none'}
-                          stroke="var(--color-accent)"
-                          strokeWidth="1.5"
-                        />
-                      </svg>
+                      <IconCoeur
+                        style={{ width: '11px', height: '11px' }}
+                        className={img.favori ? 'text-accent' : 'text-accent/30'}
+                      />
                     </button>
 
                     {img.reactions?.length > 0 && (
@@ -779,9 +1039,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
           )}
 
           {/* ============================================================
-              VUE "MODE PILE" — swipe façon cartes. Glisse à droite pour
-              mettre en favori, à gauche pour passer. Boutons dispo
-              aussi pour desktop/sans tactile.
+              VUE "MODE PILE" — swipe façon cartes.
               ============================================================ */}
           {modeAffichage === 'pile' && imagesFiltrees.length > 0 && (
             <div className="mb-10 flex flex-col items-center">
@@ -847,7 +1105,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                       className="w-14 h-14 rounded-full flex items-center justify-center hover:-translate-y-0.5 transition-transform duration-200 active:scale-90"
                       style={{ background: 'var(--color-accent)', boxShadow: '0 6px 18px rgba(62,39,35,0.2)' }}
                     >
-                      <IconHeart style={{ width: '20px', height: '20px' }} className="text-white" />
+                      <IconCoeur style={{ width: '20px', height: '20px' }} className="text-white" />
                     </button>
                   </div>
                   <p className="text-[9.5px] text-espresso/35 mt-3">{pileIndex + 1} / {imagesFiltrees.length} · glisse ou utilise les boutons</p>
@@ -875,7 +1133,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                 </p>
                 <div className="flex gap-1 mt-1">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <IconHeart key={i} style={{ width: '12px', height: '12px' }} className="text-accent" />
+                    <IconCoeur key={i} style={{ width: '12px', height: '12px' }} className="text-accent" />
                   ))}
                 </div>
               </div>
@@ -897,7 +1155,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                     </div>
                     <span className="flex-1 text-[9.5px] text-espresso/35">{r.date}</span>
                     <span className="flex items-center gap-1 text-[9.5px]" style={{ color: 'var(--color-accent)' }}>
-                      <IconHeart style={{ width: '9px', height: '9px' }} className="text-accent" />
+                      <IconCoeur style={{ width: '9px', height: '9px' }} className="text-accent" />
                       {r.coeurs}
                     </span>
                   </div>
@@ -905,6 +1163,16 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
               ))}
             </div>
           </div>
+
+          {/* ===== JAUGE DE STOCKAGE ===== */}
+          {images.length > 0 && (
+            <div className="mt-6 flex items-center gap-3">
+              <div className="flex-1 h-1 rounded-full bg-espresso/8 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${stockage.pourcentage}%`, background: stockageCouleur }} />
+              </div>
+              <span className="text-[9px] text-espresso/35 flex-shrink-0">{formaterTaille(stockage.octets)} utilisés</span>
+            </div>
+          )}
 
           <footer className="text-center pt-10 pb-4 mt-10 border-t border-espresso/[0.08]">
             <div className="text-espresso/30 text-[10px] tracking-[0.3em] mb-2">✦ ── ✦ ── ✦</div>
@@ -995,6 +1263,16 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
               <IconCroix style={{ width: '18px', height: '18px' }} className="text-white" />
             </button>
 
+            {/* ===== Diaporama ===== */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setDiaporamaActif((d) => !d) }}
+              title={diaporamaActif ? 'Mettre en pause' : 'Lancer le diaporama'}
+              className="absolute top-4 left-1/2 -translate-x-1/2 md:top-6 flex items-center gap-1.5 rounded-full bg-white/10 hover:bg-white/20 px-3 py-1.5 text-[10.5px] font-medium text-white transition-colors duration-200 z-20"
+            >
+              {diaporamaActif ? <IconPause style={{ width: '11px', height: '11px' }} /> : <IconPlay style={{ width: '11px', height: '11px' }} />}
+              {diaporamaActif ? 'Diaporama en cours' : 'Diaporama'}
+            </button>
+
             <button
               onClick={(e) => { e.stopPropagation(); allerImagePrecedente() }}
               className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center transition-colors duration-200 z-20"
@@ -1076,16 +1354,34 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                   {imageActuelle.texte}
                 </p>
 
-                {/* ===== Légende générée par Yuna (IA) ===== */}
-                <button
-                  onClick={() => genererLegende(imageActuelle)}
-                  disabled={legendeEnCours === imageActuelle.id}
-                  className="self-start flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold text-espresso mb-4 transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50"
-                  style={{ background: 'var(--color-peony)' }}
-                >
-                  <IconEtincelle style={{ width: '11px', height: '11px' }} />
-                  {legendeEnCours === imageActuelle.id ? 'Yuna réfléchit...' : 'Légende par Yuna'}
-                </button>
+                {/* ===== Actions rapides : légende IA, télécharger, partager ===== */}
+                <div className="flex items-center gap-2 flex-wrap mb-4">
+                  <button
+                    onClick={() => genererLegende(imageActuelle)}
+                    disabled={legendeEnCours === imageActuelle.id}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold text-espresso transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50"
+                    style={{ background: 'var(--color-peony)' }}
+                  >
+                    <IconEtincelle style={{ width: '11px', height: '11px' }} />
+                    {legendeEnCours === imageActuelle.id ? 'Yuna réfléchit...' : 'Légende par Yuna'}
+                  </button>
+                  {imageActuelle.url && (
+                    <button
+                      onClick={() => telechargerPhoto(imageActuelle)}
+                      title="Télécharger"
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-peony/70 hover:text-peony hover:bg-white/10 transition-colors duration-200"
+                    >
+                      <IconTelechargement style={{ width: '13px', height: '13px' }} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => partagerPhoto(imageActuelle)}
+                    title="Partager"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-peony/70 hover:text-peony hover:bg-white/10 transition-colors duration-200"
+                  >
+                    <IconPartage style={{ width: '13px', height: '13px' }} />
+                  </button>
+                </div>
 
                 {imageActuelle.commentairePerso && (
                   <p className="text-[10.5px] text-peony/50 italic mb-4 pb-4 border-b border-peony/10">
@@ -1176,15 +1472,16 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                       color: imageActuelle.favori ? '#fff' : 'var(--color-accent)',
                     }}
                   >
-                    <svg viewBox="0 0 24 24" style={{ width: '14px', height: '14px' }}>
-                      <path
-                        d="M12 21s-7-4.4-9.5-8.5C0.7 8.8 2.2 5 6 5c2.1 0 3.5 1.2 4 2.3C10.5 6.2 11.9 5 14 5c3.8 0 5.3 3.8 3.5 7.5C19 16.6 12 21 12 21z"
-                        fill={imageActuelle.favori ? '#fff' : 'none'}
-                        stroke={imageActuelle.favori ? '#fff' : 'var(--color-accent)'}
-                        strokeWidth="1.8"
-                      />
-                    </svg>
+                    <IconCoeur style={{ width: '14px', height: '14px' }} className={imageActuelle.favori ? 'text-white' : 'text-accent'} />
                     {imageActuelle.favori ? 'Dans tes favoris' : 'Ajouter aux favoris'}
+                  </button>
+
+                  <button
+                    onClick={() => supprimerPhotoActuelle(imageActuelle)}
+                    className="flex items-center justify-center gap-1.5 rounded-full py-2 text-[10.5px] font-medium text-peony/40 hover:text-red-300 transition-colors duration-200"
+                  >
+                    <IconTrash style={{ width: '11px', height: '11px' }} />
+                    Supprimer cette photo
                   </button>
                 </div>
 

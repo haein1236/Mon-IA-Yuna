@@ -913,6 +913,13 @@ function PersonnagesScreen() {
             </div>
 
             <div className="mb-4">
+              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Religion / spiritualité (facultatif)</label>
+              <input type="text" value={personnageEnEdition.religion || ''} onChange={(e) => modifierChampCreation('religion', e.target.value)}
+                placeholder="Ex : Musulman pratiquant, utilise des expressions religieuses avec pudeur..."
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
+            </div>
+
+            <div className="mb-4">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Histoire / contexte</label>
               <textarea value={personnageEnEdition.histoire} onChange={(e) => modifierChampCreation('histoire', e.target.value)} placeholder="Le contexte complet de l'histoire, la situation, la relation avec l'utilisateur..." rows={5}
                 className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
