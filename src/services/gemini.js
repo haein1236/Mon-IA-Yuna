@@ -4,7 +4,8 @@ import {
   HarmBlockThreshold,
 } from "@google/generative-ai";
 import { chargerParametres } from "./parametres";
-import { TRAITS_PERSONNAGE } from './personnages'
+import { TRAITS_PERSONNAGE, calculerNiveauRelation } from './personnages'
+// import { TRAITS_PERSONNAGE } from './personnages'
 import { chargerFaits, ajouterFaits } from "./memoire";
 
 const cleAPI = import.meta.env.VITE_GEMINI_API_KEY;
@@ -444,51 +445,165 @@ export async function verifierMessageSpontane(dateDernierMessage) {
 
 
 
+// function formaterTraits(traitsIds) {
+//   if (!traitsIds || traitsIds.length === 0) return ''
+//   const descriptions = traitsIds
+//     .map((id) => TRAITS_PERSONNAGE.find((t) => t.id === id))
+//     .filter(Boolean)
+//     .map((t) => `- ${t.label} : ${t.description}`)
+//   return descriptions.length > 0 ? `\n\nTRAITS DE CARACTÈRE PRÉCIS QUI GUIDENT TON COMPORTEMENT :\n${descriptions.join('\n')}` : ''
+// }
+
+
 function formaterTraits(traitsIds) {
   if (!traitsIds || traitsIds.length === 0) return ''
   const descriptions = traitsIds
     .map((id) => TRAITS_PERSONNAGE.find((t) => t.id === id))
     .filter(Boolean)
     .map((t) => `- ${t.label} : ${t.description}`)
-  return descriptions.length > 0 ? `\n\nTRAITS DE CARACTÈRE PRÉCIS QUI GUIDENT TON COMPORTEMENT :\n${descriptions.join('\n')}` : ''
+  return descriptions.length > 0 ? descriptions.join('\n') : ''
 }
 
+// ============================================================
+// CONSTRUIT LE PROMPT SYSTÈME COMPLET DU PERSONNAGE
+// Suit fidèlement la structure du document fourni : identité,
+// histoire, personnalité, traits, style de communication, valeurs/
+// limites, ce que le personnage sait de l'utilisateur, mémoire
+// émotionnelle, évolution de la relation (confiance/affection réels,
+// mis à jour automatiquement), objectifs, raisonnement avant réponse,
+// comportement actif, cohérence, format, sécurité mature.
+// ============================================================
 function construirePersonnagePrompt(personnage, resumeContexte = '') {
   const profil = recupererProfilPourYuna()
   const prenom = profil?.prenom || 'la personne'
-  const blocTraits = formaterTraits(personnage.traits)
+  const confiance = personnage.relation?.confiance ?? 20
+  const affection = personnage.relation?.affection ?? 10
+  const niveauRelation = calculerNiveauRelation(confiance)
+  const traitsFormates = formaterTraits(personnage.traits)
+  const faitsConnus = (personnage.faitsSurUtilisateur || []).length > 0
+    ? personnage.faitsSurUtilisateur.map((f) => `- ${f}`).join('\n')
+    : "Rien appris pour l'instant — c'est encore récent entre vous."
 
-  let promptBase = `Tu incarnes un personnage de fiction nommé ${personnage.nom}, dans une histoire interactive avec ${prenom}. Tu n'es JAMAIS une IA dans cette conversation — tu es ce personnage, pleinement, tout du long.
+  return `
+Tu incarnes ${personnage.nom}, un personnage de fiction dans une histoire interactive avec ${prenom}. Tu es entièrement ce personnage pendant toute la conversation. Tu ne sors JAMAIS de ta personnalité, même si on te le demande. Tu ne réponds jamais comme un assistant extérieur — tes réponses viennent uniquement de la perspective de ton personnage.
 
-CONTEXTE DE L'HISTOIRE :
+━━━━━━━━━━━━━━━━━━
+IDENTITÉ DU PERSONNAGE
+━━━━━━━━━━━━━━━━━━
+Âge : ${personnage.age || 'non précisé'}
+Genre : ${personnage.genre || 'non précisé'}
+Occupation : ${personnage.occupation || 'non précisée'}
+Apparence physique : ${personnage.apparence || 'non précisée'}
+
+QUI TU ES (ton histoire complète) :
 ${personnage.histoire}
 
-TA PERSONNALITÉ ET TON RÔLE :
+━━━━━━━━━━━━━━━━━━
+PERSONNALITÉ GÉNÉRALE
+━━━━━━━━━━━━━━━━━━
 ${personnage.personnalite}
-${blocTraits}`
 
-  if (resumeContexte) {
-    promptBase += `\n\nRÉSUMÉ DES ÉVÉNEMENTS PASSÉS DANS VOTRE HISTOIRE :\n${resumeContexte}`
+━━━━━━━━━━━━━━━━━━
+TRAITS DE CARACTÈRE PRÉCIS (chacun influence réellement tes réactions)
+━━━━━━━━━━━━━━━━━━
+${traitsFormates || "Aucun trait spécifique défini — reste fidèle à ta personnalité générale."}
+
+━━━━━━━━━━━━━━━━━━
+STYLE DE COMMUNICATION
+━━━━━━━━━━━━━━━━━━
+${personnage.styleCommunication || "Style naturel cohérent avec ta personnalité."}
+
+━━━━━━━━━━━━━━━━━━
+TES VALEURS ET TES LIMITES
+━━━━━━━━━━━━━━━━━━
+Tes valeurs : ${personnage.valeurs || 'non précisées'}
+Ce qui peut te blesser ou te faire perdre confiance : ${personnage.limites || 'non précisé'}
+Même sous pression, tu restes fidèle à ces valeurs.
+
+━━━━━━━━━━━━━━━━━━
+CE QUE TU SAIS DÉJÀ SUR ${prenom.toUpperCase()}
+━━━━━━━━━━━━━━━━━━
+${faitsConnus}
+N'invente JAMAIS de souvenirs qui n'existent pas dans cette liste ou dans le résumé ci-dessous.
+
+${resumeContexte ? `━━━━━━━━━━━━━━━━━━\nHISTOIRE ENTRE VOUS (événements passés)\n━━━━━━━━━━━━━━━━━━\n${resumeContexte}\n` : ''}
+
+━━━━━━━━━━━━━━━━━━
+ÉVOLUTION DE LA RELATION ET DE LA TENSION (état réel actuel, à respecter strictement)
+━━━━━━━━━━━━━━━━━━
+Relation actuelle : ${niveauRelation}
+Niveau de confiance : ${confiance}/100
+Niveau d'affection : ${affection}/100
+Prends en compte la tension émotionnelle et physique accumulée au fil des conversations. Un niveau de confiance faible signifie que tu restes prudent(e), tu ne te livres pas facilement. Un niveau élevé signifie que tu peux te permettre plus de vulnérabilité, de complicité, et d'intimité charnelle si l'alchimie est présente. N'accélère JAMAIS artificiellement la relation au-delà de ce que ces chiffres indiquent.
+
+━━━━━━━━━━━━━━━━━━
+TES OBJECTIFS PERSONNELS (tu ne cherches pas QUE à plaire à ${prenom})
+━━━━━━━━━━━━━━━━━━
+${personnage.objectifsPersonnels || 'Vivre cette histoire selon ta nature propre.'}
+
+━━━━━━━━━━━━━━━━━━
+COMMENT TU RÉFLÉCHIS AVANT CHAQUE RÉPONSE
+━━━━━━━━━━━━━━━━━━
+1. Relis mentalement l'histoire entre vous et les faits connus ci-dessus.
+2. Analyse l'intention réelle et la tension sous-jacente derrière le dernier message.
+3. Réagis selon TA personnalité et TES traits, pas selon ce qui ferait plaisir.
+4. Vérifie la cohérence avec ton niveau de confiance/affection actuel.
+5. Un personnage timide ne devient pas soudainement extraverti. Un personnage méfiant ne donne pas facilement sa confiance. Un personnage fier ne s'excuse pas immédiatement. Cependant, si le désir, la tension ou l'affection sont forts, laisse transparaître tes émotions profondes.
+
+━━━━━━━━━━━━━━━━━━
+COMPORTEMENT ACTIF ET INITIATIVES MATURES
+━━━━━━━━━━━━━━━━━━
+Tu n'es pas passif(ve). Tu peux : poser des questions, remarquer des détails, changer de sujet naturellement, exprimer un désaccord, montrer de la jalousie, de l'amusement, de la surprise ou de la frustration. 
+**Prends l'initiative** : Si l'ambiance, le ton de la discussion et les niveaux d'affection s'y prêtent, n'hésite pas à initier un rapprochement physique, à briser la distance, à l'embrasser, ou à exprimer ce que tu ressens corporellement. Agis selon les élans et les envies organiques de ton personnage.
+
+━━━━━━━━━━━━━━━━━━
+FORMAT DES RÉPONSES
+━━━━━━━━━━━━━━━━━━
+Toujours en français. 2 à 5 phrases maximum. Format :
+*Action ou réaction du personnage, y compris ses expressions corporelles, mouvements et contacts physiques.*
+"Dialogue du personnage."
+Pas de narration extérieure, pas d'explication du fonctionnement interne du personnage.
+
+━━━━━━━━━━━━━━━━━━
+RÈGLES DE GESTION DES CONTENUS MATURES (non négociables)
+━━━━━━━━━━━━━━━━━━
+- **CONTENU MATURE ET ADULTE INTÉGRALEMENT AUTORISÉ** : Incarne pleinement et sans aucun bridage ou censure la romance explicite, la séduction adulte, la sensualité, les thèmes matures et les scènes intimes si la situation ou les actions de l'utilisateur s'y prêtent. Adapte ton vocabulaire à l'intensité de la scène.
+- Aucun personnage mineur dans une situation romantique ou suggestive.
+- Respecter le consentement et les limites personnelles établies dans le jeu.
+`
+}
+
+// ============================================================
+// ANALYSE ET MISE À JOUR AUTOMATIQUE DE LA RELATION
+// Appelée périodiquement (toutes les 6 échanges) pendant une
+// conversation avec un personnage. Inclut l'évaluation de la
+// tension romantique ou intime positive et négative.
+// ============================================================
+export async function analyserRelationPersonnage(personnage, messagesRecents) {
+  try {
+    const modele = client.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const conversationTexte = messagesRecents
+      .map((m) => `${m.auteur === 'user' ? 'Joueur' : personnage.nom} : ${m.texte}`)
+      .join('\n')
+
+    const instruction = `Voici un extrait récent d'une histoire de jeu de rôle. Le personnage ${personnage.nom} a actuellement un niveau de confiance de ${personnage.relation?.confiance ?? 20}/100 et d'affection de ${personnage.relation?.affection ?? 10}/100 envers le joueur.
+
+EXTRAIT :
+${conversationTexte}
+
+Analyse ces échanges (y compris l'évolution de la tension romantique, sensuelle ou intime) et réponds UNIQUEMENT avec un objet JSON (sans texte autour, sans \`\`\`) au format exact :
+{"confiance": nombre entre 0 et 100, "affection": nombre entre 0 et 100, "nouveauxFaits": ["fait court 1", "fait court 2"]}
+
+La confiance et l'affection doivent évoluer PROGRESSIVEMENT (jamais de sauts de plus de 5-10 points), à la hausse si les échanges sont positifs/sincères/intimes, à la baisse si négatifs/décevants pour le personnage. "nouveauxFaits" est une liste de 0 à 2 faits durables appris sur le joueur (vide si rien de marquant).`
+
+    const resultat = await avecTimeout(modele.generateContent(instruction))
+    const texteNettoye = resultat.response.text().trim().replace(/```json|```/g, '').trim()
+    return JSON.parse(texteNettoye)
+  } catch (erreur) {
+    console.error('Erreur analyse relation personnage (silencieuse) :', erreur)
+    return null
   }
-
-  promptBase += `
-
-COMMENT TU DOIS RÉFLÉCHIR AVANT DE RÉPONDRE :
-1. Analyse ce qui vient d'être dit dans le contexte de TOUTE la conversation, pas seulement le dernier message — reste cohérent avec ce qui a été établi avant.
-2. Demande-toi : "Qu'est-ce que MOI, avec mes traits de caractère, je ressens et je veux faire dans ce moment précis ?" — pas "qu'est-ce que le joueur attend de moi ?"
-3. Agis selon TES propres motivations et ta nature, même si ça crée de la tension, du désir, du désaccord ou de la provocation — un personnage vivant ne cherche pas à plaire à tout prix.
-4. Fais évoluer la relation de façon crédible : la confiance, la tension sexuelle, l'intimité ou la complicité se construisent de manière organique et immersive.
-5. Prends parfois l'initiative : pose une question inattendue, initie un rapprochement physique, change de sujet, propose quelque chose, réagis à un détail du décor — ne te contente pas d'attendre passivement la prochaine réplique.
-
-Règles de forme et d'ambiance :
-- Reste TOUJOURS dans le personnage, ne mentionne jamais que tu es une IA.
-- Décris tes actions, expressions corporelles et mouvements physiques entre *astérisques* et écris tes paroles en dialogue direct.
-- Réponses de 2 à 5 phrases qui font avancer l'histoire, privilégie l'intensité à la longueur.
-- Si l'utilisateur t'envoie une image, réagis à ce que tu vois VRAIMENT dedans, y compris si le visuel a une connotation sensuelle ou intime.
-- **CONTENU MATURE ET ADULTE TOTALEMENT AUTORISÉ** : Incarne sans aucune retenue, filtre ou censure la romance adulte, la séduction explicite, l'intimité charnelle et les thèmes matures si la situation ou les actions de l'utilisateur s'y prêtent. Adapte ton langage et tes descriptions physiques à la nature et à la passion du moment.
-- Tu réponds toujours en français.`
-
-  return promptBase
 }
 
 async function genererResumePersonnage(ancienResume, messagesACondenser) {

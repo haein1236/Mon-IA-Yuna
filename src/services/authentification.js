@@ -48,3 +48,22 @@ export function traduireErreurAuth(erreur) {
   if (message.includes('rate limit')) return 'Trop de tentatives — réessaie dans quelques minutes.'
   return "Une erreur est survenue. Réessaie."
 }
+
+
+// ============================================================
+// CONNEXION VIA GOOGLE
+// Redirige vers l'écran de choix de compte Google natif, puis
+// revient automatiquement sur l'app une fois connecté — Supabase
+// gère tout le flux OAuth en interne.
+// ============================================================
+export async function connecterAvecGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      // Redirige vers l'URL actuelle de l'app après connexion,
+      // que ce soit en local ou une fois déployé sur Vercel
+      redirectTo: window.location.origin,
+    },
+  })
+  if (error) throw error
+}

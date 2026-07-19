@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { chargerPersonnages, sauvegarderPersonnage, supprimerPersonnage, togglerFavoriPersonnage, creerPersonnageVide, chargerMessagesPersonnage, sauvegarderMessagesPersonnage, reinitialiserConversationPersonnage, CATEGORIES_PERSONNAGES, TRAITS_PERSONNAGE, obtenirTraits } from '../services/personnages'
-import { envoyerMessageAPersonnage } from '../services/gemini'
+import { chargerPersonnages, sauvegarderPersonnage, supprimerPersonnage, togglerFavoriPersonnage, creerPersonnageVide, chargerMessagesPersonnage, sauvegarderMessagesPersonnage, reinitialiserConversationPersonnage, CATEGORIES_PERSONNAGES, TRAITS_PERSONNAGE, calculerNiveauRelation, mettreAJourRelation } from '../services/personnages'
+import { envoyerMessageAPersonnage, analyserRelationPersonnage } from '../services/gemini'
 import { fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
 import { notifierErreur } from '../services/notifications'
@@ -320,6 +320,19 @@ function PersonnagesScreen() {
       }]
       setMessages(messagesAvecReponse)
       sauvegarderMessagesPersonnage(personnageActif.id, messagesAvecReponse)
+
+      // ⬅️ NOUVEAU : analyse la relation toutes les 6 messages, en
+      // arrière-plan (sans "await" — ne ralentit jamais la conversation)
+      if (messagesAvecReponse.length % 6 === 0) {
+        analyserRelationPersonnage(personnageActif, messagesAvecReponse.slice(-6)).then((resultat) => {
+          if (resultat) {
+            const personnagesMaj = mettreAJourRelation(personnageActif.id, resultat)
+            setPersonnages(personnagesMaj)
+            const persoMaj = personnagesMaj.find((p) => p.id === personnageActif.id)
+            if (persoMaj) setPersonnageActif(persoMaj)
+          }
+        })
+      }
     } catch (erreur) {
       // ⬅️ C'est ce bloc qui manquait/n'était pas appliqué — sans lui,
       // une erreur ici laissait "..." affiché pour toujours
@@ -510,7 +523,9 @@ function PersonnagesScreen() {
           <AvatarPersonnage personnage={personnageActif} taille={38} modifiable onModifier={() => demanderChangementPhoto(personnageActif)} />
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-espresso truncate">{personnageActif.nom}</p>
-            <p className="text-[9.5px] text-espresso/45 truncate">{personnageActif.description}</p>
+            <p className="text-[9.5px] text-espresso/45 truncate">
+              {calculerNiveauRelation(personnageActif.relation?.confiance ?? 20)} · 💛 {personnageActif.relation?.affection ?? 10}%
+            </p>
           </div>
           <button onClick={() => ouvrirCreateur(personnageActif)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0" title="Modifier ce personnage">
             <IconCrayon style={{ width: '14px', height: '14px' }} className="text-espresso/50" />
@@ -879,6 +894,24 @@ function PersonnagesScreen() {
                 className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
             </div>
 
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Âge</label>
+                <input type="text" value={personnageEnEdition.age || ''} onChange={(e) => modifierChampCreation('age', e.target.value)} placeholder="Ex : 21 ans"
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
+              </div>
+              <div>
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Occupation</label>
+                <input type="text" value={personnageEnEdition.occupation || ''} onChange={(e) => modifierChampCreation('occupation', e.target.value)} placeholder="Ex : Étudiant"
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Apparence physique</label>
+              <input type="text" value={personnageEnEdition.apparence || ''} onChange={(e) => modifierChampCreation('apparence', e.target.value)} placeholder="Ex : Cheveux châtains, sourire chaleureux..."
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
+            </div>
+
             <div className="mb-4">
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Histoire / contexte</label>
               <textarea value={personnageEnEdition.histoire} onChange={(e) => modifierChampCreation('histoire', e.target.value)} placeholder="Le contexte complet de l'histoire, la situation, la relation avec l'utilisateur..." rows={5}
@@ -889,6 +922,32 @@ function PersonnagesScreen() {
               <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Personnalité (comment il/elle doit se comporter)</label>
               <textarea value={personnageEnEdition.personnalite} onChange={(e) => modifierChampCreation('personnalite', e.target.value)} placeholder="Ex : Timide au début, drôle une fois en confiance, protecteur..." rows={4}
                 className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Style de communication</label>
+              <textarea value={personnageEnEdition.styleCommunication || ''} onChange={(e) => modifierChampCreation('styleCommunication', e.target.value)}
+                placeholder="Vocabulaire, expressions habituelles, humour, façon de montrer l'affection/la colère/la tristesse..." rows={3}
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses valeurs</label>
+                <textarea value={personnageEnEdition.valeurs || ''} onChange={(e) => modifierChampCreation('valeurs', e.target.value)} rows={2}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y" />
+              </div>
+              <div>
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses limites (ce qui le/la blesse)</label>
+                <textarea value={personnageEnEdition.limites || ''} onChange={(e) => modifierChampCreation('limites', e.target.value)} rows={2}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y" />
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses objectifs personnels</label>
+              <textarea value={personnageEnEdition.objectifsPersonnels || ''} onChange={(e) => modifierChampCreation('objectifsPersonnels', e.target.value)}
+                placeholder="Ce que le personnage recherche pour lui-même, indépendamment de toi..." rows={2}
+                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y" />
             </div>
 
             <div className="mb-6">
