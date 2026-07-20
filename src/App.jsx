@@ -27,21 +27,37 @@ function App() {
   const [utilisateur, setUtilisateur] = useState(null)
   const [verificationAuthTerminee, setVerificationAuthTerminee] = useState(false)
 
-
-
+  // ============================================================
+  // AUTHENTIFICATION ET SYNCHRONISATION INITIALE
+  // Écoute les changements d'état de session Supabase. Intègre un 
+  // filet de sécurité de 6 secondes pour éviter de bloquer l'utilisateur 
+  // sur le Splash screen en cas de coupure réseau ou mauvaise configuration.
+  // ============================================================
   useEffect(() => {
-  const desabonner = surveillerConnexion(async (user) => {
-    setUtilisateur(user)
-    if (user) {
-      // ⬅️ NOUVEAU : synchronise Profil + Paramètres dès la connexion
-      await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
-      await synchroniserAuDemarrage('yuna-parametres', 'parametres')
-    }
-    setVerificationAuthTerminee(true)
-  })
-  return () => desabonner()
-}, [])
+    // ⬅️ NOUVEAU : filet de sécurité — si Supabase ne répond jamais
+    // (mauvaise config, réseau), on force l'affichage de l'écran de
+    // connexion après 6 secondes maximum, au lieu de rester bloqué
+    // indéfiniment sur le Splash
+    const filetSecurite = setTimeout(() => {
+      setVerificationAuthTerminee((deja) => deja || true)
+    }, 6000)
 
+    const desabonner = surveillerConnexion(async (user) => {
+      clearTimeout(filetSecurite)
+      setUtilisateur(user)
+      if (user) {
+        await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
+        await synchroniserAuDemarrage('yuna-parametres', 'parametres')
+        // ⬅️ NOUVEAU : synchronise aussi conversations Yuna + personnages
+        await synchroniserAuDemarrage('yuna-conversations', 'conversations')
+        await synchroniserAuDemarrage('yuna-personnages', 'personnages')
+        await synchroniserAuDemarrage('yuna-personnages-conversations', 'personnages_conversations')
+      }
+      setVerificationAuthTerminee(true)
+    })
+
+    return () => { clearTimeout(filetSecurite); desabonner() }
+  }, [])
 
   useHauteurEcran()
 
@@ -55,16 +71,10 @@ function App() {
   }, [])
 
   // ============================================================
-  // CORRIGÉ : plus de "drapeau" navigationInterneRef.
-  // AVANT : le bouton retour activait un drapeau censé "sauter" le
-  // prochain enregistrement d'historique — mais ce drapeau restait
-  // parfois activé bien après, et faisait sauter l'enregistrement
-  // d'un clic complètement différent plus tard, cassant la pile
-  // d'historique (d'où "ça m'envoie sur une autre page").
-  // APRÈS : le popstate (bouton retour) se contente de lire l'état —
-  // il n'a JAMAIS besoin d'appeler pushState lui-même (le navigateur
-  // gère déjà sa propre pile automatiquement). Chaque clic normal,
-  // lui, enregistre TOUJOURS sa page. Plus simple, plus fiable.
+  // GESTION DU BOUTON RETOUR NAVIGATEUR (POPSTATE)
+  // Le popstate se contente de lire l'état — il n'a JAMAIS besoin
+  // d'appeler pushState lui-même. Chaque clic normal enregistre 
+  // sa page. Simple et fiable.
   // ============================================================
   useEffect(() => {
     const gererBoutonRetour = (evenement) => {
@@ -78,22 +88,14 @@ function App() {
   // ============================================================
   // ACCUEIL INTELLIGENT DE YUNA
   // Se déclenche UNE FOIS à l'ouverture de l'app. Compare la date de
-  // la dernière visite (stockée localement) à maintenant — si 2 jours
-  // ou plus se sont écoulés, on regarde aussi depuis quand le Journal
-  // et la Galerie n'ont pas été visités, et on demande à Yuna un
-  // message d'accueil personnalisé, affiché en notification discrète.
-  // ⚠️ Rappel technique honnête : ceci ne fonctionne QUE si tu ouvres
-  // l'app toi-même — aucune vraie notification ne peut arriver sur
-  // ton téléphone pendant que l'app est fermée (ça demanderait un
-  // serveur permanent, hors de portée gratuite).
+  // la dernière visite à maintenant pour générer un message personnalisé.
   // ============================================================
   useEffect(() => {
     const verifierAccueil = async () => {
       const suivi = chargerSuivi()
       const joursAbsence = joursDepuis(suivi.app)
 
-      // On enregistre la visite MAINTENANT, pour que la prochaine
-      // fois compare bien depuis cet instant précis
+      // On enregistre la visite MAINTENANT
       enregistrerVisite('app')
 
       if (joursAbsence >= 2) {
@@ -108,8 +110,7 @@ function App() {
         }
       }
     }
-    // On attend un court instant après le splash pour ne pas juxtaposer
-    // la notification à l'animation de démarrage
+    
     const delai = setTimeout(verifierAccueil, 2800)
     return () => clearTimeout(delai)
   }, [])
@@ -117,30 +118,23 @@ function App() {
   const ouvrirConversation = (conv) => setConversationActive(conv)
 
   const gererChangerEcran = (ecran) => {
-    // Évite d'empiler des entrées d'historique identiques si on
-    // clique deux fois sur le même onglet
     if (ecran === ecranActuel) return
 
     if (ecran === 'chat' && !conversationActive) {
       setConversationActive(creerNouvelleConversation())
     }
     setEcranActuel(ecran)
-    // ⬅️ TOUJOURS enregistré maintenant, sans condition — c'est ce qui
-    // corrige le bug
     window.history.pushState({ ecran }, '')
   }
 
   const gererNouvelleConversation = (conv) => setConversationActive(conv)
 
-  // ⬅️ NOUVEAU : garde conversationActive synchronisée avec les vraies
-  // données sauvegardées par ChatScreen (messages, dateMiseAJour), pour
-  // qu'un démontage/remontage de l'écran Chat ne reparte pas d'une
-  // version figée de la conversation
   const mettreAJourConversationActive = (conv) => setConversationActive(conv)
 
   if (ecranActuel === 'splash') return <SplashScreen />
   if (!verificationAuthTerminee) return <SplashScreen />
   if (!utilisateur) return <ConnexionScreen />
+
   return (
     <>
       <NotificationHost />

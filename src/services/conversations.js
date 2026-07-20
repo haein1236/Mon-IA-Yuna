@@ -1,3 +1,5 @@
+import { synchroniserVersFirestore } from './sync'
+
 // ===== CLÉ DE STOCKAGE =====
 // Toutes les conversations sont stockées sous cette clé dans localStorage
 const CLE_CONVERSATIONS = 'yuna-conversations'
@@ -6,7 +8,6 @@ const CLE_CONVERSATIONS = 'yuna-conversations'
 // Retourne le tableau de toutes les conversations sauvegardées
 // Si rien n'est sauvegardé, retourne un tableau vide []
 export function chargerConversations() {
-
   // On récupère la valeur sauvegardée sous la clé 'yuna-conversations'
   const donneesBrutes = localStorage.getItem(CLE_CONVERSATIONS)
 
@@ -18,33 +19,25 @@ export function chargerConversations() {
 }
 
 // ===== SAUVEGARDER UNE CONVERSATION =====
-// Crée une nouvelle conversation ou met à jour une existante
+// Crée une nouvelle conversation ou met à jour une existante et synchronise avec Firestore
 // conversation = objet { id, titre, messages, dateCreation, dateMiseAJour }
 export function sauvegarderConversation(conversation) {
-
-  // On charge toutes les conversations existantes
   const conversations = chargerConversations()
-
-  // On cherche si cette conversation existe déjà (par son id)
-  const indexExistant = conversations.findIndex((c) => c.id === conversation.id)
-
-  if (indexExistant !== -1) {
-    // Si elle existe déjà, on la met à jour à sa position
-    conversations[indexExistant] = conversation
+  const index = conversations.findIndex((c) => c.id === conversation.id)
+  
+  if (index !== -1) {
+    conversations[index] = conversation
   } else {
-    // Si c'est une nouvelle conversation, on l'ajoute au début du tableau
-    // unshift = ajoute au début (les plus récentes en premier)
     conversations.unshift(conversation)
   }
-
-  // On sauvegarde le tableau mis à jour dans localStorage
+  
   localStorage.setItem(CLE_CONVERSATIONS, JSON.stringify(conversations))
+  synchroniserVersFirestore('conversations', conversations) // ⬅️ NOUVEAU : Synchronisation cloud automatique
 }
 
 // ===== SUPPRIMER UNE CONVERSATION =====
 // Supprime une conversation par son id
 export function supprimerConversation(id) {
-
   // On charge toutes les conversations
   const conversations = chargerConversations()
 
@@ -86,7 +79,6 @@ export function creerNouvelleConversation() {
 // ===== FORMATER LA DATE =====
 // Convertit une date ISO en texte lisible (ex: "Aujourd'hui", "Hier", "20 juin")
 export function formaterDate(dateISO) {
-
   const date = new Date(dateISO)
   const maintenant = new Date()
 

@@ -249,10 +249,6 @@ function PersonnagesScreen() {
     requestAnimationFrame(() => { champ.focus(); champ.setSelectionRange(positionCurseur, positionCurseur) })
   }
 
-  // ============================================================
-  // EMOJIS — confirmés fonctionnels : insère l'emoji choisi dans le
-  // champ de texte, à la position actuelle du curseur
-  // ============================================================
   const insererEmoji = (emoji) => {
     const champ = zoneTexteRef.current
     const position = champ?.selectionStart ?? saisie.length
@@ -261,11 +257,6 @@ function PersonnagesScreen() {
     requestAnimationFrame(() => { champ?.focus(); const p = position + emoji.length; champ?.setSelectionRange(p, p) })
   }
 
-  // ============================================================
-  // PHOTO JOINTE — confirmée fonctionnelle : stockée en base64,
-  // affichée en aperçu, puis VRAIMENT transmise à Gemini (voir
-  // envoyerMessage ci-dessous, 4ème argument imageBase64)
-  // ============================================================
   const gererSelectionPhotoConversation = async (e) => {
     const fichier = e.target.files[0]
     e.target.value = ''
@@ -275,14 +266,6 @@ function PersonnagesScreen() {
   }
   const retirerPhotoEnAttente = () => setPhotoEnAttente(null)
 
-  // ============================================================
-  // ENVOYER UN MESSAGE — try/catch GARANTI
-  // Peu importe ce qui se passe (Gemini échoue, les 3 secours
-  // échouent aussi, timeout dépassé...), le "finally" implicite via
-  // le catch remet TOUJOURS envoiEnCours/enTrainDecrire à false —
-  // l'interface ne peut plus jamais rester bloquée sur "..." pour
-  // toujours, contrairement à avant.
-  // ============================================================
   const envoyerMessage = async () => {
     if ((!saisie.trim() && !photoEnAttente) || envoiEnCours || !personnageActif) return
     const texteUtilisateur = saisie
@@ -307,8 +290,6 @@ function PersonnagesScreen() {
     }))
 
     try {
-      // ⬅️ CONFIRMÉ : "image" (la photo en base64) est bien transmise
-      // en 4ème argument — le personnage voit VRAIMENT la photo
       const reponseTexte = await envoyerMessageAPersonnage(historiquePourGemini, texteUtilisateur, personnageActif, image)
 
       setEnTrainDecrire(false)
@@ -321,8 +302,6 @@ function PersonnagesScreen() {
       setMessages(messagesAvecReponse)
       sauvegarderMessagesPersonnage(personnageActif.id, messagesAvecReponse)
 
-      // ⬅️ NOUVEAU : analyse la relation toutes les 6 messages, en
-      // arrière-plan (sans "await" — ne ralentit jamais la conversation)
       if (messagesAvecReponse.length % 6 === 0) {
         analyserRelationPersonnage(personnageActif, messagesAvecReponse.slice(-6)).then((resultat) => {
           if (resultat) {
@@ -334,8 +313,6 @@ function PersonnagesScreen() {
         })
       }
     } catch (erreur) {
-      // ⬅️ C'est ce bloc qui manquait/n'était pas appliqué — sans lui,
-      // une erreur ici laissait "..." affiché pour toujours
       setEnTrainDecrire(false)
       setEnvoiEnCours(false)
       notifierErreur(erreur.message || "Le personnage n'a pas pu répondre. Réessaie.")
@@ -455,12 +432,12 @@ function PersonnagesScreen() {
   }
 
   const toggleTraitEdition = (id) => {
-  setPersonnageEnEdition((ancien) => {
-    const actuels = ancien.traits || []
-    const nouveaux = actuels.includes(id) ? actuels.filter((t) => t !== id) : [...actuels, id]
-    return { ...ancien, traits: nouveaux }
-  })
-}
+    setPersonnageEnEdition((ancien) => {
+      const actuels = ancien.traits || []
+      const nouveaux = actuels.includes(id) ? actuels.filter((t) => t !== id) : [...actuels, id]
+      return { ...ancien, traits: nouveaux }
+    })
+  }
   const gererUploadAvatar = async (e) => {
     const fichier = e.target.files[0]
     if (!fichier) return
