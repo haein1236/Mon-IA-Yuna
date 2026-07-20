@@ -126,8 +126,12 @@ function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModif
 }
 
 function BandeauCarte({ personnage, children }) {
+  const styleFond = !personnage.avatarUrl 
+    ? { background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 20%))` } 
+    : {};
+
   return (
-    <div className="h-16 relative flex items-end p-3 overflow-hidden" style={!personnage.avatarUrl ? { background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 20%))` } : undefined}>
+    <div className="h-16 relative flex items-end p-3 overflow-hidden" style={styleFond}>
       {personnage.avatarUrl && (
         <>
           <img src={personnage.avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -140,7 +144,6 @@ function BandeauCarte({ personnage, children }) {
 }
 
 function PersonnagesScreen() {
-
   const [personnages, setPersonnages] = useState([])
   const [categoriesFiltre, setCategoriesFiltre] = useState([])
   const [recherche, setRecherche] = useState('')
@@ -457,17 +460,15 @@ function PersonnagesScreen() {
     fermerCreateur()
   }
 
-
-// APRÈS — fonctionne pour tous, avertissement renforcé pour les prédéfinis
-const supprimerPersonnageActuel = (e, personnage) => {
-  e.stopPropagation()
-  const messageConfirmation = personnage.origine === 'predefini'
-    ? `${personnage.nom} est un personnage par défaut de l'app — le supprimer est définitif, il ne reviendra jamais automatiquement. Continuer ?`
-    : `Supprimer définitivement ${personnage.nom} et sa conversation ?`
-  const confirme = window.confirm(messageConfirmation)
-  if (!confirme) return
-  setPersonnages(supprimerPersonnage(personnage.id))
-}
+  const supprimerPersonnageActuel = (e, personnage) => {
+    e.stopPropagation()
+    const messageConfirmation = personnage.origine === 'predefini'
+      ? `${personnage.nom} est un personnage par défaut de l'app — le supprimer est définitif, il ne reviendra jamais automatiquement. Continuer ?`
+      : `Supprimer définitivement ${personnage.nom} et sa conversation ?`
+    const confirme = window.confirm(messageConfirmation)
+    if (!confirme) return
+    setPersonnages(supprimerPersonnage(personnage.id))
+  }
 
   const styleFondConversation = (() => {
     if (fondEcran.fondEcranChat === 'personnalise' && fondEcran.fondEcranChatPerso) {
@@ -735,19 +736,17 @@ const supprimerPersonnageActuel = (e, personnage) => {
                     <IconCoeur style={{ width: '13px', height: '13px' }} fill={personnage.favori ? '#fff' : 'none'} stroke="#fff" strokeWidth="2" />
                   </button>
                   
-// APRÈS — visible pour tous les personnages, "Modifier" reste réservé
-// aux persos perso (ça n'a pas de sens de "modifier" un prédéfini
-// puisqu'il serait alors dupliqué au prochain rechargement du code)
-<div className="absolute top-2 left-2 flex gap-1.5">
-  {personnage.origine === 'perso' && (
-    <button onClick={(e) => { e.stopPropagation(); ouvrirCreateur(personnage) }} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200" title="Modifier">
-      <IconCrayon style={{ width: '11px', height: '11px' }} className="text-white" />
-    </button>
-  )}
-  <button onClick={(e) => supprimerPersonnageActuel(e, personnage)} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200" title="Supprimer">
-    <IconTrash style={{ width: '12px', height: '12px' }} className="text-white" />
-  </button>
-</div>
+                  {/* Actions sur la carte du personnage */}
+                  <div className="absolute top-2 left-2 flex gap-1.5">
+                    {personnage.origine === 'perso' && (
+                      <button onClick={(e) => { e.stopPropagation(); ouvrirCreateur(personnage) }} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200" title="Modifier">
+                        <IconCrayon style={{ width: '11px', height: '11px' }} className="text-white" />
+                      </button>
+                    )}
+                    <button onClick={(e) => supprimerPersonnageActuel(e, personnage)} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200" title="Supprimer">
+                      <IconTrash style={{ width: '12px', height: '12px' }} className="text-white" />
+                    </button>
+                  </div>
                 </BandeauCarte>
 
                 <div className="p-4 -mt-8 relative">
