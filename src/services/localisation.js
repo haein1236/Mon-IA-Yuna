@@ -44,6 +44,18 @@ export function supprimerLieuFavori(id) {
 }
 
 // ============================================================
+// AJOUT — renommer un lieu favori existant (utilisé par le bouton
+// "modifier" dans l'interface). N'affecte aucune fonction existante.
+// ============================================================
+export function modifierLieuFavori(id, nouveauNom) {
+  const lieux = chargerLieuxFavoris().map((l) =>
+    l.id === id ? { ...l, nom: nouveauNom } : l
+  )
+  localStorage.setItem(CLE_LIEUX_FAVORIS, JSON.stringify(lieux))
+  return lieux
+}
+
+// ============================================================
 // DISTANCE ENTRE DEUX POINTS (formule de Haversine) — renvoie des km
 // ============================================================
 export function calculerDistanceKm(lat1, lon1, lat2, lon2) {

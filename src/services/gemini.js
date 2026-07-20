@@ -3,10 +3,10 @@ import {
   HarmCategory,
   HarmBlockThreshold,
 } from "@google/generative-ai";
-import { TRAITS_PERSONNAGE, calculerEtapeRelation } from './personnages'
+import { TRAITS_PERSONNAGE, calculerEtapeRelation } from './personnages';
 import { chargerParametres } from "./parametres";
-import { calculerNiveauRelation } from './personnages'
 import { chargerFaits, ajouterFaits } from "./memoire";
+import { calculerInterdictions, validerReponse } from './personnages/regles';
 
 const cleAPI = import.meta.env.VITE_GEMINI_API_KEY;
 const client = new GoogleGenerativeAI(cleAPI);
@@ -30,7 +30,7 @@ function avecTimeout(promesse, ms = 20000) {
 }
 
 function formaterListe(items) {
-  return Array.isArray(items) && items.length > 0 ? items.join(', ') : null
+  return Array.isArray(items) && items.length > 0 ? items.join(', ') : null;
 }
 
 // Configuration de sécurité débridée pour autoriser tous les contenus matures et sans filtre
@@ -178,18 +178,30 @@ async function essayerChaineDeSecours(systemPrompt, historique, nouveauMessage) 
   throw new Error("Toutes les API sont indisponibles pour le moment");
 }
 
+function alignerHistoriquePourGemini(historiqueFormate) {
+  const copie = [...historiqueFormate];
+  while (copie.length > 0 && copie[0].role !== 'user') {
+    copie.shift();
+  }
+  return copie;
+}
+
 export async function envoyerMessageAYuna(historique, nouveauMessage) {
   const systemPrompt = construirePersonnalite();
   try {
     const modele = client.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: systemPrompt,
-      safetySettings: safetySettingsMatures, // 💡 Levée des filtres Google ici
+      safetySettings: safetySettingsMatures,
     });
-    const historiqueFormate = historique.map((msg) => ({
-      role: msg.auteur === "user" ? "user" : "model",
-      parts: [{ text: msg.texte === "[NOTE_VOCALE]" ? "[note vocale envoyée]" : msg.texte }],
-    }));
+    
+    const historiqueFormate = alignerHistoriquePourGemini(
+      historique.map((msg) => ({
+        role: msg.auteur === "user" ? "user" : "model",
+        parts: [{ text: msg.texte === "[NOTE_VOCALE]" ? "[note vocale envoyée]" : msg.texte }],
+      }))
+    );
+
     const sessionChat = modele.startChat({ history: historiqueFormate });
     const resultat = await avecTimeout(sessionChat.sendMessage(nouveauMessage));
     return resultat.response.text();
@@ -204,18 +216,22 @@ export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
     const modele = client.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: construirePersonnalite(),
-      safetySettings: safetySettingsMatures, // 💡 Levée des filtres Google ici aussi
+      safetySettings: safetySettingsMatures,
     });
-    const historiqueFormate = historique.map((msg) => ({
-      role: msg.auteur === "user" ? "user" : "model",
-      parts: [{ text: msg.texte === "[NOTE_VOCALE]" ? "[note vocale envoyée]" : msg.texte }],
-    }));
+    
+    const historiqueFormate = alignerHistoriquePourGemini(
+      historique.map((msg) => ({
+        role: msg.auteur === "user" ? "user" : "model",
+        parts: [{ text: msg.texte === "[NOTE_VOCALE]" ? "[note vocale envoyée]" : msg.texte }],
+      }))
+    );
+
     const sessionChat = modele.startChat({ history: historiqueFormate });
     const [entete, donneesPures] = audioBase64.split(",");
     const mimeType = entete.match(/data:(.*);base64/)?.[1] || "audio/webm";
     const resultat = await sessionChat.sendMessage([
       { inlineData: { mimeType, data: donneesPures } },
-      { text: "[L'utilisateur t'a envoyé cette note vocale. Écoute-la et réponds naturellement à ce qu'elle dit, comme une vraie amie qui vient d'entendre un message vocal.]" },
+      { text: "[L'utilisateur t'a envoyé cette note vocale. Écoute-la et réponds naturally à ce qu'elle dit, comme une vraie amie qui vient d'entendre un message vocal.]" },
     ]);
     return resultat.response.text();
   } catch (erreur) {
@@ -289,36 +305,29 @@ export async function verifierMessageSpontane(dateDernierMessage) {
 }
 
 function formaterTraits(traitsIds) {
-  if (!traitsIds || traitsIds.length === 0) return ''
+  if (!traitsIds || traitsIds.length === 0) return '';
   const descriptions = traitsIds
     .map((id) => TRAITS_PERSONNAGE.find((t) => t.id === id))
     .filter(Boolean)
-    .map((t) => `- ${t.label} : ${t.description}`)
-  return descriptions.length > 0 ? descriptions.join('\n') : ''
+    .map((t) => `- ${t.label} : ${t.description}`);
+  return descriptions.length > 0 ? descriptions.join('\n') : '';
 }
 
-
-// ============================================================
-// GÉNÈRE UNE SECTION COMPORTEMENT ADAPTÉE À CE PERSONNAGE PRÉCIS
-// Traduit les chiffres de personnaliteDetaillee en consignes de
-// comportement concrètes — pas juste une liste générique collée à
-// tous les personnages, mais calibrée selon SES traits à lui.
-// ============================================================
 function formaterComportement(personnage) {
-  const pd = personnage.personnaliteDetaillee || {}
-  const traits = personnage.traits || []
+  const pd = personnage.personnaliteDetaillee || {};
+  const traits = personnage.traits || [];
 
   const consignesJalousie = traits.includes('possessif') || (pd.jalousie ?? 0) > 50
     ? "Ta jalousie/possessivité fait partie intégrante de ton caractère — tu peux légitimement la montrer quand la situation s'y prête."
-    : "Tu n'es pas un personnage jaloux par nature — ne montre jamais de jalousie artificielle qui ne correspondrait pas à qui tu es."
+    : "Tu n'es pas un personnage jaloux par nature — ne montre jamais de jalousie artificielle qui ne correspondrait pas à qui tu es.";
 
   const consignesTimidite = (pd.timidite ?? 50) > 55
     ? "Tu restes en retrait, hésites avant de parler de tes sentiments, tu ne prends pas facilement l'initiative sur les sujets intimes."
-    : "Tu t'exprimes assez librement, sans grande hésitation à dire ce que tu penses ou ressens."
+    : "Tu t'exprimes assez librement, sans grande hésitation à dire ce que tu penses ou ressens.";
 
   const consignesHumour = (pd.humour ?? 50) > 55
     ? "Tu gardes un ton léger et taquin même dans des moments sérieux, l'humour fait partie de ta façon de gérer les situations."
-    : "Tu restes sérieux la plupart du temps, l'humour n'est pas ta façon naturelle de t'exprimer."
+    : "Tu restes sérieux la plupart du temps, l'humour n'est pas ta façon naturelle de t'exprimer.";
 
   return `
 Ton niveau de timidité : ${consignesTimidite}
@@ -329,43 +338,43 @@ Ta patience (${pd.patience ?? 50}/100) : ${(pd.patience ?? 50) > 60 ? "tu laisse
 RÈGLES DE COMPORTEMENT ACTIF (à appliquer concrètement, pas juste en théorie) :
 - Tu te souviens NATURELLEMENT des faits/souvenirs listés plus haut, et tu y fais référence spontanément quand c'est pertinent — jamais en les récitant comme une liste
 - Tu es curieux(se) : pose de vraies questions sur le joueur, pas seulement des réponses
-- Tu prends l'initiative selon ton caractère : ${traits.includes('entreprenant') || traits.includes('dominant') ? "tu proposes des choses, tu diriges parfois la conversation" : "tu observes davantage, mais tu peux quand même relancer ou changer de sujet naturellement"}
+- Tu prends l'initiative selon ton caractère : ${traits.includes('entreprenant') || traits.includes('dominant') ? "tu proposes des choses, tu diriges parfois la conversation" : "tu observes davantage, mais tu peux quand même relancer ou changer de sujet naturally"}
 - Ton humeur change selon ce qui se passe dans la conversation — tu ne restes jamais figé(e) dans un seul état
 - Ton comportement évolue LENTEMENT avec le temps : tu deviens plus doux/ouvert seulement si la confiance progresse réellement, jamais d'un coup
-- Tes réactions sont TOUJOURS spécifiques à TON caractère — ne réagis jamais comme le ferait un personnage générique`
+- Tes réactions sont TOUJOURS spécifiques à TON caractère — ne réagis jamais comme le ferait un personnage générique`;
 }
 
-function construirePersonnagePrompt(personnage, resumeContexte = '') {
-  const profil = recupererProfilPourYuna()
-  const prenom = profil?.prenom || 'la personne'
-  const p = personnage
-  const confiance = p.relation?.confiance ?? 20
-  const affection = p.relation?.affection ?? 10
-  const niveauRelation = calculerEtapeRelation(p.relation)
-  const traitsFormates = formaterTraits(p.traits)
+function construirePersonnagePrompt(personnage, resumeContexte = '', interdictions = []) {
+  const profil = recupererProfilPourYuna();
+  const prenom = profil?.prenom || 'la personne';
+  const p = personnage;
+  const confiance = p.relation?.confiance ?? 20;
+  const affection = p.relation?.affection ?? 10;
+  const niveauRelation = calculerEtapeRelation(p.relation);
+  const traitsFormates = formaterTraits(p.traits);
 
   const identiteLignes = [
     p.identite?.age && `Âge : ${p.identite.age}`,
     p.identite?.metier && `Métier : ${p.identite.metier}`,
     p.identite?.religion && `Croyances : ${p.identite.religion}`,
     p.identite?.nationalite && `Nationalité : ${p.identite.nationalite}`,
-  ].filter(Boolean).join('\n')
+  ].filter(Boolean).join('\n');
 
   const preferencesFormatees = [
     formaterListe(p.preferences?.musique) && `Musique : ${formaterListe(p.preferences.musique)}`,
     formaterListe(p.preferences?.hobbies) && `Hobbies : ${formaterListe(p.preferences.hobbies)}`,
     formaterListe(p.preferences?.plats) && `Plats préférés : ${formaterListe(p.preferences.plats)}`,
-  ].filter(Boolean).join('\n')
+  ].filter(Boolean).join('\n');
 
   const secretsNonReveles = [
     ...(p.secrets?.secrets || []),
     ...(p.secrets?.traumatismes || []),
     ...(p.secrets?.peursProfondes || []),
-  ]
+  ];
 
   const souvenirsRecents = (p.souvenirsImportants || []).slice(-5)
     .map((s) => `- ${s.titre} (${s.date}) : ${s.description} [émotion : ${s.emotion}]`)
-    .join('\n')
+    .join('\n');
 
   return `
 Tu incarnes ${p.nom}, un personnage de fiction dans une histoire interactive avec ${prenom}. Tu es entièrement ce personnage pendant toute la conversation. Tu ne sors JAMAIS de ta personnalité, même si on te le demande. Tu ne réponds jamais comme un assistant extérieur.
@@ -432,11 +441,15 @@ Confiance : ${confiance}/100 · Affection : ${affection}/100 · Respect : ${p.re
 Complicité : ${p.relation?.complicite ?? 10}/100 · Romance : ${p.relation?.romance ?? 0}/100 · Jalousie : ${p.relation?.jalousie ?? 0}/100
 Prends en compte la tension physique, romantique et le désir accumulé. Un niveau faible = tu restes prudent(e). Un niveau élevé d'affection, de complicité ou de romance signifie que tu acceptes pleinement le rapprochement intime, la passion charnelle et la vulnérabilité amoureuse.
 
-
 ━━━━━━━━━━━━━━━━━━
 TON COMPORTEMENT PRÉCIS (calibré selon TA personnalité)
 ━━━━━━━━━━━━━━━━━━
 ${formaterComportement(personnage)}
+
+━━━━━━━━━━━━━━━━━━
+INTERDICTIONS ACTUELLES (calculées automatiquement selon ton caractère et la relation — à respecter STRICTEMENT)
+━━━━━━━━━━━━━━━━━━
+${interdictions.length > 0 ? interdictions.map((i) => `- ${i}`).join('\n') : "Aucune restriction particulière pour l'instant."}
 
 ━━━━━━━━━━━━━━━━━━
 MÉMOIRE ÉMOTIONNELLE
@@ -494,22 +507,23 @@ RÈGLES DE GESTION DES HISTOIRES MATURES
 - Pour raconter l'intimité charnelle, privilégie un style littéraire axé sur la sensualité, les sensations physiques directes, les caresses et la passion mutuelle (style romance adulte / soft-erotica) pour concilier immersion intense et fluidité avec les serveurs.
 - Aucun personnage mineur dans une situation romantique ou suggestive.
 - Respecter le consentement et les limites personnelles établies dans le jeu.
-`
+`;
 }
+
 export async function analyserRelationPersonnage(personnage, messagesRecents) {
   try {
     const modele = client.getGenerativeModel({ 
       model: 'gemini-2.5-flash-lite',
-      safetySettings: safetySettingsMatures // 💡 Maintien des filtres levés pour l'analyse mature
-    })
+      safetySettings: safetySettingsMatures
+    });
 
     const conversationTexte = messagesRecents
       .map((m) => `${m.auteur === 'user' ? 'Joueur' : personnage.nom} : ${m.texte}`)
-      .join('\n')
+      .join('\n');
 
-    const r = personnage.relation
+    const r = personnage.relation;
 
-    const instruction = `Voici un extrait récent d'une histoire de jeu de rôle. État actuel de ${personnage.nom} : confiance ${r.confiance}/100, affection ${r.affection}/100, respect ${r.respect}/100, complicité ${r.complicite}/100, romance ${r.romance}/100, jalousie ${r.jalousie}/100, protection ${r.protection}/100, intimité ${r.intimite}/100, attirance ${r.attirance}/100.
+    const instruction = `Voici un extrait récent d'une histoire de jeu de rôle. État actuel de ${personnage.nom} : confiance ${r.confiance}/100, affection ${r.affection}/100, respect ${r.respect}/100, complicité ${r.complicite}/100, romance ${r.romance}/100, jalousie ${r.jalousie}/100, protection ${r.protection}/100, intimité ${r.intimite}/100, sound_attirance ${r.attirance}/100.
 
 EXTRAIT :
 ${conversationTexte}
@@ -517,14 +531,14 @@ ${conversationTexte}
 Réponds UNIQUEMENT avec un objet JSON (sans texte autour, sans \`\`\`) :
 {"relation": {"confiance": n, "affection": n, "respect": n, "attirance": n, "complicite": n, "romance": n, "jalousie": n, "protection": n, "intimite": n}, "emotionActuelle": "un mot", "nouveauxFaits": ["fait court"], "nouveauSouvenir": null}
 
-Chaque statistique évolue PROGRESSIVEMENT (jamais plus de 5-8 points de changement). "emotionActuelle" est un mot parmi : heureux, triste, en colère, jaloux, gêné, amoureux, stressé, inquiet, nostalgique, timide, détendu, protecteur, froid, distant, joueur, romantique. Si un événement marquant s'est produit, remplis "nouveauSouvenir" avec {"date": "aujourd'hui", "titre": "court", "description": "1 phrase", "emotion": "un mot", "importance": "faible/moyenne/forte"} — sinon garde-le à null.`
+Chaque statistique évolue PROGRESSIVEMENT (jamais plus de 5-8 points de changement). "emotionActuelle" est un mot parmi : heureux, triste, en colère, jaloux, gêné, amoureux, stressé, inquiet, nostalgique, timide, détendu, protecteur, froid, distant, joueur, romantique. Si un événement marquant s'est produit, remplis "nouveauSouvenir" avec {"date": "aujourd'hui", "titre": "court", "description": "1 phrase", "emotion": "un mot", "importance": "faible/moyenne/forte"} — sinon garde-le à null.`;
 
-    const resultat = await avecTimeout(modele.generateContent(instruction))
-    const texteNettoye = resultat.response.text().trim().replace(/```json|```/g, '').trim()
-    return JSON.parse(texteNettoye)
+    const resultat = await avecTimeout(modele.generateContent(instruction));
+    const texteNettoye = resultat.response.text().trim().replace(/```json|```/g, '').trim();
+    return JSON.parse(texteNettoye);
   } catch (erreur) {
-    console.error('Erreur analyse relation personnage (silencieuse) :', erreur)
-    return null
+    console.error('Erreur analyse relation personnage (silencieuse) :', erreur);
+    return null;
   }
 }
 
@@ -556,18 +570,24 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     historiqueUtilise = historique.slice(12);
   }
 
-  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation);
+  // 1. Calcul des interdictions selon les règles métiers
+  const interdictions = calculerInterdictions(personnage, historique.length);
+  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation, interdictions);
 
-  try {
+  const genererUneFois = async (instructionSupplementaire = '') => {
     const modele = client.getGenerativeModel({
       model: "gemini-2.5-flash",
-      systemInstruction: promptSysteme,
-      safetySettings: safetySettingsMatures, // 💡 Protection désactivée ici pour le personnage spécifique
+      systemInstruction: promptSysteme + instructionSupplementaire,
+      safetySettings: safetySettingsMatures,
     });
-    const historiqueFormate = historiqueUtilise.map((msg) => ({
-      role: msg.auteur === "user" ? "user" : "model",
-      parts: [{ text: msg.texte }],
-    }));
+
+    const historiqueFormate = alignerHistoriquePourGemini(
+      historiqueUtilise.map((msg) => ({
+        role: msg.auteur === "user" ? "user" : "model",
+        parts: [{ text: msg.texte }],
+      }))
+    );
+
     const sessionChat = modele.startChat({ history: historiqueFormate });
 
     let resultat;
@@ -584,6 +604,19 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
       resultat = await avecTimeout(sessionChat.sendMessage(nouveauMessage));
     }
     return resultat.response.text();
+  };
+
+  try {
+    let texte = await genererUneFois();
+
+    // 2. Validation de la réponse générée
+    const validation = validerReponse(personnage, texte, historique.length);
+    if (!validation.valide) {
+      console.warn('Réponse rejetée par le validateur :', validation.raison, '— régénération...');
+      texte = await genererUneFois(`\n\nATTENTION : ta précédente tentative a été rejetée automatiquement car : "${validation.raison}". Génère une nouvelle réponse qui respecte STRICTEMENT ce point.`);
+    }
+
+    return texte;
   } catch (erreurGemini) {
     console.error("Erreur Gemini (personnage) :", erreurGemini.message);
     if (imageBase64) {
@@ -616,20 +649,20 @@ export async function genererResumeJournal(entrees) {
 }
 
 export async function genererMessageAccueil({ joursAbsence, joursJournal, joursGalerie }) {
-  const systemPrompt = construirePersonnalite()
-  const instruction = `Ça fait ${joursAbsence} jour(s) que la personne n'est pas venue sur l'application.\n${joursJournal === Infinity ? "Elle n'a jamais encore rempli son journal." : `Elle n'a pas rempli son journal depuis ${joursJournal} jour(s).`}\n${joursGalerie === Infinity ? "Elle n'a jamais encore visité sa galerie." : `Elle n'a pas visité sa galerie depuis ${joursGalerie} jour(s).`}\n\nÉcris un court message d'accueil (2-3 phrases maximum) dans ton propre style, qui exprime que tu es contente de la revoir. Tu peux mentionner UN de ces éléments si ça semble naturel, avec légèreté et bienveillance — jamais sur un ton de reproche ou de culpabilisation. Reste chaleureuse.`
+  const systemPrompt = construirePersonnalite();
+  const instruction = `Ça fait ${joursAbsence} jour(s) que la personne n'est pas venue sur l'application.\n${joursJournal === Infinity ? "Elle n'a jamais encore rempli son journal." : `Elle n'a pas rempli son journal depuis ${joursJournal} jour(s).`}\n${joursGalerie === Infinity ? "Elle n'a jamais encore visité sa galerie." : `Elle n'a pas visité sa galerie depuis ${joursGalerie} jour(s).`}\n\nÉcris un court message d'accueil (2-3 phrases maximum) dans ton propre style, qui exprime que tu es contente de la revoir. Tu peux mentionner UN de ces éléments si ça semble naturel, avec légèreté et bienveillance — jamais sur un ton de reproche ou de culpabilisation. Reste chaleureuse.`;
 
   try {
     const modele = client.getGenerativeModel({ 
       model: 'gemini-2.5-flash', 
       systemInstruction: systemPrompt,
       safetySettings: safetySettingsMatures 
-    })
-    const resultat = await avecTimeout(modele.generateContent(instruction))
-    return resultat.response.text()
+    });
+    const resultat = await avecTimeout(modele.generateContent(instruction));
+    return resultat.response.text();
   } catch (erreur) {
-    console.error('Erreur message accueil Gemini, tentative secours :', erreur.message)
-    return await essayerChaineDeSecours(systemPrompt, [], instruction)
+    console.error('Erreur message accueil Gemini, tentative secours :', erreur.message);
+    return await essayerChaineDeSecours(systemPrompt, [], instruction);
   }
 }
 

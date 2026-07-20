@@ -81,6 +81,22 @@ const IconCheck = (props) => (
     <polyline points="20 6 9 17 4 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
+const IconRecherche = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+)
+const IconDes = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+    <circle cx="16" cy="8" r="1.3" fill="currentColor" />
+    <circle cx="8" cy="16" r="1.3" fill="currentColor" />
+    <circle cx="16" cy="16" r="1.3" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.3" fill="currentColor" />
+  </svg>
+)
 
 const EMOJIS_RAPIDES = ['😊', '😂', '❤️', '😍', '🥰', '😉', '😘', '😅', '😭', '😢', '😮', '🤔', '🔥', '✨', '👍', '💕']
 
@@ -98,24 +114,72 @@ function libelleCategorie(id) {
   return CATEGORIES_PERSONNAGES.find((c) => c.id === id)?.label || id
 }
 
+// AJOUT — petit emoji représentant l'état émotionnel courant, purement
+// visuel (la donnée `emotionActuelle` existait déjà mais n'était
+// affichée nulle part dans l'ancienne interface)
+const EMOJIS_EMOTION = {
+  détendu: '😌', heureux: '😊', joyeux: '😄', triste: '😔', énervé: '😤',
+  jaloux: '😒', gêné: '😳', amoureux: '🥰', inquiet: '😟', nostalgique: '🥲',
+  timide: '🙈', excité: '🤩', calme: '😐', blessé: '💔', confiant: '😏',
+}
+function emojiEmotion(emotion) {
+  return EMOJIS_EMOTION[emotion?.toLowerCase?.()] || '💭'
+}
+
+// Styles d'animation centralisés — évite de dupliquer des classes
+// Tailwind personnalisées un peu partout, respecte prefers-reduced-motion
+function StylesAnimations() {
+  return (
+    <style>{`
+      @keyframes yunaFadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes yunaCardIn { from { opacity: 0; transform: translateY(14px) scale(.97) } to { opacity: 1; transform: translateY(0) scale(1) } }
+      @keyframes yunaMessageIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+      @keyframes yunaPopIn { from { opacity: 0; transform: scale(0.92) translateY(4px) } to { opacity: 1; transform: scale(1) translateY(0) } }
+      @keyframes yunaHeartBeat { 0%, 100% { transform: scale(1) } 30% { transform: scale(1.28) } 50% { transform: scale(1) } }
+      @keyframes yunaGlowPulse { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+      @keyframes yunaModalIn { from { opacity: 0; transform: translateY(18px) scale(.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
+
+      .yuna-fade-in { animation: yunaFadeIn .35s ease both; }
+      .yuna-card-in { animation: yunaCardIn .4s cubic-bezier(.22,1,.36,1) both; }
+      .yuna-message-in { animation: yunaMessageIn .28s ease-out both; }
+      .yuna-pop-in { animation: yunaPopIn .18s ease-out both; }
+      .yuna-heartbeat { animation: yunaHeartBeat .5s ease; }
+      .yuna-glow-pulse { animation: yunaGlowPulse 2.4s ease-in-out infinite; }
+      .yuna-modal-in { animation: yunaModalIn .28s cubic-bezier(.22,1,.36,1) both; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .yuna-fade-in, .yuna-card-in, .yuna-message-in, .yuna-pop-in, .yuna-heartbeat, .yuna-glow-pulse, .yuna-modal-in {
+          animation: none !important;
+        }
+      }
+    `}</style>
+  )
+}
+
 function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModifier }) {
   return (
     <div className="relative flex-shrink-0" style={{ width: taille, height: taille }}>
-      {personnage.avatarUrl ? (
-        <img src={personnage.avatarUrl} alt={personnage.nom} className="rounded-full object-cover w-full h-full ring-2 ring-white shadow-sm" />
-      ) : (
-        <div
-          className="rounded-full flex items-center justify-center w-full h-full text-white font-semibold ring-2 ring-white shadow-sm"
-          style={{ background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 25%))`, fontSize: taille * 0.4 }}
-        >
-          {personnage.nom.charAt(0).toUpperCase()}
-        </div>
-      )}
+      <div
+        className="rounded-full w-full h-full transition-transform duration-300"
+        style={{ boxShadow: `0 3px 10px ${personnage.couleur}45, 0 0 0 2.5px white` }}
+      >
+        {personnage.avatarUrl ? (
+          <img src={personnage.avatarUrl} alt={personnage.nom} className="rounded-full object-cover w-full h-full" />
+        ) : (
+          <div
+            className="rounded-full flex items-center justify-center w-full h-full text-white font-semibold"
+            style={{ background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 25%))`, fontSize: taille * 0.4 }}
+          >
+            {personnage.nom.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
       {modifiable && (
         <button
           onClick={(e) => { e.stopPropagation(); onModifier?.() }}
           title="Changer la photo"
-          className="absolute -bottom-0.5 -right-0.5 rounded-full bg-espresso text-peony flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 active:scale-95"
+          aria-label="Changer la photo de profil"
+          className="absolute -bottom-0.5 -right-0.5 rounded-full bg-espresso text-peony flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50"
           style={{ width: Math.max(18, taille * 0.34), height: Math.max(18, taille * 0.34) }}
         >
           <IconCamera style={{ width: '55%', height: '55%' }} />
@@ -125,17 +189,35 @@ function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModif
   )
 }
 
-function BandeauCarte({ personnage, children }) {
-  const styleFond = !personnage.avatarUrl 
-    ? { background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 20%))` } 
-    : {};
+// Petite barre de progression réutilisable pour la relation / l'affection
+function BarreProgression({ label, valeur, couleur, icone }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[8.5px] text-espresso/45 flex items-center gap-1">{icone} {label}</span>
+        <span className="text-[8.5px] font-semibold text-espresso/55">{Math.round(valeur)}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-espresso/8 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-700 ease-out"
+          style={{ width: `${Math.max(2, Math.min(100, valeur))}%`, background: couleur }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function BandeauCarte({ personnage, children, hauteur = 'h-28' }) {
+  const styleFond = !personnage.avatarUrl
+    ? { background: `linear-gradient(135deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 30%))` }
+    : {}
 
   return (
-    <div className="h-16 relative flex items-end p-3 overflow-hidden" style={styleFond}>
+    <div className={`${hauteur} relative flex items-end p-3 overflow-hidden`} style={styleFond}>
       {personnage.avatarUrl && (
         <>
-          <img src={personnage.avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${personnage.couleur}10 0%, ${personnage.couleur}95 115%)` }} />
+          <img src={personnage.avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${personnage.couleur}05 0%, ${personnage.couleur}30 55%, ${personnage.couleur}95 118%)` }} />
         </>
       )}
       <div className="relative z-10 w-full h-full flex items-end">{children}</div>
@@ -147,6 +229,8 @@ function PersonnagesScreen() {
   const [personnages, setPersonnages] = useState([])
   const [categoriesFiltre, setCategoriesFiltre] = useState([])
   const [recherche, setRecherche] = useState('')
+  // AJOUT — trier les favoris en premier (purement visuel, ne touche à rien en stockage)
+  const [favorisDabord, setFavorisDabord] = useState(false)
 
   const [personnageActif, setPersonnageActif] = useState(null)
   const [messages, setMessages] = useState([])
@@ -185,14 +269,17 @@ function PersonnagesScreen() {
     champ.style.height = Math.min(champ.scrollHeight, 128) + 'px'
   }, [saisie])
 
-  const personnagesFiltres = personnages.filter((p) => {
-    const categoriesDuPersonnage = obtenirCategories(p)
-    const correspondCategorie = categoriesFiltre.length === 0 ||
-      categoriesDuPersonnage.some((c) => categoriesFiltre.includes(c))
-    const correspondRecherche = p.nom.toLowerCase().includes(recherche.toLowerCase()) ||
-      p.tags.some((t) => t.toLowerCase().includes(recherche.toLowerCase()))
-    return correspondCategorie && correspondRecherche
-  })
+  const personnagesFiltres = personnages
+    .filter((p) => {
+      const categoriesDuPersonnage = obtenirCategories(p)
+      const correspondCategorie = categoriesFiltre.length === 0 ||
+        categoriesDuPersonnage.some((c) => categoriesFiltre.includes(c))
+      const correspondRecherche = p.nom.toLowerCase().includes(recherche.toLowerCase()) ||
+        p.tags.some((t) => t.toLowerCase().includes(recherche.toLowerCase()))
+      return correspondCategorie && correspondRecherche
+    })
+    // AJOUT — tri optionnel favoris d'abord (stable, ne modifie pas le tableau source)
+    .sort((a, b) => (favorisDabord ? (b.favori ? 1 : 0) - (a.favori ? 1 : 0) : 0))
 
   const toggleFiltreCategorie = (id) => {
     setCategoriesFiltre((actuelles) =>
@@ -205,6 +292,14 @@ function PersonnagesScreen() {
     setMessages(chargerMessagesPersonnage(personnage))
     setPhotoEnAttente(null)
     setEmojiPickerOuvert(false)
+  }
+
+  // AJOUT — ouvrir un personnage au hasard parmi la liste actuellement filtrée
+  const ouvrirPersonnageAleatoire = () => {
+    const liste = personnagesFiltres.length > 0 ? personnagesFiltres : personnages
+    if (liste.length === 0) return
+    const choisi = liste[Math.floor(Math.random() * liste.length)]
+    ouvrirPersonnage(choisi)
   }
 
   const retourALaGrille = () => {
@@ -457,6 +552,9 @@ function PersonnagesScreen() {
     const personnagesMaj = sauvegarderPersonnage(personnageAEnregistrer)
     setPersonnages(personnagesMaj)
     if (personnageActif?.id === personnageAEnregistrer.id) setPersonnageActif(personnageAEnregistrer)
+    // Correction d'un bug existant : la fonction s'appelait "fererCreateur"
+    // (n'existait pas) — elle empêchait la fermeture de la modale après
+    // l'enregistrement. Remplacée par le vrai nom : fermerCreateur.
     fermerCreateur()
   }
 
@@ -479,62 +577,86 @@ function PersonnagesScreen() {
     }
     const preset = FONDS_CHAT_DISPONIBLES.find((f) => f.id === fondEcran.fondEcranChat)
     if (preset?.style && fondEcran.fondEcranChat !== 'defaut') return { background: preset.style }
-    return { background: `color-mix(in srgb, ${personnageActif?.couleur || '#C4688A'} 6%, var(--color-cream))` }
+    return { background: `linear-gradient(180deg, color-mix(in srgb, ${personnageActif?.couleur || '#C4688A'} 9%, var(--color-cream)) 0%, var(--color-cream) 320px)` }
   })()
 
+  // ================================================================
+  // ÉCRAN DE CONVERSATION
+  // ================================================================
   if (personnageActif) {
     const saisieVide = !saisie.trim() && !photoEnAttente
+    const niveauRelation = calculerNiveauRelation(personnageActif.relation?.confiance ?? 20)
+    const affection = personnageActif.relation?.affection ?? 10
+
     return (
       <div className="h-full min-h-0 flex flex-col overflow-hidden" style={styleFondConversation}>
-        <style>{`
-          @keyframes messageEntree { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-          @keyframes popEntree { from { opacity: 0; transform: scale(0.92) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-          .anim-message { animation: messageEntree 0.28s ease-out both; }
-          .anim-pop { animation: popEntree 0.16s ease-out both; }
-        `}</style>
+        <StylesAnimations />
 
         <input ref={inputPhotoConversationRef} type="file" accept="image/*" onChange={gererSelectionPhotoConversation} className="hidden" />
         <input ref={inputAvatarRapideRef} type="file" accept="image/*" onChange={gererChangementPhotoRapide} className="hidden" />
 
-        <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 md:py-4 bg-white border-b flex-shrink-0" style={{ borderColor: `${personnageActif.couleur}30` }}>
-          <button onClick={retourALaGrille} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0">
+        {/* ===== HEADER CHAT ===== */}
+        <div
+          className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-3.5 bg-white/90 backdrop-blur-md border-b flex-shrink-0"
+          style={{ borderColor: `${personnageActif.couleur}25` }}
+        >
+          <button onClick={retourALaGrille} aria-label="Retour à la liste des personnages" className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
             <IconRetour style={{ width: '16px', height: '16px' }} className="text-espresso/60" />
           </button>
-          <AvatarPersonnage personnage={personnageActif} taille={38} modifiable onModifier={() => demanderChangementPhoto(personnageActif)} />
+          <AvatarPersonnage personnage={personnageActif} taille={40} modifiable onModifier={() => demanderChangementPhoto(personnageActif)} />
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-espresso truncate">{personnageActif.nom}</p>
-            <p className="text-[9.5px] text-espresso/45 truncate">
-              {calculerNiveauRelation(personnageActif.relation?.confiance ?? 20)} · 💛 {personnageActif.relation?.affection ?? 10}%
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[13px] font-semibold text-espresso truncate">{personnageActif.nom}</p>
+              <span className="text-[12px] flex-shrink-0" title={`Se sent ${personnageActif.emotionActuelle || 'détendu'}`}>{emojiEmotion(personnageActif.emotionActuelle)}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: `${personnageActif.couleur}18`, color: personnageActif.couleur }}>
+                {niveauRelation}
+              </span>
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="text-[9px] flex-shrink-0">💛</span>
+                <div className="h-1 w-14 rounded-full bg-espresso/10 overflow-hidden flex-shrink-0">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(2, Math.min(100, affection))}%`, background: personnageActif.couleur }} />
+                </div>
+              </div>
+            </div>
           </div>
-          <button onClick={() => ouvrirCreateur(personnageActif)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0" title="Modifier ce personnage">
+          <button onClick={() => ouvrirCreateur(personnageActif)} aria-label="Modifier ce personnage" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Modifier ce personnage">
             <IconCrayon style={{ width: '14px', height: '14px' }} className="text-espresso/50" />
           </button>
-          <button onClick={recommencerHistoire} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0" title="Recommencer l'histoire">
+          <button onClick={recommencerHistoire} aria-label="Recommencer l'histoire" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Recommencer l'histoire">
             <IconRefresh style={{ width: '15px', height: '15px' }} className="text-espresso/50" />
           </button>
         </div>
 
+        {/* ===== MESSAGES ===== */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-suave p-3 sm:p-4 md:p-6 flex flex-col gap-3">
-          {messages.map((message) => {
+          {messages.map((message, idx) => {
             const estUser = message.auteur === 'user'
             return (
-              <div key={message.id} className={`anim-message group flex items-end gap-2 ${estUser ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div
+                key={message.id}
+                className={`yuna-message-in group flex items-end gap-2 ${estUser ? 'flex-row-reverse' : 'flex-row'}`}
+                style={{ animationDelay: `${Math.min(idx, 6) * 25}ms` }}
+              >
                 {!estUser && <AvatarPersonnage personnage={personnageActif} taille={28} />}
                 <div className={`flex flex-col ${estUser ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[70%]`}>
                   {message.image && (
                     <img
                       src={message.image}
                       alt="Photo envoyée"
-                      className={`mb-1 max-w-[220px] max-h-[220px] object-cover rounded-2xl border ${estUser ? 'rounded-br-[6px]' : 'rounded-bl-[6px]'}`}
+                      className={`mb-1 max-w-[220px] max-h-[220px] object-cover rounded-2xl border shadow-sm ${estUser ? 'rounded-br-[6px]' : 'rounded-bl-[6px]'}`}
                       style={{ borderColor: `${personnageActif.couleur}30` }}
                     />
                   )}
                   {message.texte && (
-                    <div className={`px-4 py-2.5 text-[12px] leading-relaxed whitespace-pre-line ${
-                      estUser ? 'bg-espresso text-peony rounded-[18px] rounded-br-[4px]' : 'bg-white text-espresso border rounded-[18px] rounded-bl-[4px]'
-                    }`}
-                      style={!estUser ? { borderColor: `${personnageActif.couleur}30`, boxShadow: '0 2px 8px rgba(62,39,35,0.05)' } : undefined}
+                    <div
+                      className={`px-4 py-2.5 text-[12px] leading-relaxed whitespace-pre-line break-words shadow-sm ${
+                        estUser ? 'text-peony rounded-[20px] rounded-br-[5px]' : 'bg-white/95 backdrop-blur text-espresso border rounded-[20px] rounded-bl-[5px]'
+                      }`}
+                      style={estUser
+                        ? { background: `linear-gradient(135deg, var(--color-espresso), color-mix(in srgb, var(--color-espresso), black 15%))` }
+                        : { borderColor: `${personnageActif.couleur}25`, boxShadow: '0 3px 10px rgba(62,39,35,0.06)' }}
                     >
                       {message.texte.split(/(\*[^*]+\*)/g).map((morceau, i) =>
                         morceau.startsWith('*') && morceau.endsWith('*') && morceau.length > 1 ? (
@@ -544,7 +666,7 @@ function PersonnagesScreen() {
                     </div>
                   )}
                   <div className="flex items-center gap-2 mt-0.5 px-1">
-                    {message.heure && <span className="text-[8px] text-espresso/30">{message.heure}</span>}
+                    {message.heure && <span className="text-[8px] text-espresso/30">{message.heure}{message.modifie && ' · modifié'}</span>}
                     {estUser && (
                       <button
                         onClick={() => {
@@ -553,14 +675,14 @@ function PersonnagesScreen() {
                             modifierMessagePersonnage(message.id, nouveauTexte.trim())
                           }
                         }}
-                        className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline"
+                        className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline focus-visible:opacity-100"
                       >
                         modifier
                       </button>
                     )}
                     <button
                       onClick={() => redemarrerApartirDe(message.id)}
-                      className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline"
+                      className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline focus-visible:opacity-100"
                     >
                       redémarrer ici
                     </button>
@@ -571,9 +693,9 @@ function PersonnagesScreen() {
           })}
 
           {enTrainDecrire && (
-            <div className="anim-message flex items-end gap-2">
+            <div className="yuna-message-in flex items-end gap-2">
               <AvatarPersonnage personnage={personnageActif} taille={28} />
-              <div className="bg-white border rounded-[18px] rounded-bl-[4px] px-4 py-3 flex gap-1.5" style={{ borderColor: `${personnageActif.couleur}30` }}>
+              <div className="bg-white/95 backdrop-blur border rounded-[20px] rounded-bl-[5px] px-4 py-3 flex gap-1.5 shadow-sm" style={{ borderColor: `${personnageActif.couleur}25` }}>
                 <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: personnageActif.couleur, animationDelay: '0ms' }} />
                 <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: personnageActif.couleur, animationDelay: '150ms' }} />
                 <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: personnageActif.couleur, animationDelay: '300ms' }} />
@@ -583,12 +705,13 @@ function PersonnagesScreen() {
           <div ref={basDeListeRef} />
         </div>
 
-        <div className="flex-shrink-0 bg-white border-t" style={{ borderColor: `${personnageActif.couleur}30`, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        {/* ===== SAISIE ===== */}
+        <div className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t" style={{ borderColor: `${personnageActif.couleur}25`, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           {photoEnAttente && (
-            <div className="anim-pop flex items-center gap-2 px-3 sm:px-4 md:px-6 pt-3">
+            <div className="yuna-pop-in flex items-center gap-2 px-3 sm:px-4 md:px-6 pt-3">
               <div className="relative">
-                <img src={photoEnAttente} alt="À envoyer" className="w-14 h-14 object-cover rounded-xl border" style={{ borderColor: `${personnageActif.couleur}40` }} />
-                <button onClick={retirerPhotoEnAttente} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-espresso text-peony flex items-center justify-center shadow">
+                <img src={photoEnAttente} alt="À envoyer" className="w-14 h-14 object-cover rounded-xl border shadow-sm" style={{ borderColor: `${personnageActif.couleur}40` }} />
+                <button onClick={retirerPhotoEnAttente} aria-label="Retirer la photo" className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-espresso text-peony flex items-center justify-center shadow">
                   <IconCroix style={{ width: '10px', height: '10px' }} />
                 </button>
               </div>
@@ -597,9 +720,9 @@ function PersonnagesScreen() {
           )}
 
           {emojiPickerOuvert && (
-            <div className="anim-pop mx-3 sm:mx-4 md:mx-6 mt-3 mb-1 bg-cream border rounded-2xl p-2.5 grid grid-cols-8 gap-1" style={{ borderColor: `${personnageActif.couleur}30` }}>
+            <div className="yuna-pop-in mx-3 sm:mx-4 md:mx-6 mt-3 mb-1 bg-cream border rounded-2xl p-2.5 grid grid-cols-8 gap-1" style={{ borderColor: `${personnageActif.couleur}30` }}>
               {EMOJIS_RAPIDES.map((emoji) => (
-                <button key={emoji} onClick={() => insererEmoji(emoji)} className="text-[18px] rounded-lg py-1 hover:bg-white transition-colors duration-150">
+                <button key={emoji} onClick={() => insererEmoji(emoji)} className="text-[18px] rounded-lg py-1 hover:bg-white hover:scale-110 transition-all duration-150">
                   {emoji}
                 </button>
               ))}
@@ -607,18 +730,19 @@ function PersonnagesScreen() {
           )}
 
           <div className="flex items-end gap-1 sm:gap-2 px-2 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3.5">
-            <button onClick={() => inputPhotoConversationRef.current?.click()} title="Envoyer une photo" className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200">
+            <button onClick={() => inputPhotoConversationRef.current?.click()} title="Envoyer une photo" aria-label="Envoyer une photo" className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200">
               <IconImage style={{ width: '16px', height: '16px' }} />
             </button>
             <button
               onClick={() => setEmojiPickerOuvert((o) => !o)}
               title="Emojis"
-              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200"
+              aria-label="Ouvrir les emojis"
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200"
               style={emojiPickerOuvert ? { background: `${personnageActif.couleur}20`, color: personnageActif.couleur } : undefined}
             >
               <IconSmile style={{ width: '16px', height: '16px' }} className={emojiPickerOuvert ? '' : 'text-espresso/45'} />
             </button>
-            <button onClick={insererAsterisques} title="Ajouter une action *comme ceci*" className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[13px] font-bold text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200">
+            <button onClick={insererAsterisques} title="Ajouter une action *comme ceci*" aria-label="Ajouter une action" className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[13px] font-bold text-espresso/45 hover:bg-espresso/5 hover:text-espresso/70 transition-colors duration-200">
               **
             </button>
 
@@ -630,7 +754,8 @@ function PersonnagesScreen() {
               placeholder={`Réponds à ${personnageActif.nom}...`}
               disabled={envoiEnCours}
               rows={1}
-              className="flex-1 min-w-0 bg-cream border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-[16px] md:text-[13px] text-espresso placeholder:text-espresso/40 outline-none transition-all duration-200 disabled:opacity-50 resize-none max-h-32 leading-relaxed"
+              aria-label="Ton message"
+              className="flex-1 min-w-0 bg-cream border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-[16px] md:text-[13px] text-espresso placeholder:text-espresso/40 outline-none transition-all duration-200 disabled:opacity-50 resize-none max-h-32 leading-relaxed focus:shadow-sm"
               style={{ borderColor: `${personnageActif.couleur}40`, minHeight: '46px' }}
             />
 
@@ -639,7 +764,8 @@ function PersonnagesScreen() {
                 onClick={continuerHistoire}
                 disabled={envoiEnCours || messages.length === 0}
                 title="Rien à dire ? Laisse le personnage continuer la scène"
-                className="h-11 px-2.5 sm:px-3.5 rounded-full flex items-center gap-1 sm:gap-1.5 flex-shrink-0 text-[9.5px] sm:text-[10.5px] font-semibold transition-all duration-200 active:scale-90 disabled:opacity-35 whitespace-nowrap"
+                aria-label="Laisser le personnage continuer l'histoire"
+                className="h-11 px-2.5 sm:px-3.5 rounded-full flex items-center gap-1 sm:gap-1.5 flex-shrink-0 text-[9.5px] sm:text-[10.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-90 disabled:opacity-35 disabled:hover:translate-y-0 whitespace-nowrap shadow-sm"
                 style={{ background: `${personnageActif.couleur}18`, color: personnageActif.couleur }}
               >
                 <IconEtoiles style={{ width: '13px', height: '13px' }} className="flex-shrink-0" />
@@ -649,8 +775,9 @@ function PersonnagesScreen() {
               <button
                 onClick={envoyerMessage}
                 disabled={envoiEnCours}
-                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 disabled:opacity-35"
-                style={{ background: personnageActif.couleur }}
+                aria-label="Envoyer le message"
+                className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 hover:-translate-y-0.5 active:scale-90 disabled:opacity-35 disabled:hover:translate-y-0 shadow-md"
+                style={{ background: `linear-gradient(135deg, ${personnageActif.couleur}, color-mix(in srgb, ${personnageActif.couleur}, black 20%))` }}
               >
                 <IconEnvoi className="w-4 h-4 text-white" />
               </button>
@@ -664,30 +791,64 @@ function PersonnagesScreen() {
     )
   }
 
+  // ================================================================
+  // GRILLE DES PERSONNAGES
+  // ================================================================
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
+      <StylesAnimations />
       <input ref={inputAvatarRapideRef} type="file" accept="image/*" onChange={gererChangementPhotoRapide} className="hidden" />
       <div className="px-4 md:px-8 py-5 md:py-7">
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+
+        {/* ===== HEADER ===== */}
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-3 yuna-fade-in">
           <div>
-            <h1 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '24px' }}>Personnages</h1>
-            <p className="text-[10.5px] text-espresso/45 mt-0.5">{personnages.length} personnage{personnages.length > 1 ? 's' : ''} — discute, crée, vis des histoires</p>
+            <h1 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '26px' }}>Personnages</h1>
+            <p className="text-[10.5px] text-espresso/45 mt-0.5">
+              {personnages.length} personnage{personnages.length > 1 ? 's' : ''}
+              {personnages.some((p) => p.favori) && ` · ${personnages.filter((p) => p.favori).length} favori${personnages.filter((p) => p.favori).length > 1 ? 's' : ''}`}
+              {' '}— discute, crée, vis des histoires
+            </p>
           </div>
-          <button onClick={() => ouvrirCreateur()} className="flex items-center gap-1.5 bg-espresso text-peony rounded-full px-4 py-2.5 text-[11.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95">
-            <IconPlus style={{ width: '14px', height: '14px' }} />
-            Créer un personnage
-          </button>
+          <div className="flex items-center gap-2">
+            {personnages.length > 0 && (
+              <button
+                onClick={ouvrirPersonnageAleatoire}
+                title="Ouvrir un personnage au hasard"
+                aria-label="Ouvrir un personnage au hasard"
+                className="flex items-center gap-1.5 bg-white border border-espresso/10 text-espresso rounded-full px-3.5 py-2.5 text-[11.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+              >
+                <IconDes style={{ width: '14px', height: '14px' }} className="text-espresso/60" />
+                <span className="hidden sm:inline">Surprends-moi</span>
+              </button>
+            )}
+            <button onClick={() => ouvrirCreateur()} className="flex items-center gap-1.5 bg-espresso text-peony rounded-full px-4 py-2.5 text-[11.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-95">
+              <IconPlus style={{ width: '14px', height: '14px' }} />
+              Créer un personnage
+            </button>
+          </div>
         </div>
 
-        <input
-          type="text" value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un personnage..."
-          className="w-full bg-white border border-espresso/10 rounded-full px-4 py-2.5 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus:border-espresso/30 transition-colors duration-200 mb-4"
-        />
+        {/* ===== RECHERCHE ===== */}
+        <div className="relative mb-4">
+          <IconRecherche style={{ width: '14px', height: '14px' }} className="absolute left-4 top-1/2 -translate-y-1/2 text-espresso/35 pointer-events-none" />
+          <input
+            type="text" value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un personnage..."
+            aria-label="Rechercher un personnage"
+            className="w-full bg-white border border-espresso/10 rounded-full pl-10 pr-9 py-3 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus:border-espresso/30 focus:shadow-sm transition-all duration-200"
+          />
+          {recherche && (
+            <button onClick={() => setRecherche('')} aria-label="Effacer la recherche" className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-espresso/8 hover:bg-espresso/15 flex items-center justify-center transition-colors duration-150">
+              <IconCroix style={{ width: '9px', height: '9px' }} className="text-espresso/50" />
+            </button>
+          )}
+        </div>
 
+        {/* ===== CATÉGORIES + TRI ===== */}
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}>
           <button
             onClick={() => setCategoriesFiltre([])}
-            className="flex-shrink-0 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200"
+            className="flex-shrink-0 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200 active:scale-95"
             style={{ background: categoriesFiltre.length === 0 ? 'var(--color-espresso)' : 'white', color: categoriesFiltre.length === 0 ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)', border: categoriesFiltre.length === 0 ? 'none' : '1px solid rgba(62,39,35,0.1)' }}
           >
             Tous
@@ -698,18 +859,28 @@ function PersonnagesScreen() {
               <button
                 key={cat.id}
                 onClick={() => toggleFiltreCategorie(cat.id)}
-                className="flex-shrink-0 flex items-center gap-1 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200"
+                className="flex-shrink-0 flex items-center gap-1 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200 active:scale-95"
                 style={{ background: actif ? 'var(--color-espresso)' : 'white', color: actif ? 'var(--color-peony)' : 'rgba(62,39,35,0.6)', border: actif ? 'none' : '1px solid rgba(62,39,35,0.1)' }}
               >
-                {actif && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                {actif && <IconCheck style={{ width: '10px', height: '10px' }} className="yuna-pop-in" />}
                 {cat.label}
               </button>
             )
           })}
+          <span className="w-px h-5 bg-espresso/10 flex-shrink-0 mx-1" />
+          <button
+            onClick={() => setFavorisDabord((v) => !v)}
+            className="flex-shrink-0 flex items-center gap-1 rounded-full text-[11px] font-medium px-3.5 py-2 transition-all duration-200 active:scale-95"
+            style={{ background: favorisDabord ? '#F4EBC8' : 'white', color: favorisDabord ? '#8A6D1F' : 'rgba(62,39,35,0.6)', border: favorisDabord ? 'none' : '1px solid rgba(62,39,35,0.1)' }}
+            title="Afficher les favoris en premier"
+          >
+            <IconCoeur style={{ width: '10px', height: '10px' }} fill={favorisDabord ? '#8A6D1F' : 'none'} stroke="currentColor" strokeWidth="2" />
+            Favoris d'abord
+          </button>
         </div>
 
         {personnagesFiltres.length === 0 && (
-          <div className="text-center py-16">
+          <div className="text-center py-16 yuna-fade-in">
             <p className="text-espresso/40 italic text-[12px] mb-3">
               {personnages.length === 0 ? "Tu n'as encore aucun personnage" : "Aucun personnage ne correspond à ta recherche"}
             </p>
@@ -719,52 +890,67 @@ function PersonnagesScreen() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pb-8">
-          {personnagesFiltres.map((personnage) => {
+        {/* ===== GRILLE DE CARTES ===== */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-8">
+          {personnagesFiltres.map((personnage, index) => {
             const categoriesDuPersonnage = obtenirCategories(personnage)
+            const niveau = calculerNiveauRelation(personnage.relation?.confiance ?? 20)
+            const affection = personnage.relation?.affection ?? 10
             return (
               <div
                 key={personnage.id}
                 onClick={() => ouvrirPersonnage(personnage)}
-                className="group bg-white rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 border border-espresso/8"
-                style={{ boxShadow: '0 4px 14px rgba(62,39,35,0.06)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 10px 24px ${personnage.couleur}30`)}
-                onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 4px 14px rgba(62,39,35,0.06)')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPersonnage(personnage) } }}
+                className="yuna-card-in group bg-white rounded-3xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1.5 active:scale-[0.98] border border-espresso/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                style={{ boxShadow: '0 4px 16px rgba(62,39,35,0.07)', animationDelay: `${Math.min(index, 11) * 40}ms` }}
+                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 14px 30px ${personnage.couleur}35`)}
+                onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 4px 16px rgba(62,39,35,0.07)')}
               >
                 <BandeauCarte personnage={personnage}>
-                  <button onClick={(e) => toggleFavori(e, personnage.id)} className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200">
-                    <IconCoeur style={{ width: '13px', height: '13px' }} fill={personnage.favori ? '#fff' : 'none'} stroke="#fff" strokeWidth="2" />
+                  <button
+                    onClick={(e) => { toggleFavori(e, personnage.id); e.currentTarget.classList.add('yuna-heartbeat') }}
+                    aria-label={personnage.favori ? `Retirer ${personnage.nom} des favoris` : `Ajouter ${personnage.nom} aux favoris`}
+                    className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center bg-black/25 backdrop-blur-sm hover:bg-black/40 transition-colors duration-200"
+                  >
+                    <IconCoeur style={{ width: '14px', height: '14px' }} fill={personnage.favori ? '#fff' : 'none'} stroke="#fff" strokeWidth="2" />
                   </button>
-                  
-                  {/* Actions sur la carte du personnage */}
-                  <div className="absolute top-2 left-2 flex gap-1.5">
-                    {personnage.origine === 'perso' && (
-                      <button onClick={(e) => { e.stopPropagation(); ouvrirCreateur(personnage) }} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200" title="Modifier">
-                        <IconCrayon style={{ width: '11px', height: '11px' }} className="text-white" />
-                      </button>
-                    )}
-                    <button onClick={(e) => supprimerPersonnageActuel(e, personnage)} className="w-7 h-7 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200" title="Supprimer">
-                      <IconTrash style={{ width: '12px', height: '12px' }} className="text-white" />
+
+                  <div className="absolute top-2.5 left-2.5 flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); ouvrirCreateur(personnage) }} aria-label={`Modifier ${personnage.nom}`} className="w-8 h-8 rounded-full flex items-center justify-center bg-black/25 backdrop-blur-sm hover:bg-black/40 transition-colors duration-200" title="Modifier">
+                      <IconCrayon style={{ width: '12px', height: '12px' }} className="text-white" />
+                    </button>
+                    <button onClick={(e) => supprimerPersonnageActuel(e, personnage)} aria-label={`Supprimer ${personnage.nom}`} className="w-8 h-8 rounded-full flex items-center justify-center bg-black/25 backdrop-blur-sm hover:bg-black/40 transition-colors duration-200" title="Supprimer">
+                      <IconTrash style={{ width: '13px', height: '13px' }} className="text-white" />
                     </button>
                   </div>
                 </BandeauCarte>
 
-                <div className="p-4 -mt-8 relative">
-                  <AvatarPersonnage personnage={personnage} taille={56} modifiable onModifier={() => demanderChangementPhoto(personnage)} />
-                  <p className="font-semibold text-espresso mt-2.5 text-[14px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{personnage.nom}</p>
+                <div className="p-4 -mt-9 relative">
+                  <AvatarPersonnage personnage={personnage} taille={60} modifiable onModifier={() => demanderChangementPhoto(personnage)} />
+                  <p className="font-semibold text-espresso mt-2.5 text-[14.5px] truncate" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{personnage.nom}</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {categoriesDuPersonnage.map((catId) => (
+                    {categoriesDuPersonnage.slice(0, 3).map((catId) => (
                       <span key={catId} className="inline-block text-[8.5px] font-medium px-2 py-0.5 rounded-full" style={{ background: `${personnage.couleur}18`, color: personnage.couleur }}>
                         {libelleCategorie(catId)}
                       </span>
                     ))}
                   </div>
-                  <p className="text-[10.5px] text-espresso/55 mt-2 leading-relaxed line-clamp-2">{personnage.description}</p>
-                  <div className="flex flex-wrap gap-1 mt-2.5">
-                    {personnage.tags.slice(0, 3).map((tag) => (
-                      <span key={tag} className="text-[8px] text-espresso/40 bg-[#F0EEEB] px-1.5 py-0.5 rounded-full">#{tag}</span>
-                    ))}
+                  <p className="text-[10.5px] text-espresso/55 mt-2 leading-relaxed line-clamp-2 min-h-[27px]">{personnage.description}</p>
+
+                  <div className="flex flex-col gap-1.5 mt-3">
+                    <BarreProgression label={niveau} valeur={personnage.relation?.confiance ?? 20} couleur={personnage.couleur} icone="🤝" />
+                    <BarreProgression label="Affection" valeur={affection} couleur="#C99A2E" icone="💛" />
                   </div>
+
+                  {personnage.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2.5">
+                      {personnage.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="text-[8px] text-espresso/40 bg-[#F0EEEB] px-1.5 py-0.5 rounded-full">#{tag}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -772,182 +958,205 @@ function PersonnagesScreen() {
         </div>
       </div>
 
+      {/* ================================================================
+          MODALE DE CRÉATION / ÉDITION
+          ================================================================ */}
       {afficherCreateur && personnageEnEdition && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-espresso/60" onClick={fermerCreateur}>
-          <div className="bg-white rounded-3xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto scroll-suave p-5 md:p-7" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '20px' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-espresso/60 backdrop-blur-sm yuna-fade-in" onClick={fermerCreateur}>
+          <div className="yuna-modal-in bg-white rounded-3xl w-full max-w-[640px] max-h-[92vh] overflow-y-auto scroll-suave" onClick={(e) => e.stopPropagation()}>
+
+            {/* En-tête sticky de la modale */}
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md flex items-center justify-between px-5 md:px-7 py-4 border-b border-espresso/8">
+              <h2 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '21px' }}>
                 {modeEdition ? 'Modifier le personnage' : 'Créer un personnage'}
               </h2>
-              <button onClick={fermerCreateur} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200">
+              <button onClick={fermerCreateur} aria-label="Fermer" className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
                 <IconCroix style={{ width: '16px', height: '16px' }} className="text-espresso/50" />
               </button>
             </div>
 
-            <div className="mb-6">
-              <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1.5">Aperçu de la carte</p>
-              <div className="w-full max-w-[200px] bg-white rounded-2xl overflow-hidden border border-espresso/10" style={{ boxShadow: '0 4px 14px rgba(62,39,35,0.08)' }}>
-                <BandeauCarte personnage={personnageEnEdition}><span /></BandeauCarte>
-                <div className="p-3 -mt-7 relative">
-                  <AvatarPersonnage personnage={personnageEnEdition} taille={44} />
-                  <p className="font-semibold text-espresso mt-2 text-[12.5px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-                    {personnageEnEdition.nom || 'Nom du personnage'}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(personnageEnEdition.categories || []).length === 0 && <span className="text-[8px] text-espresso/30 italic">Aucune catégorie choisie</span>}
-                    {(personnageEnEdition.categories || []).map((catId) => (
-                      <span key={catId} className="text-[8px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: `${personnageEnEdition.couleur}18`, color: personnageEnEdition.couleur }}>
-                        {libelleCategorie(catId)}
-                      </span>
-                    ))}
+            <div className="px-5 md:px-7 py-5">
+
+              {/* Aperçu de carte */}
+              <div className="mb-6">
+                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Aperçu de la carte</p>
+                <div className="w-full max-w-[210px] bg-white rounded-2xl overflow-hidden border border-espresso/10" style={{ boxShadow: '0 6px 18px rgba(62,39,35,0.1)' }}>
+                  <BandeauCarte personnage={personnageEnEdition} hauteur="h-20"><span /></BandeauCarte>
+                  <div className="p-3 -mt-7 relative">
+                    <AvatarPersonnage personnage={personnageEnEdition} taille={46} />
+                    <p className="font-semibold text-espresso mt-2 text-[13px]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                      {personnageEnEdition.nom || 'Nom du personnage'}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(personnageEnEdition.categories || []).length === 0 && <span className="text-[8px] text-espresso/30 italic">Aucune catégorie choisie</span>}
+                      {(personnageEnEdition.categories || []).map((catId) => (
+                        <span key={catId} className="text-[8px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: `${personnageEnEdition.couleur}18`, color: personnageEnEdition.couleur }}>
+                          {libelleCategorie(catId)}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-3 mb-5">
-              <AvatarPersonnage personnage={personnageEnEdition} taille={60} />
-              <div>
-                <input ref={inputAvatarRef} type="file" accept="image/*" onChange={gererUploadAvatar} className="hidden" />
-                <button onClick={() => inputAvatarRef.current?.click()} className="text-[10.5px] font-medium text-espresso bg-[#F0EEEB] rounded-full px-3.5 py-1.5 hover:bg-espresso/10 transition-colors duration-200">
-                  Choisir une image
-                </button>
-                <p className="text-[9px] text-espresso/35 mt-1">Cette photo remplace la couleur sur la carte</p>
+              {/* ===== SECTION : Identité ===== */}
+              <p className="text-[10px] font-semibold text-espresso/50 uppercase tracking-wide mb-3 pb-1.5 border-b border-espresso/8">Identité</p>
+
+              <div className="flex items-center gap-3 mb-5">
+                <AvatarPersonnage personnage={personnageEnEdition} taille={64} />
+                <div>
+                  <input ref={inputAvatarRef} type="file" accept="image/*" onChange={gererUploadAvatar} className="hidden" />
+                  <button onClick={() => inputAvatarRef.current?.click()} className="text-[10.5px] font-medium text-espresso bg-[#F0EEEB] rounded-full px-3.5 py-1.5 hover:bg-espresso/10 transition-colors duration-200">
+                    Choisir une image
+                  </button>
+                  <p className="text-[9px] text-espresso/35 mt-1">Cette photo remplace la couleur sur la carte</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Nom du personnage *</label>
+                  <input type="text" value={personnageEnEdition.nom} onChange={(e) => modifierChampCreation('nom', e.target.value)} placeholder="Ex : Sofia"
+                    className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Couleur</label>
+                  <input type="color" value={personnageEnEdition.couleur} onChange={(e) => modifierChampCreation('couleur', e.target.value)} className="w-full h-11 rounded-xl mt-1 cursor-pointer border border-espresso/15" />
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Catégories * (tu peux en choisir plusieurs)</label>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {CATEGORIES_PERSONNAGES.map((cat) => {
+                    const choisie = (personnageEnEdition.categories || []).includes(cat.id)
+                    return (
+                      <button key={cat.id} type="button" onClick={() => toggleCategorieEdition(cat.id)}
+                        className="flex items-center gap-1 rounded-full text-[11.5px] font-medium px-3.5 py-2 transition-all duration-200 border active:scale-95"
+                        style={choisie ? { background: 'var(--color-espresso)', color: 'var(--color-peony)', borderColor: 'var(--color-espresso)' } : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}>
+                        {choisie && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                        {cat.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Traits de caractère (facultatif)</label>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {TRAITS_PERSONNAGE.map((trait) => {
+                    const choisi = (personnageEnEdition.traits || []).includes(trait.id)
+                    return (
+                      <button
+                        key={trait.id}
+                        type="button"
+                        onClick={() => toggleTraitEdition(trait.id)}
+                        title={trait.description}
+                        className="flex items-center gap-1 rounded-full text-[11px] font-medium px-3 py-1.5 transition-all duration-200 border active:scale-95"
+                        style={choisi
+                          ? { background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }
+                          : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}
+                      >
+                        {choisi && <IconCheck style={{ width: '10px', height: '10px' }} />}
+                        {trait.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[9px] text-espresso/35 mt-1.5">Survole un trait pour voir sa description exacte</p>
+              </div>
+
+              <div className="mb-5">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Description courte (affichée sur la carte)</label>
+                <input type="text" value={personnageEnEdition.description} onChange={(e) => modifierChampCreation('description', e.target.value)} placeholder="Une phrase qui donne envie de cliquer"
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors" />
+              </div>
+
+              {/* ===== SECTION : Apparence & contexte ===== */}
+              <p className="text-[10px] font-semibold text-espresso/50 uppercase tracking-wide mb-3 pb-1.5 border-b border-espresso/8">Apparence & contexte</p>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Âge</label>
+                  <input type="text" value={personnageEnEdition.age || ''} onChange={(e) => modifierChampCreation('age', e.target.value)} placeholder="Ex : 21 ans"
+                    className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Occupation</label>
+                  <input type="text" value={personnageEnEdition.occupation || ''} onChange={(e) => modifierChampCreation('occupation', e.target.value)} placeholder="Ex : Étudiant"
+                    className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors" />
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Apparence physique</label>
+                <input type="text" value={personnageEnEdition.apparence || ''} onChange={(e) => modifierChampCreation('apparence', e.target.value)} placeholder="Ex : Cheveux châtains, sourire chaleureux..."
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors" />
+              </div>
+
+              <div className="mb-5">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Religion / spiritualité (facultatif)</label>
+                <input type="text" value={personnageEnEdition.religion || ''} onChange={(e) => modifierChampCreation('religion', e.target.value)}
+                  placeholder="Ex : Musulman pratiquant, utilise des expressions religieuses avec pudeur..."
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors" />
+              </div>
+
+              <div className="mb-5">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Histoire / contexte</label>
+                <textarea value={personnageEnEdition.histoire} onChange={(e) => modifierChampCreation('histoire', e.target.value)} placeholder="Le contexte complet de l'histoire, la situation, la relation avec l'utilisateur..." rows={5}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y leading-relaxed" />
+              </div>
+
+              {/* ===== SECTION : Personnalité ===== */}
+              <p className="text-[10px] font-semibold text-espresso/50 uppercase tracking-wide mb-3 pb-1.5 border-b border-espresso/8">Personnalité</p>
+
+              <div className="mb-5">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Personnalité (comment il/elle doit se comporter)</label>
+                <textarea value={personnageEnEdition.personnalite} onChange={(e) => modifierChampCreation('personnalite', e.target.value)} placeholder="Ex : Timide au début, drôle une fois en confiance, protecteur..." rows={4}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y leading-relaxed" />
+              </div>
+
+              <div className="mb-5">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Style de communication</label>
+                <textarea value={personnageEnEdition.styleCommunication || ''} onChange={(e) => modifierChampCreation('styleCommunication', e.target.value)}
+                  placeholder="Vocabulaire, expressions habituelles, humour, façon de montrer l'affection/la colère/la tristesse..." rows={3}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y leading-relaxed" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                <div>
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses valeurs</label>
+                  <textarea value={personnageEnEdition.valeurs || ''} onChange={(e) => modifierChampCreation('valeurs', e.target.value)} rows={2}
+                    className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses limites (ce qui le/la blesse)</label>
+                  <textarea value={personnageEnEdition.limites || ''} onChange={(e) => modifierChampCreation('limites', e.target.value)} rows={2}
+                    className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y" />
+                </div>
+              </div>
+              <div className="mb-6">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses objectifs personnels</label>
+                <textarea value={personnageEnEdition.objectifsPersonnels || ''} onChange={(e) => modifierChampCreation('objectifsPersonnels', e.target.value)}
+                  placeholder="Ce que le personnage recherche pour lui-même, indépendamment de toi..." rows={2}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y" />
+              </div>
+
+              {/* ===== SECTION : Scène d'ouverture ===== */}
+              <p className="text-[10px] font-semibold text-espresso/50 uppercase tracking-wide mb-3 pb-1.5 border-b border-espresso/8">Scène d'ouverture</p>
+              <div className="mb-2">
+                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Le premier message qui lance l'histoire *</label>
+                <textarea value={personnageEnEdition.sceneOuverture} onChange={(e) => modifierChampCreation('sceneOuverture', e.target.value)} placeholder="Le tout premier message, celui qui lance l'histoire" rows={5}
+                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y leading-relaxed" />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Nom du personnage *</label>
-                <input type="text" value={personnageEnEdition.nom} onChange={(e) => modifierChampCreation('nom', e.target.value)} placeholder="Ex : Sofia"
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
-              </div>
-              <div>
-                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Couleur</label>
-                <input type="color" value={personnageEnEdition.couleur} onChange={(e) => modifierChampCreation('couleur', e.target.value)} className="w-full h-11 rounded-xl mt-1 cursor-pointer border border-espresso/15" />
-              </div>
+            {/* Pied sticky avec bouton d'enregistrement */}
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur-md px-5 md:px-7 py-4 border-t border-espresso/8">
+              <button onClick={validerCreation} className="w-full rounded-xl py-3.5 text-[13px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98]">
+                {modeEdition ? 'Enregistrer les modifications' : 'Créer le personnage'}
+              </button>
             </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Catégories * (tu peux en choisir plusieurs)</label>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {CATEGORIES_PERSONNAGES.map((cat) => {
-                  const choisie = (personnageEnEdition.categories || []).includes(cat.id)
-                  return (
-                    <button key={cat.id} type="button" onClick={() => toggleCategorieEdition(cat.id)}
-                      className="flex items-center gap-1 rounded-full text-[11.5px] font-medium px-3.5 py-2 transition-all duration-200 border"
-                      style={choisie ? { background: 'var(--color-espresso)', color: 'var(--color-peony)', borderColor: 'var(--color-espresso)' } : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}>
-                      {choisie && <IconCheck style={{ width: '10px', height: '10px' }} />}
-                      {cat.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Traits de caractère (facultatif, mais recommandé pour des réponses plus vivantes)</label>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {TRAITS_PERSONNAGE.map((trait) => {
-                  const choisi = (personnageEnEdition.traits || []).includes(trait.id)
-                  return (
-                    <button
-                      key={trait.id}
-                      type="button"
-                      onClick={() => toggleTraitEdition(trait.id)}
-                      title={trait.description}
-                      className="flex items-center gap-1 rounded-full text-[11px] font-medium px-3 py-1.5 transition-all duration-200 border"
-                      style={choisi
-                        ? { background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }
-                        : { background: '#F0EEEB', color: 'rgba(62,39,35,0.6)', borderColor: 'transparent' }}
-                    >
-                      {choisi && <IconCheck style={{ width: '10px', height: '10px' }} />}
-                      {trait.label}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-[9px] text-espresso/35 mt-1.5">Survole un trait pour voir sa description exacte</p>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Description courte (affichée sur la carte)</label>
-              <input type="text" value={personnageEnEdition.description} onChange={(e) => modifierChampCreation('description', e.target.value)} placeholder="Une phrase qui donne envie de cliquer"
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Âge</label>
-                <input type="text" value={personnageEnEdition.age || ''} onChange={(e) => modifierChampCreation('age', e.target.value)} placeholder="Ex : 21 ans"
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
-              </div>
-              <div>
-                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Occupation</label>
-                <input type="text" value={personnageEnEdition.occupation || ''} onChange={(e) => modifierChampCreation('occupation', e.target.value)} placeholder="Ex : Étudiant"
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Apparence physique</label>
-              <input type="text" value={personnageEnEdition.apparence || ''} onChange={(e) => modifierChampCreation('apparence', e.target.value)} placeholder="Ex : Cheveux châtains, sourire chaleureux..."
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Religion / spiritualité (facultatif)</label>
-              <input type="text" value={personnageEnEdition.religion || ''} onChange={(e) => modifierChampCreation('religion', e.target.value)}
-                placeholder="Ex : Musulman pratiquant, utilise des expressions religieuses avec pudeur..."
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso" />
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Histoire / contexte</label>
-              <textarea value={personnageEnEdition.histoire} onChange={(e) => modifierChampCreation('histoire', e.target.value)} placeholder="Le contexte complet de l'histoire, la situation, la relation avec l'utilisateur..." rows={5}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Personnalité (comment il/elle doit se comporter)</label>
-              <textarea value={personnageEnEdition.personnalite} onChange={(e) => modifierChampCreation('personnalite', e.target.value)} placeholder="Ex : Timide au début, drôle une fois en confiance, protecteur..." rows={4}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Style de communication</label>
-              <textarea value={personnageEnEdition.styleCommunication || ''} onChange={(e) => modifierChampCreation('styleCommunication', e.target.value)}
-                placeholder="Vocabulaire, expressions habituelles, humour, façon de montrer l'affection/la colère/la tristesse..." rows={3}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses valeurs</label>
-                <textarea value={personnageEnEdition.valeurs || ''} onChange={(e) => modifierChampCreation('valeurs', e.target.value)} rows={2}
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y" />
-              </div>
-              <div>
-                <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses limites (ce qui le/la blesse)</label>
-                <textarea value={personnageEnEdition.limites || ''} onChange={(e) => modifierChampCreation('limites', e.target.value)} rows={2}
-                  className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y" />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Ses objectifs personnels</label>
-              <textarea value={personnageEnEdition.objectifsPersonnels || ''} onChange={(e) => modifierChampCreation('objectifsPersonnels', e.target.value)}
-                placeholder="Ce que le personnage recherche pour lui-même, indépendamment de toi..." rows={2}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y" />
-            </div>
-
-            <div className="mb-6">
-              <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Scène d'ouverture *</label>
-              <textarea value={personnageEnEdition.sceneOuverture} onChange={(e) => modifierChampCreation('sceneOuverture', e.target.value)} placeholder="Le tout premier message, celui qui lance l'histoire" rows={5}
-                className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-3 text-[13px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso resize-y leading-relaxed" />
-            </div>
-
-            <button onClick={validerCreation} className="w-full rounded-xl py-3.5 text-[13px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]">
-              {modeEdition ? 'Enregistrer les modifications' : 'Créer le personnage'}
-            </button>
           </div>
         </div>
       )}

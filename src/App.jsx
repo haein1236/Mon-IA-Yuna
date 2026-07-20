@@ -20,6 +20,7 @@ import { useHauteurEcran } from './hooks/useHauteurEcran'
 import { chargerSuivi, enregistrerVisite, joursDepuis } from './services/suivi'
 import { genererMessageAccueil } from './services/gemini'
 import { notifierInfo } from './services/notifications'
+import { envoyerNotificationLocale } from './services/notificationsNatives'
 
 function App() {
   const [ecranActuel, setEcranActuel]               = useState('splash')
@@ -34,7 +35,7 @@ function App() {
   // sur le Splash screen en cas de coupure réseau ou mauvaise configuration.
   // ============================================================
   useEffect(() => {
-    // ⬅️ NOUVEAU : filet de sécurité — si Supabase ne répond jamais
+    // ⬅️ Filet de sécurité — si Supabase ne répond jamais
     // (mauvaise config, réseau), on force l'affichage de l'écran de
     // connexion après 6 secondes maximum, au lieu de rester bloqué
     // indéfiniment sur le Splash
@@ -48,7 +49,7 @@ function App() {
       if (user) {
         await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
         await synchroniserAuDemarrage('yuna-parametres', 'parametres')
-        // ⬅️ NOUVEAU : synchronise aussi conversations Yuna + personnages
+        // Synchronise aussi conversations Yuna + personnages
         await synchroniserAuDemarrage('yuna-conversations', 'conversations')
         await synchroniserAuDemarrage('yuna-personnages', 'personnages')
         await synchroniserAuDemarrage('yuna-personnages-conversations', 'personnages_conversations')
@@ -89,6 +90,7 @@ function App() {
   // ACCUEIL INTELLIGENT DE YUNA
   // Se déclenche UNE FOIS à l'ouverture de l'app. Compare la date de
   // la dernière visite à maintenant pour générer un message personnalisé.
+  // Déclenche à la fois la notification In-App et la notification native.
   // ============================================================
   useEffect(() => {
     const verifierAccueil = async () => {
@@ -104,9 +106,12 @@ function App() {
         try {
           const message = await genererMessageAccueil({ joursAbsence, joursJournal, joursGalerie })
           notifierInfo(message)
+          envoyerNotificationLocale('Yuna', message)
         } catch (erreur) {
           console.error('Erreur message accueil :', erreur)
-          notifierInfo(`Tu m'as manqué ! Ça fait ${joursAbsence} jours qu'on ne s'est pas parlé 💭`)
+          const messageSecours = `Tu m'as manqué ! Ça fait ${joursAbsence} jours qu'on ne s'est pas parlé 💭`
+          notifierInfo(messageSecours)
+          envoyerNotificationLocale('Yuna', messageSecours)
         }
       }
     }

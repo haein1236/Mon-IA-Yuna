@@ -39,7 +39,7 @@ const CONFIGURATION_PROVIDERS = {
   cerebras: { 
     url: 'https://api.cerebras.ai/v1/chat/completions', 
     cle: process.env.CEREBRAS_API_KEY, 
-    modele: 'llama3.3-70b',
+    modele: 'llama-3.3-70b',
     temperature: 0.8
   },
 }

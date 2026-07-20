@@ -227,6 +227,20 @@ const IconCamera = (props) => (
     <circle cx="12" cy="14" r="3.2" stroke="currentColor" strokeWidth="1.8" />
   </svg>
 )
+// AJOUT — icônes pour les nouvelles fonctionnalités fun & chill
+const IconCarte = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <rect x="4" y="3.3" width="12" height="17" rx="2.2" transform="rotate(-8 10 11.5)" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="9.6" cy="7.8" r="1.3" fill="currentColor" />
+  </svg>
+)
+const IconRoue = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <path d="M12 3.7V7M12 17v3.3M3.7 12H7M17 12h3.3M6.2 6.2l2.1 2.1M15.7 15.7l2.1 2.1M17.8 6.2l-2.1 2.1M8.3 15.7l-2.1 2.1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+)
 
 const imagesInitiales = [
   // { id: '1', titre: 'Ambiance florale', mood: 'Floral', texte: '"Les matins fleuris appartiennent à celles qui savent les voir."', sous: "Yuna · Aujourd'hui", source: 'yuna', favori: true, bg: 'linear-gradient(135deg, #D4869A, #E8B4C4)', Icone: IconFleur, url: null },
@@ -305,6 +319,44 @@ function formaterDateISO(date) {
   return date.toISOString().slice(0, 10)
 }
 
+// ============================================================
+// AJOUT — CARTE SURPRISE : petit compteur "combien de cartes tirées
+// au total", stocké dans sa propre clé pour ne toucher à rien
+// d'existant (ni au format des images, ni au reste du stockage).
+// ============================================================
+const CLE_CARTES_TIREES = 'yuna-galerie-cartes-tirees'
+function chargerNombreCartesTirees() {
+  const valeur = localStorage.getItem(CLE_CARTES_TIREES)
+  return valeur ? parseInt(valeur, 10) || 0 : 0
+}
+function incrementerCartesTirees() {
+  const nombre = chargerNombreCartesTirees() + 1
+  localStorage.setItem(CLE_CARTES_TIREES, String(nombre))
+  return nombre
+}
+
+// Petites légendes tirées au hasard selon le mood de la photo révélée
+const CAPTIONS_CARTE_SURPRISE = {
+  Floral: ["Un peu de douceur fleurie pour ta journée 🌸", "Ça sentait presque le printemps."],
+  Cosy: ["Ambiance cocooning garantie ☕", "Le genre de photo qui donne envie d'une tisane."],
+  Nuit: ["Une pincée de magie nocturne ✨", "Les nuits ont aussi leur beauté."],
+  Nature: ["Un souffle de nature, juste pour toi 🌿", "Ça fait du bien de respirer un peu."],
+  Illustration: ["Une petite touche d'imaginaire.", "Même les créations ont une âme."],
+  Dreamy: ["On dirait un rêve éveillé 💭", "Douce comme un nuage."],
+  Lifestyle: ["Un instant du quotidien, capturé avec soin.", "Les petites choses comptent aussi."],
+  Aesthetic: ["Juste... joli. Rien à ajouter.", "Un délice pour les yeux."],
+  Calme: ["Une pause, rien qu'une pause 🌙", "Respire, cette photo n'est pas pressée."],
+  Photo: ["Un souvenir qui valait la peine d'être gardé.", "Le hasard a bien choisi, non ?"],
+  _defaut: ["Le hasard a bien choisi, non ? ✨", "Une petite pépite de ta galerie.", "Regarde comme ce moment était joli."],
+}
+function tirerCaption(mood) {
+  const liste = CAPTIONS_CARTE_SURPRISE[mood] || CAPTIONS_CARTE_SURPRISE._defaut
+  return liste[Math.floor(Math.random() * liste.length)]
+}
+
+const EMOJIS_CONFETTI = ['✨', '💕', '🎉', '⭐', '🌸', '💫']
+const MOODS_ROUE_PAR_DEFAUT = ['Floral', 'Cosy', 'Nuit', 'Nature', 'Dreamy', 'Calme']
+
 // GalleryScreen accepte un callback optionnel onOuvrirJournal(dateISO)
 // pour naviguer vers la page Journal à une date précise, si ton
 // système de navigation le permet. Sans ce prop, le lien "Ce jour-là
@@ -347,6 +399,24 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
 
   // ===== UPLOAD =====
   const [uploadEnCours, setUploadEnCours] = useState(false)
+
+  // ===== AJOUT — CARTE SURPRISE (fun & chill) =====
+  const [carteSurpriseOuverte, setCarteSurpriseOuverte] = useState(false)
+  const [carteSurpriseImage, setCarteSurpriseImage] = useState(null)
+  const [carteRetournee, setCarteRetournee] = useState(false)
+  const [captionCarte, setCaptionCarte] = useState('')
+  const [nombreCartesTirees, setNombreCartesTirees] = useState(() => chargerNombreCartesTirees())
+  const carteTimeoutRef = useRef(null)
+
+  // ===== AJOUT — CONFETTIS (petite pluie décorative) =====
+  const [confettis, setConfettis] = useState([])
+
+  // ===== AJOUT — ROUE DES HUMEURS =====
+  const [roueOuverte, setRoueOuverte] = useState(false)
+  const [roueEnRotation, setRoueEnRotation] = useState(false)
+  const [roueAffichage, setRoueAffichage] = useState('')
+  const [roueResultat, setRoueResultat] = useState(null)
+  const roueIntervalRef = useRef(null)
 
   const positionSwipeDebut = useRef(null)
 
@@ -441,6 +511,15 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   enregistrerVisite('galerie')
   }, [])
 
+  // AJOUT — nettoyage des minuteurs de la roue et de la carte
+  // surprise si l'écran est quitté en plein milieu d'une animation
+  useEffect(() => {
+    return () => {
+      clearInterval(roueIntervalRef.current)
+      clearTimeout(carteTimeoutRef.current)
+    }
+  }, [])
+
   const toggleFavori = (id) => {
     const imagesSauvegardees = chargerImages()
     if (imagesSauvegardees.length === 0) {
@@ -458,6 +537,38 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
     } catch (erreur) {
       console.error('Erreur réaction :', erreur)
     }
+  }
+
+  // ============================================================
+  // AJOUT — petite pluie de confettis, déclenchée à un point précis
+  // de l'écran (position du clic). Purement décoratif, se nettoie
+  // tout seul après l'animation.
+  // ============================================================
+  const declencherConfettis = (x, y, quantite = 10) => {
+    const origineX = x ?? window.innerWidth / 2
+    const origineY = y ?? window.innerHeight / 2
+    const nouveaux = Array.from({ length: quantite }).map(() => ({
+      id: Math.random().toString(36).slice(2),
+      x: origineX, y: origineY,
+      dx: (Math.random() - 0.5) * 170,
+      dy: -Math.random() * 150 - 40,
+      rotation: Math.random() * 360,
+      emoji: EMOJIS_CONFETTI[Math.floor(Math.random() * EMOJIS_CONFETTI.length)],
+    }))
+    setConfettis((c) => [...c, ...nouveaux])
+    setTimeout(() => {
+      setConfettis((c) => c.filter((p) => !nouveaux.includes(p)))
+    }, 900)
+  }
+
+  // AJOUT — bascule un favori en lançant une pluie de confettis
+  // uniquement quand on l'ajoute (pas quand on le retire). Ne
+  // remplace pas toggleFavori, s'appelle juste avant/autour.
+  const gererToggleFavori = (e, image) => {
+    e?.stopPropagation?.()
+    const deviendraFavori = !image.favori
+    toggleFavori(image.id)
+    if (deviendraFavori) declencherConfettis(e?.clientX, e?.clientY)
   }
 
   // ============================================================
@@ -643,9 +754,15 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   // MODE PILE (swipe façon cartes)
   // ============================================================
   const pileImage = imagesFiltrees[pileIndex]
-  const pileAimer = () => {
+  const pileAimer = (e) => {
     if (!pileImage) return
+    const deviendraFavori = !pileImage.favori
     toggleFavori(pileImage.id)
+    if (deviendraFavori) {
+      const x = e?.clientX ?? e?.changedTouches?.[0]?.clientX
+      const y = e?.clientY ?? e?.changedTouches?.[0]?.clientY
+      declencherConfettis(x, y)
+    }
     setPileIndex((i) => i + 1)
   }
   const pilePasser = () => setPileIndex((i) => i + 1)
@@ -655,10 +772,82 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   const gererFinSwipePile = (e) => {
     if (pileSwipeDebut.current === null) return
     const distance = e.changedTouches[0].clientX - pileSwipeDebut.current
-    if (distance > 60) pileAimer()
+    if (distance > 60) pileAimer(e)
     else if (distance < -60) pilePasser()
     pileSwipeDebut.current = null
   }
+
+  // ============================================================
+  // AJOUT — CARTE SURPRISE : pioche une photo au hasard dans toute
+  // la galerie, façon carte à jouer qu'on retourne, avec une petite
+  // légende ludique et un compteur de cartes tirées.
+  // ============================================================
+  const tirerCarteSurprise = () => {
+    if (images.length === 0) return
+    const image = images[Math.floor(Math.random() * images.length)]
+    setCarteSurpriseImage(image)
+    setCaptionCarte(tirerCaption(image.mood))
+    setCarteRetournee(false)
+    setCarteSurpriseOuverte(true)
+    clearTimeout(carteTimeoutRef.current)
+    carteTimeoutRef.current = setTimeout(() => {
+      setCarteRetournee(true)
+      declencherConfettis(window.innerWidth / 2, window.innerHeight / 2, 16)
+    }, 550)
+    setNombreCartesTirees(incrementerCartesTirees())
+  }
+  const fermerCarteSurprise = () => {
+    setCarteSurpriseOuverte(false)
+    setCarteSurpriseImage(null)
+    setCarteRetournee(false)
+  }
+  const toggleFavoriDepuisCarte = (e) => {
+    e.stopPropagation()
+    if (!carteSurpriseImage) return
+    const deviendraFavori = !carteSurpriseImage.favori
+    toggleFavori(carteSurpriseImage.id)
+    setCarteSurpriseImage((img) => ({ ...img, favori: deviendraFavori }))
+    if (deviendraFavori) declencherConfettis(e.clientX, e.clientY)
+  }
+
+  // ============================================================
+  // AJOUT — ROUE DES HUMEURS : petit tirage au sort ludique parmi
+  // les moods déjà présents dans la galerie. Le résultat est
+  // simplement injecté dans la recherche existante (qui filtre déjà
+  // par mood), donc aucune logique de filtrage n'est dupliquée.
+  // ============================================================
+  const moodsDisponibles = useMemo(() => {
+    const liste = [...new Set(images.map((i) => i.mood).filter(Boolean))]
+    return liste.length > 0 ? liste : MOODS_ROUE_PAR_DEFAUT
+  }, [images])
+
+  const lancerRoue = () => {
+    if (roueEnRotation) return
+    setRoueOuverte(true)
+    setRoueEnRotation(true)
+    setRoueResultat(null)
+    let compteur = 0
+    const total = 14
+    clearInterval(roueIntervalRef.current)
+    roueIntervalRef.current = setInterval(() => {
+      setRoueAffichage(moodsDisponibles[Math.floor(Math.random() * moodsDisponibles.length)])
+      compteur++
+      if (compteur >= total) {
+        clearInterval(roueIntervalRef.current)
+        const resultatFinal = moodsDisponibles[Math.floor(Math.random() * moodsDisponibles.length)]
+        setRoueAffichage(resultatFinal)
+        setRoueResultat(resultatFinal)
+        setRoueEnRotation(false)
+        declencherConfettis(window.innerWidth / 2, window.innerHeight / 3, 12)
+      }
+    }, 90)
+  }
+  const voirResultatsRoue = () => {
+    if (!roueResultat) return
+    setRecherche(roueResultat)
+    setRoueOuverte(false)
+  }
+  const fermerRoue = () => setRoueOuverte(false)
 
   const totalFavoris = images.filter((i) => i.favori).length
   const totalYuna    = images.filter((i) => i.source === 'yuna').length
@@ -676,7 +865,40 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
       <style>{`
         @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
         .anim-pop { animation: popIn 0.25s ease-out both; }
+
+        @keyframes yunaConfetti {
+          0% { transform: translate(-50%, -50%) translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+          100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.4); opacity: 0; }
+        }
+        .yuna-carte-flip { perspective: 1300px; }
+        .yuna-carte-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.65s cubic-bezier(.22,1,.36,1); }
+        .yuna-carte-inner.retournee { transform: rotateY(180deg); }
+        .yuna-carte-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+        .yuna-carte-face.arriere { transform: rotateY(180deg); }
+
+        @media (prefers-reduced-motion: reduce) {
+          .anim-pop, .yuna-carte-inner, .yuna-carte-inner.retournee { animation: none !important; transition: none !important; }
+        }
       `}</style>
+
+      {/* AJOUT — couche de confettis, au-dessus de tout, jamais cliquable */}
+      {confettis.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-[200]">
+          {confettis.map((p) => (
+            <span
+              key={p.id}
+              className="absolute text-[18px] select-none"
+              style={{
+                left: p.x, top: p.y,
+                animation: 'yunaConfetti 0.9s ease-out forwards',
+                '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rotation}deg`,
+              }}
+            >
+              {p.emoji}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Input caché partagé pour l'ajout de photos depuis la grille */}
       <input ref={inputFichierRef} type="file" accept="image/*" multiple onChange={handleUpload} style={{ display: 'none' }} />
@@ -758,6 +980,32 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
               </div>
               <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: 'var(--color-accent)' }}>Voir →</span>
             </button>
+          )}
+
+          {/* ============================================================
+              AJOUT — OUTILS FUN & CHILL : carte surprise + roue des humeurs
+              ============================================================ */}
+          {images.length > 0 && (
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-6 flex-wrap">
+              <button
+                onClick={tirerCarteSurprise}
+                className="flex items-center gap-2 rounded-full pl-4 pr-3 py-2.5 text-[11.5px] font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                style={{ background: 'linear-gradient(135deg, var(--color-accent), var(--color-peony))', boxShadow: '0 6px 16px rgba(62,39,35,0.15)' }}
+              >
+                <IconCarte style={{ width: '14px', height: '14px' }} />
+                Carte surprise
+                {nombreCartesTirees > 0 && (
+                  <span className="text-[9px] font-bold bg-white/25 rounded-full px-1.5 py-0.5 ml-0.5">{nombreCartesTirees}</span>
+                )}
+              </button>
+              <button
+                onClick={lancerRoue}
+                className="flex items-center gap-2 rounded-full px-4 py-2.5 text-[11.5px] font-semibold border border-espresso/15 text-espresso/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-espresso/30 active:scale-95"
+              >
+                <IconRoue style={{ width: '14px', height: '14px' }} />
+                Roue des humeurs
+              </button>
+            </div>
           )}
 
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6">
@@ -985,7 +1233,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                     )}
 
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleFavori(img.id) }}
+                      onClick={(e) => gererToggleFavori(e, img)}
                       className="absolute top-1.5 right-2 flex items-center justify-center rounded-full transition-transform duration-150 hover:scale-110 active:scale-95"
                       style={{
                         width: '22px', height: '22px',
@@ -1242,6 +1490,104 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
       )}
 
       {/* ============================================================
+          AJOUT — CARTE SURPRISE : modale de tirage aléatoire
+          ============================================================ */}
+      {carteSurpriseOuverte && carteSurpriseImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-espresso/70" onClick={fermerCarteSurprise}>
+          <div className="w-full max-w-[300px]" onClick={(e) => e.stopPropagation()}>
+            <div className="yuna-carte-flip w-full h-[400px]">
+              <div className={`yuna-carte-inner ${carteRetournee ? 'retournee' : ''}`}>
+                {/* Dos de la carte */}
+                <div
+                  className="yuna-carte-face rounded-3xl flex flex-col items-center justify-center gap-3"
+                  style={{ background: 'linear-gradient(135deg, var(--color-espresso), color-mix(in srgb, var(--color-espresso), black 20%))', boxShadow: '0 14px 32px rgba(62,39,35,0.3)' }}
+                >
+                  <span className="text-[46px]">🎴</span>
+                  <p className="text-peony/70 text-[11px] italic" style={{ fontFamily: "'Cormorant Garamond', serif" }}>On retourne la carte...</p>
+                </div>
+                {/* Face avant : la photo révélée */}
+                <div
+                  className="yuna-carte-face arriere rounded-3xl overflow-hidden"
+                  style={{ background: carteSurpriseImage.bg, boxShadow: '0 14px 32px rgba(62,39,35,0.3)' }}
+                >
+                  {carteSurpriseImage.url ? (
+                    <img src={carteSurpriseImage.url} alt={carteSurpriseImage.titre} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {carteSurpriseImage.Icone && <carteSurpriseImage.Icone style={{ width: '48px', height: '48px' }} className="text-cream/90" />}
+                    </div>
+                  )}
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(62,39,35,0.75), transparent 60%)' }} />
+                  <div className="absolute bottom-4 left-4 right-4 text-cream">
+                    <span className="inline-block text-[8px] font-medium uppercase tracking-wide rounded-full px-2 py-0.5 mb-1.5" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                      {carteSurpriseImage.mood}
+                    </span>
+                    <p className="text-[15px] font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{carteSurpriseImage.titre}</p>
+                    <p className="text-[10.5px] italic opacity-80 mt-1">{captionCarte}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {carteRetournee && (
+              <div className="flex items-center gap-2 mt-4 anim-pop">
+                <button
+                  onClick={toggleFavoriDepuisCarte}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2.5 text-[11.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
+                  style={{
+                    background: carteSurpriseImage.favori ? 'var(--color-accent)' : 'white',
+                    color: carteSurpriseImage.favori ? '#fff' : 'var(--color-accent)',
+                    border: '1.5px solid var(--color-accent)',
+                  }}
+                >
+                  <IconCoeur style={{ width: '12px', height: '12px' }} />
+                  {carteSurpriseImage.favori ? 'Favorite' : 'Garder'}
+                </button>
+                <button
+                  onClick={tirerCarteSurprise}
+                  className="flex-1 rounded-full py-2.5 text-[11.5px] font-semibold text-peony transition-all duration-200 hover:-translate-y-0.5"
+                  style={{ background: 'var(--color-espresso)' }}
+                >
+                  Une autre 🎴
+                </button>
+              </div>
+            )}
+            <button onClick={fermerCarteSurprise} className="w-full text-center text-[10.5px] text-white/70 mt-3 underline underline-offset-2">Fermer</button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          AJOUT — ROUE DES HUMEURS : petit tirage au sort ludique
+          ============================================================ */}
+      {roueOuverte && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-espresso/70" onClick={fermerRoue}>
+          <div className="bg-white rounded-3xl w-full max-w-[320px] p-6 text-center anim-pop" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Roue des humeurs</p>
+            <div className="rounded-2xl py-8 mb-4" style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, white)' }}>
+              <p className={`font-semibold text-espresso transition-opacity duration-150 ${roueEnRotation ? 'opacity-60' : 'opacity-100'}`} style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '24px' }}>
+                {roueAffichage || '?'}
+              </p>
+            </div>
+            {roueResultat && !roueEnRotation ? (
+              <div className="flex flex-col gap-2 anim-pop">
+                <p className="text-[11px] text-espresso/55">Et si tu regardais tes photos <strong>{roueResultat}</strong> ce soir ? ✨</p>
+                <button onClick={voirResultatsRoue} className="rounded-full py-2.5 text-[11.5px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5">
+                  Voir ces photos
+                </button>
+                <button onClick={lancerRoue} className="text-[10.5px] text-espresso/45 underline underline-offset-2">Relancer</button>
+              </div>
+            ) : (
+              <button onClick={lancerRoue} disabled={roueEnRotation} className="rounded-full py-2.5 px-6 text-[11.5px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50">
+                {roueEnRotation ? 'Ça tourne...' : 'Lancer la roue'}
+              </button>
+            )}
+            <button onClick={fermerRoue} className="block w-full text-center text-[10px] text-espresso/35 mt-3 underline underline-offset-2">Fermer</button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
           VISIONNEUSE PLEIN ÉCRAN
           ============================================================ */}
       {indexOuvert !== null && imagesFiltrees[indexOuvert] && (() => {
@@ -1464,7 +1810,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                   </div>
 
                   <button
-                    onClick={() => toggleFavori(imageActuelle.id)}
+                    onClick={(e) => gererToggleFavori(e, imageActuelle)}
                     className="flex items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
                     style={{
                       background: imageActuelle.favori ? 'var(--color-accent)' : 'transparent',

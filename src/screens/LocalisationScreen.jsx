@@ -8,10 +8,14 @@ import {
   chargerLieuxFavoris,
   sauvegarderLieuFavori,
   supprimerLieuFavori,
+  modifierLieuFavori,
   calculerDistanceKm,
 } from '../services/localisation'
 import { notifierErreur, notifierSucces } from '../services/notifications'
 
+// ============================================================
+// ICÔNES
+// ============================================================
 const IconPin = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
     <path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
@@ -59,12 +63,55 @@ const IconTrash = (props) => (
     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="1.7" />
   </svg>
 )
+const IconEdit = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M12 20h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+  </svg>
+)
+const IconCheck = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M4 12l5.5 5.5L20 6" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+const IconX = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M5 5l14 14M19 5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
+const IconVitesse = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M12 21a9 9 0 1 1 9-9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M12 12l4.5-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+)
+const IconMontagne = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M3 19l6.5-11L14 15l2.5-3.5L21 19H3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+  </svg>
+)
+const IconClock = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M12 8v4.5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+)
 
-// Retourne un badge {texte, couleur} selon la précision GPS en mètres
+// ============================================================
+// PETITS UTILITAIRES
+// ============================================================
+
+// Vibration légère pour renforcer les actions, quand le navigateur
+// le permet (silencieusement ignoré sinon — jamais bloquant)
+function vibrer(duree = 8) {
+  if (navigator.vibrate) navigator.vibrate(duree)
+}
+
+// Retourne un badge {texte, couleur, emoji} selon la précision GPS en mètres
 function evaluerPrecision(metres) {
-  if (metres <= 20) return { texte: 'Excellente', couleur: '#3E8E5A' }
-  if (metres <= 100) return { texte: 'Bonne', couleur: '#C99A2E' }
-  return { texte: 'Faible', couleur: '#C6564B' }
+  if (metres <= 20) return { texte: 'Excellente', couleur: '#3E8E5A', emoji: '🟢' }
+  if (metres <= 100) return { texte: 'Bonne', couleur: '#C99A2E', emoji: '🟡' }
+  return { texte: 'Faible', couleur: '#C6564B', emoji: '🔴' }
 }
 
 function tempsEcoule(dateISO) {
@@ -76,13 +123,106 @@ function tempsEcoule(dateISO) {
   return `il y a ${Math.round(diffH / 24)} j`
 }
 
-// Petite carte d'info réutilisable, pour garder un rythme visuel cohérent
-function CarteInfo({ label, children, className = '' }) {
+function formaterDistance(km) {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`
+}
+
+// ============================================================
+// STYLES D'ANIMATION PARTAGÉS
+// Regroupés ici une seule fois (au lieu de classes Tailwind
+// personnalisées) pour ne pas toucher à la config Tailwind.
+// Respecte prefers-reduced-motion.
+// ============================================================
+function StylesAnimations() {
   return (
-    <div className={`bg-white rounded-2xl border border-espresso/10 p-4 ${className}`}>
-      <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">{label}</p>
+    <style>{`
+      @keyframes yunaFadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes yunaSlideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+      @keyframes yunaScaleIn { from { opacity: 0; transform: scale(.94) } to { opacity: 1; transform: scale(1) } }
+      @keyframes yunaBadgeDrop { from { opacity: 0; transform: translateY(-8px) scale(.92) } to { opacity: 1; transform: translateY(0) scale(1) } }
+      @keyframes yunaShimmer { 0% { background-position: -300% 0 } 100% { background-position: 300% 0 } }
+      @keyframes yunaRipple { to { transform: scale(4); opacity: 0 } }
+      @keyframes yunaPulseSoft { 0%, 100% { opacity: 1 } 50% { opacity: .5 } }
+      @keyframes yunaPulseRing { 0% { box-shadow: 0 0 0 0 rgba(62,79,58,.18) } 100% { box-shadow: 0 0 0 10px rgba(62,79,58,0) } }
+
+      .yuna-fade-in { animation: yunaFadeIn .4s ease both; }
+      .yuna-slide-up { animation: yunaSlideUp .38s cubic-bezier(.22,1,.36,1) both; }
+      .yuna-scale-in { animation: yunaScaleIn .3s cubic-bezier(.22,1,.36,1) both; }
+      .yuna-badge-drop { animation: yunaBadgeDrop .35s cubic-bezier(.22,1,.36,1) both; }
+      .yuna-shimmer { background-image: linear-gradient(90deg, #ECE7DE 25%, #F6F3ED 37%, #ECE7DE 63%); background-size: 400% 100%; animation: yunaShimmer 1.6s ease infinite; }
+      .yuna-pulse-soft { animation: yunaPulseSoft 2.2s ease-in-out infinite; }
+      .yuna-pulse-ring { animation: yunaPulseRing 1.6s ease-out infinite; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .yuna-fade-in, .yuna-slide-up, .yuna-scale-in, .yuna-badge-drop, .yuna-shimmer, .yuna-pulse-soft, .yuna-pulse-ring {
+          animation: none !important;
+        }
+      }
+    `}</style>
+  )
+}
+
+// Carte d'information réutilisable — garde un rythme visuel cohérent
+function CarteInfo({ icon: Icon, iconColor = '#6B5B4B', label, className = '', children }) {
+  return (
+    <div className={`yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        {Icon && (
+          <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: iconColor + '1A' }}>
+            <Icon style={{ width: '11px', height: '11px', color: iconColor }} />
+          </div>
+        )}
+        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">{label}</p>
+      </div>
       {children}
     </div>
+  )
+}
+
+// Bouton d'action rapide — carte interactive avec effet ripple et
+// légère élévation, au lieu d'un simple bouton plat
+function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
+  const [ripples, setRipples] = useState([])
+  const ref = useRef(null)
+
+  const declencherRipple = (e) => {
+    const bouton = ref.current
+    if (!bouton) return
+    const rect = bouton.getBoundingClientRect()
+    const taille = Math.max(rect.width, rect.height) * 1.4
+    const x = e.clientX - rect.left - taille / 2
+    const y = e.clientY - rect.top - taille / 2
+    const id = Date.now() + Math.random()
+    setRipples((r) => [...r, { id, x, y, taille }])
+    setTimeout(() => setRipples((r) => r.filter((rp) => rp.id !== id)), 550)
+  }
+
+  const gerer = (e) => {
+    declencherRipple(e)
+    vibrer()
+    onClick()
+  }
+
+  return (
+    <button
+      ref={ref}
+      onClick={gerer}
+      aria-label={ariaLabel || label}
+      title={label}
+      className="relative overflow-hidden flex flex-col items-center gap-2 bg-white rounded-2xl border border-espresso/10 py-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+    >
+      {ripples.map((r) => (
+        <span
+          key={r.id}
+          className="absolute rounded-full bg-espresso/10 pointer-events-none"
+          style={{ left: r.x, top: r.y, width: r.taille, height: r.taille, animation: 'yunaRipple .55s ease-out forwards' }}
+        />
+      ))}
+      <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: accent + '1A' }}>
+        <Icon style={{ width: '16px', height: '16px', color: accent }} />
+      </div>
+      <span className="text-[10px] font-medium text-espresso/60">{label}</span>
+    </button>
   )
 }
 
@@ -100,6 +240,11 @@ function LocalisationScreen() {
   const [lieuxFavoris, setLieuxFavoris] = useState([])
   const [nomNouveauFavori, setNomNouveauFavori] = useState('')
   const [afficherFormFavori, setAfficherFormFavori] = useState(false)
+
+  // Édition d'un favori existant (renommer)
+  const [favoriEnEdition, setFavoriEnEdition] = useState(null) // { id, nom }
+  // Petite animation de sortie avant suppression définitive
+  const [favoriEnSuppression, setFavoriEnSuppression] = useState(null)
 
   const [actualisationAuto, setActualisationAuto] = useState(false)
   const intervalleRef = useRef(null)
@@ -153,6 +298,11 @@ function LocalisationScreen() {
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${centre.longitude - 0.01}%2C${centre.latitude - 0.01}%2C${centre.longitude + 0.01}%2C${centre.latitude + 0.01}&layer=mapnik&marker=${centre.latitude}%2C${centre.longitude}`
     : null
 
+  const centrerSur = (point) => {
+    vibrer()
+    setCentreCarte(point)
+  }
+
   const copierCoordonnees = async () => {
     if (!position) return
     const texte = `${position.latitude.toFixed(5)}, ${position.longitude.toFixed(5)}`
@@ -180,7 +330,34 @@ function LocalisationScreen() {
   }
 
   const ouvrirItineraire = (lat, lon) => {
+    vibrer()
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`, '_blank')
+  }
+
+  // AJOUT — copier / partager l'adresse lisible (mêmes patterns que
+  // pour les coordonnées, juste appliqués au texte de l'adresse)
+  const copierAdresse = async () => {
+    if (!adresse) return
+    try {
+      await navigator.clipboard.writeText(adresse)
+      notifierSucces('Adresse copiée 📋')
+    } catch {
+      notifierErreur("Impossible de copier l'adresse automatiquement.")
+    }
+  }
+
+  const partagerAdresse = async () => {
+    if (!adresse) return
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Mon adresse', text: adresse })
+      } catch {
+        // annulé par l'utilisateur
+      }
+    } else {
+      await navigator.clipboard.writeText(adresse)
+      notifierSucces('Adresse copiée 📋')
+    }
   }
 
   const enregistrerFavori = () => {
@@ -193,29 +370,76 @@ function LocalisationScreen() {
     setLieuxFavoris(lieux)
     setNomNouveauFavori('')
     setAfficherFormFavori(false)
+    vibrer(12)
     notifierSucces(`"${nomNouveauFavori.trim()}" ajouté à tes lieux favoris ⭐`)
   }
 
+  // Suppression avec petite animation de sortie avant de retirer
+  // réellement l'élément de la liste
   const retirerFavori = (e, id) => {
     e.stopPropagation()
-    setLieuxFavoris(supprimerLieuFavori(id))
+    setFavoriEnSuppression(id)
+    vibrer(10)
+    setTimeout(() => {
+      setLieuxFavoris(supprimerLieuFavori(id))
+      setFavoriEnSuppression(null)
+      notifierSucces('Lieu favori supprimé')
+    }, 220)
+  }
+
+  const commencerEdition = (e, lieu) => {
+    e.stopPropagation()
+    setFavoriEnEdition({ id: lieu.id, nom: lieu.nom })
+  }
+
+  const annulerEdition = (e) => {
+    e?.stopPropagation()
+    setFavoriEnEdition(null)
+  }
+
+  const confirmerEdition = (e) => {
+    e.stopPropagation()
+    if (!favoriEnEdition?.nom.trim()) return
+    setLieuxFavoris(modifierLieuFavori(favoriEnEdition.id, favoriEnEdition.nom.trim()))
+    setFavoriEnEdition(null)
+    notifierSucces('Lieu favori renommé')
   }
 
   const precisionInfo = position ? evaluerPrecision(position.precision) : null
 
+  // Libellé du badge flottant affiché au-dessus de la carte
+  const labelCarte = (() => {
+    if (!centreCarte || !position) return 'Position actuelle'
+    if (centreCarte.latitude === position.latitude && centreCarte.longitude === position.longitude) return 'Position actuelle'
+    const favoriCorrespondant = lieuxFavoris.find(
+      (l) => l.latitude === centreCarte.latitude && l.longitude === centreCarte.longitude
+    )
+    if (favoriCorrespondant) return favoriCorrespondant.nom
+    return "Point de l'historique"
+  })()
+
+  // Sous-titre dynamique du header
+  const sousTitre = (() => {
+    if (chargement && !position) return 'Recherche de ta position en cours…'
+    if (adresse) return `Actuellement près de ${adresse.split(',').slice(0, 2).join(',')}`
+    return 'Retrouve facilement tes positions et tes lieux favoris.'
+  })()
+
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
+      <StylesAnimations />
       <div className="px-4 sm:px-6 md:px-8 py-6 md:py-8 max-w-[1100px] mx-auto">
 
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-full bg-espresso/8 flex items-center justify-center flex-shrink-0">
-            <IconPin style={{ width: '17px', height: '17px' }} className="text-espresso" />
+        {/* ===== EN-TÊTE ===== */}
+        <div className="flex items-center gap-3 mb-2 yuna-fade-in">
+          <div className="w-12 h-12 rounded-2xl bg-espresso/8 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <IconPin style={{ width: '20px', height: '20px' }} className="text-espresso" />
           </div>
-          <div>
-            <h1 className="text-espresso font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px' }}>
-              Ma position
+          <div className="min-w-0">
+            <h1 className="text-espresso font-semibold flex items-center gap-1.5" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '24px' }}>
+              📍 Localisation
             </h1>
-            <p className="text-[10.5px] text-espresso/45">Ta localisation, en direct sur la carte</p>
+            <p className="text-[10.5px] text-espresso/45 truncate">{sousTitre}</p>
           </div>
         </div>
 
@@ -230,7 +454,7 @@ function LocalisationScreen() {
         </p>
 
         {erreur && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5">
+          <div role="alert" className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 yuna-scale-in">
             <p className="text-[11.5px] text-red-600">{erreur}</p>
           </div>
         )}
@@ -239,75 +463,96 @@ function LocalisationScreen() {
           <div className="lg:grid lg:grid-cols-[1.45fr_1fr] lg:gap-5 lg:items-start">
             {/* ===== COLONNE GAUCHE : carte + actions rapides (fixe au scroll sur desktop) ===== */}
             <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-3 lg:mb-0">
-              <div className="bg-white rounded-2xl border border-espresso/10 overflow-hidden relative">
+              <div className="yuna-scale-in bg-white rounded-3xl border border-espresso/10 overflow-hidden relative shadow-md">
                 <iframe
+                  key={urlCarte}
                   title="Carte de ma position"
                   src={urlCarte}
-                  className="w-full h-[280px] sm:h-[340px] lg:h-[440px]"
+                  className="w-full h-[280px] sm:h-[340px] lg:h-[440px] yuna-fade-in"
                   style={{ border: 'none' }}
                   loading="lazy"
                 />
-                {centreCarte && position && centreCarte !== position && (centreCarte.latitude !== position.latitude || centreCarte.longitude !== position.longitude) && (
+
+                {/* Badge flottant : indique ce qui est actuellement centré */}
+                <div key={labelCarte + centreCarte?.latitude} className="absolute top-3 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full shadow-md yuna-badge-drop">
+                  <IconPin style={{ width: '10px', height: '10px' }} className="text-espresso/70 flex-shrink-0" />
+                  <span className="text-[10.5px] font-semibold text-espresso truncate max-w-[140px]">{labelCarte}</span>
+                </div>
+
+                {chargement && (
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-full shadow-md yuna-fade-in">
+                    <IconRefresh style={{ width: '11px', height: '11px' }} className="text-espresso/60 animate-spin" />
+                    <span className="text-[9.5px] text-espresso/55">Mise à jour…</span>
+                  </div>
+                )}
+
+                {centreCarte && position && (centreCarte.latitude !== position.latitude || centreCarte.longitude !== position.longitude) && (
                   <button
-                    onClick={() => setCentreCarte(position)}
-                    className="absolute top-3 right-3 text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                    onClick={() => centrerSur(position)}
+                    className="absolute bottom-3 right-3 text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow-md hover:bg-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
                   >
                     Revenir à ma position
                   </button>
                 )}
               </div>
 
-              {/* Actions rapides */}
+              {/* Actions rapides — cartes interactives avec ripple */}
               <div className="grid grid-cols-3 gap-2">
-                <button onClick={copierCoordonnees} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 hover:border-espresso/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
-                  <IconCopier style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
-                  <span className="text-[9.5px] text-espresso/55">Copier</span>
-                </button>
-                <button onClick={partagerPosition} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 hover:border-espresso/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
-                  <IconPartager style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
-                  <span className="text-[9.5px] text-espresso/55">Partager</span>
-                </button>
-                <button onClick={() => ouvrirItineraire(position.latitude, position.longitude)} className="flex flex-col items-center gap-1.5 bg-white rounded-xl border border-espresso/10 py-3 hover:bg-espresso/5 hover:border-espresso/20 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40">
-                  <IconItineraire style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
-                  <span className="text-[9.5px] text-espresso/55">Itinéraire</span>
-                </button>
+                <BoutonAction icon={IconCopier} label="Copier" ariaLabel="Copier mes coordonnées" onClick={copierCoordonnees} accent="#6B5B4B" />
+                <BoutonAction icon={IconPartager} label="Partager" ariaLabel="Partager ma position" onClick={partagerPosition} accent="#3E6E8E" />
+                <BoutonAction icon={IconItineraire} label="Itinéraire" ariaLabel="Lancer un itinéraire vers ma position" onClick={() => ouvrirItineraire(position.latitude, position.longitude)} accent="#3E8E5A" />
               </div>
 
               {/* Sur desktop, le bouton d'actualisation reste avec la carte, bien visible sans scroller */}
               <div className="hidden lg:block">
                 <button
-                  onClick={() => localiser()}
+                  onClick={() => { vibrer(10); localiser() }}
                   disabled={chargement}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                  aria-label="Actualiser ma position"
+                  className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${chargement ? 'yuna-pulse-ring' : ''}`}
                 >
                   <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
                   {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
                 </button>
-                <label className="flex items-center justify-center gap-2 mt-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={actualisationAuto}
-                    onChange={(e) => setActualisationAuto(e.target.checked)}
-                    className="accent-espresso"
-                  />
-                  <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
-                </label>
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={actualisationAuto}
+                      onChange={(e) => setActualisationAuto(e.target.checked)}
+                      className="accent-espresso"
+                    />
+                    <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
+                  </label>
+                  {actualisationAuto && (
+                    <span className="flex items-center gap-1 text-[9.5px] font-semibold text-[#3E8E5A] yuna-fade-in">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#3E8E5A] yuna-pulse-soft" />
+                      En direct
+                    </span>
+                  )}
+                </div>
+                {!chargement && (
+                  <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
+                )}
               </div>
             </div>
 
             {/* ===== COLONNE DROITE : informations détaillées ===== */}
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3">
-                <CarteInfo label="Coordonnées">
+                <CarteInfo icon={IconPin} iconColor="#6B5B4B" label="Coordonnées">
                   <p className="text-[13px] text-espresso font-medium tabular-nums">
                     {position.latitude.toFixed(5)}, {position.longitude.toFixed(5)}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: precisionInfo.couleur }} />
-                    <p className="text-[10px] text-espresso/45">Précision {precisionInfo.texte.toLowerCase()} (~{position.precision}m)</p>
-                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 text-[9.5px] font-semibold px-2 py-0.5 rounded-full mt-2"
+                    style={{ background: precisionInfo.couleur + '1A', color: precisionInfo.couleur }}
+                  >
+                    <span className={precisionInfo.texte === 'Excellente' ? 'yuna-pulse-soft' : ''}>{precisionInfo.emoji}</span>
+                    {precisionInfo.texte} (~{position.precision} m)
+                  </span>
                 </CarteInfo>
-                <CarteInfo label="Dernière mise à jour">
+                <CarteInfo icon={IconClock} iconColor="#6B5B4B" label="Dernière mise à jour">
                   <p className="text-[13px] text-espresso font-medium">
                     {new Date(position.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -318,12 +563,12 @@ function LocalisationScreen() {
               {(position.vitesse != null || position.altitude != null) && (
                 <div className="grid grid-cols-2 gap-3">
                   {position.vitesse != null && (
-                    <CarteInfo label="Vitesse">
+                    <CarteInfo icon={IconVitesse} iconColor="#3E6E8E" label="Vitesse">
                       <p className="text-[13px] text-espresso font-medium">{position.vitesse} km/h</p>
                     </CarteInfo>
                   )}
                   {position.altitude != null && (
-                    <CarteInfo label="Altitude">
+                    <CarteInfo icon={IconMontagne} iconColor="#7A5EA8" label="Altitude">
                       <p className="text-[13px] text-espresso font-medium">{position.altitude} m</p>
                     </CarteInfo>
                   )}
@@ -331,13 +576,21 @@ function LocalisationScreen() {
               )}
 
               {adresse && (
-                <CarteInfo label="Adresse approximative">
-                  <p className="text-[12.5px] text-espresso leading-relaxed">{adresse}</p>
+                <CarteInfo icon={IconPin} iconColor="#6B5B4B" label="Adresse approximative">
+                  <p className="text-[12.5px] text-espresso leading-relaxed mb-2.5">{adresse}</p>
+                  <div className="flex gap-3">
+                    <button onClick={copierAdresse} className="text-[10px] font-semibold text-espresso/55 hover:text-espresso underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 rounded transition-colors">
+                      Copier
+                    </button>
+                    <button onClick={partagerAdresse} className="text-[10px] font-semibold text-espresso/55 hover:text-espresso underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 rounded transition-colors">
+                      Partager
+                    </button>
+                  </div>
                 </CarteInfo>
               )}
 
               {/* ===== LIEUX FAVORIS ===== */}
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4">
+              <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Lieux favoris</p>
                   <button
@@ -349,15 +602,17 @@ function LocalisationScreen() {
                 </div>
 
                 {afficherFormFavori && (
-                  <div className="flex gap-2 mb-3">
+                  <div className="flex gap-2 mb-3 yuna-scale-in">
                     <input
                       value={nomNouveauFavori}
                       onChange={(e) => setNomNouveauFavori(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && enregistrerFavori()}
                       placeholder="Ex : Maison, Travail..."
-                      className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso"
+                      aria-label="Nom du nouveau lieu favori"
+                      autoFocus
+                      className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso transition-colors"
                     />
-                    <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 text-[11px] font-semibold text-peony bg-espresso focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
+                    <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 text-[11px] font-semibold text-peony bg-espresso hover:-translate-y-0.5 active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
                       Ajouter
                     </button>
                   </div>
@@ -369,27 +624,67 @@ function LocalisationScreen() {
                   <div className="flex flex-col gap-1.5">
                     {lieuxFavoris.map((lieu) => {
                       const distance = calculerDistanceKm(position.latitude, position.longitude, lieu.latitude, lieu.longitude)
+                      const enEdition = favoriEnEdition?.id === lieu.id
+                      const enSuppression = favoriEnSuppression === lieu.id
                       return (
                         <div
                           key={lieu.id}
-                          onClick={() => setCentreCarte(lieu)}
-                          className="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:bg-[#F0EEEB] transition-colors duration-150 cursor-pointer"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => !enEdition && centrerSur(lieu)}
+                          onKeyDown={(e) => { if (!enEdition && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); centrerSur(lieu) } }}
+                          className={`flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 ${enSuppression ? 'opacity-0 scale-95 -translate-x-2' : 'opacity-100 scale-100'} ${enEdition ? 'bg-[#F0EEEB]' : 'hover:bg-[#F0EEEB]'}`}
                         >
-                          <IconEtoile style={{ width: '13px', height: '13px' }} className="text-espresso/40 flex-shrink-0" fill="currentColor" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11.5px] font-medium text-espresso truncate">{lieu.nom}</p>
-                            <p className="text-[9.5px] text-espresso/45">{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`} de toi</p>
+                          <div className="w-7 h-7 rounded-full bg-[#F4EBC8] flex items-center justify-center flex-shrink-0">
+                            <IconEtoile style={{ width: '12px', height: '12px' }} className="text-[#C99A2E]" fill="currentColor" />
                           </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); ouvrirItineraire(lieu.latitude, lieu.longitude) }}
-                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
-                            title="Itinéraire"
-                          >
-                            <IconItineraire style={{ width: '12px', height: '12px' }} className="text-espresso/50" />
-                          </button>
-                          <button onClick={(e) => retirerFavori(e, lieu.id)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Supprimer">
-                            <IconTrash style={{ width: '12px', height: '12px' }} className="text-espresso/40" />
-                          </button>
+
+                          {enEdition ? (
+                            <input
+                              autoFocus
+                              value={favoriEnEdition.nom}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setFavoriEnEdition((f) => ({ ...f, nom: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === 'Enter') confirmerEdition(e); if (e.key === 'Escape') annulerEdition(e) }}
+                              aria-label="Renommer ce lieu favori"
+                              className="flex-1 min-w-0 bg-white rounded-lg px-2 py-1 text-[11.5px] text-espresso outline-none border border-espresso/20 focus:border-espresso"
+                            />
+                          ) : (
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11.5px] font-medium text-espresso truncate">{lieu.nom}</p>
+                              <p className="text-[9.5px] text-espresso/45">
+                                {formaterDistance(distance)} de toi · ajouté {tempsEcoule(new Date(lieu.id).toISOString())}
+                              </p>
+                            </div>
+                          )}
+
+                          {enEdition ? (
+                            <>
+                              <button onClick={confirmerEdition} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Valider" aria-label="Valider le renommage">
+                                <IconCheck style={{ width: '13px', height: '13px' }} className="text-[#3E8E5A]" />
+                              </button>
+                              <button onClick={annulerEdition} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Annuler" aria-label="Annuler le renommage">
+                                <IconX style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); vibrer(); ouvrirItineraire(lieu.latitude, lieu.longitude) }}
+                                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                                title="Itinéraire"
+                                aria-label={`Itinéraire vers ${lieu.nom}`}
+                              >
+                                <IconItineraire style={{ width: '12px', height: '12px' }} className="text-espresso/50" />
+                              </button>
+                              <button onClick={(e) => commencerEdition(e, lieu)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Modifier" aria-label={`Renommer ${lieu.nom}`}>
+                                <IconEdit style={{ width: '12px', height: '12px' }} className="text-espresso/45" />
+                              </button>
+                              <button onClick={(e) => retirerFavori(e, lieu.id)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Supprimer" aria-label={`Supprimer ${lieu.nom}`}>
+                                <IconTrash style={{ width: '12px', height: '12px' }} className="text-espresso/40" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )
                     })}
@@ -397,34 +692,64 @@ function LocalisationScreen() {
                 )}
               </div>
 
-              {/* ===== HISTORIQUE ===== */}
+              {/* ===== HISTORIQUE — présenté comme une timeline ===== */}
               {historique.length > 1 && (
-                <div className="bg-white rounded-2xl border border-espresso/10 p-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
                     <IconHistorique style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
                     <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Historique des positions</p>
                   </div>
-                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto scroll-suave">
-                    {historique.slice(0, 15).map((pos, i) => (
-                      <button
-                        key={pos.date + i}
-                        onClick={() => setCentreCarte(pos)}
-                        className="flex items-center justify-between text-left rounded-lg px-2.5 py-1.5 hover:bg-[#F0EEEB] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
-                      >
-                        <span className="text-[10.5px] text-espresso/60 tabular-nums">{pos.latitude.toFixed(4)}, {pos.longitude.toFixed(4)}</span>
-                        <span className="text-[9.5px] text-espresso/35 flex-shrink-0 ml-2">{tempsEcoule(pos.date)}</span>
-                      </button>
-                    ))}
+                  <div className="relative max-h-56 overflow-y-auto scroll-suave pl-1">
+                    <div className="absolute left-[10px] top-2 bottom-2 w-px bg-espresso/10" />
+                    {historique.slice(0, 15).map((pos, i) => {
+                      const distance = calculerDistanceKm(position.latitude, position.longitude, pos.latitude, pos.longitude)
+                      return (
+                        <button
+                          key={pos.date + i}
+                          onClick={() => centrerSur(pos)}
+                          className="relative w-full text-left flex items-start py-1.5 group focus-visible:outline-none"
+                        >
+                          <span className="relative z-10 mt-1.5 w-3 h-3 rounded-full bg-white border-2 border-espresso/25 group-hover:border-espresso/70 transition-colors duration-150 flex-shrink-0" />
+                          <div className="flex-1 min-w-0 ml-3 rounded-lg px-2 py-1 group-hover:bg-[#F0EEEB] transition-colors duration-150 group-focus-visible:ring-2 group-focus-visible:ring-espresso/40">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10.5px] font-medium text-espresso/70 flex items-center gap-1">
+                                📍 {new Date(pos.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span className="text-[9.5px] text-espresso/35 flex-shrink-0">{tempsEcoule(pos.date)}</span>
+                            </div>
+                            <p className="text-[9.5px] text-espresso/45 mt-0.5">
+                              {distance === 0 ? 'Position actuelle' : `${formaterDistance(distance)} de ta position actuelle`}
+                            </p>
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          !chargement && !erreur && (
-            <p className="text-center text-espresso/40 italic py-16 text-[12px]">
-              Aucune position enregistrée pour l'instant
-            </p>
+          // ===== ÉCRAN DE CHARGEMENT (skeleton) — remplace le simple texte =====
+          chargement ? (
+            <div className="flex flex-col gap-3 yuna-fade-in" aria-busy="true" aria-label="Recherche de ta position en cours">
+              <div className="yuna-shimmer rounded-3xl h-[280px] sm:h-[340px]" />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="yuna-shimmer rounded-2xl h-20" />
+                <div className="yuna-shimmer rounded-2xl h-20" />
+                <div className="yuna-shimmer rounded-2xl h-20" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="yuna-shimmer rounded-2xl h-16" />
+                <div className="yuna-shimmer rounded-2xl h-16" />
+              </div>
+            </div>
+          ) : (
+            !erreur && (
+              <p className="text-center text-espresso/40 italic py-16 text-[12px]">
+                Aucune position enregistrée pour l'instant
+              </p>
+            )
           )
         )}
 
@@ -432,23 +757,35 @@ function LocalisationScreen() {
         <div className={position ? 'lg:hidden mt-5' : 'mt-5'}>
           <div className="max-w-[420px] mx-auto lg:max-w-none">
             <button
-              onClick={() => localiser()}
+              onClick={() => { vibrer(10); localiser() }}
               disabled={chargement}
-              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              aria-label="Actualiser ma position"
+              className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${chargement ? 'yuna-pulse-ring' : ''}`}
             >
               <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
               {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
             </button>
 
-            <label className="flex items-center justify-center gap-2 mt-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={actualisationAuto}
-                onChange={(e) => setActualisationAuto(e.target.checked)}
-                className="accent-espresso"
-              />
-              <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
-            </label>
+            <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={actualisationAuto}
+                  onChange={(e) => setActualisationAuto(e.target.checked)}
+                  className="accent-espresso"
+                />
+                <span className="text-[10.5px] text-espresso/50">Actualiser automatiquement toutes les 2 minutes</span>
+              </label>
+              {actualisationAuto && (
+                <span className="flex items-center gap-1 text-[9.5px] font-semibold text-[#3E8E5A] yuna-fade-in">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3E8E5A] yuna-pulse-soft" />
+                  En direct
+                </span>
+              )}
+            </div>
+            {position && !chargement && (
+              <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
+            )}
           </div>
         </div>
       </div>
