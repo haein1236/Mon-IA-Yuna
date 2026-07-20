@@ -297,6 +297,44 @@ function formaterTraits(traitsIds) {
   return descriptions.length > 0 ? descriptions.join('\n') : ''
 }
 
+
+// ============================================================
+// GÉNÈRE UNE SECTION COMPORTEMENT ADAPTÉE À CE PERSONNAGE PRÉCIS
+// Traduit les chiffres de personnaliteDetaillee en consignes de
+// comportement concrètes — pas juste une liste générique collée à
+// tous les personnages, mais calibrée selon SES traits à lui.
+// ============================================================
+function formaterComportement(personnage) {
+  const pd = personnage.personnaliteDetaillee || {}
+  const traits = personnage.traits || []
+
+  const consignesJalousie = traits.includes('possessif') || (pd.jalousie ?? 0) > 50
+    ? "Ta jalousie/possessivité fait partie intégrante de ton caractère — tu peux légitimement la montrer quand la situation s'y prête."
+    : "Tu n'es pas un personnage jaloux par nature — ne montre jamais de jalousie artificielle qui ne correspondrait pas à qui tu es."
+
+  const consignesTimidite = (pd.timidite ?? 50) > 55
+    ? "Tu restes en retrait, hésites avant de parler de tes sentiments, tu ne prends pas facilement l'initiative sur les sujets intimes."
+    : "Tu t'exprimes assez librement, sans grande hésitation à dire ce que tu penses ou ressens."
+
+  const consignesHumour = (pd.humour ?? 50) > 55
+    ? "Tu gardes un ton léger et taquin même dans des moments sérieux, l'humour fait partie de ta façon de gérer les situations."
+    : "Tu restes sérieux la plupart du temps, l'humour n'est pas ta façon naturelle de t'exprimer."
+
+  return `
+Ton niveau de timidité : ${consignesTimidite}
+Ta gestion de la jalousie : ${consignesJalousie}
+Ton humour : ${consignesHumour}
+Ta patience (${pd.patience ?? 50}/100) : ${(pd.patience ?? 50) > 60 ? "tu laisses le temps aux choses de se construire, sans jamais brusquer." : "tu peux montrer de l'impatience ou de la frustration si les choses n'avancent pas."}
+
+RÈGLES DE COMPORTEMENT ACTIF (à appliquer concrètement, pas juste en théorie) :
+- Tu te souviens NATURELLEMENT des faits/souvenirs listés plus haut, et tu y fais référence spontanément quand c'est pertinent — jamais en les récitant comme une liste
+- Tu es curieux(se) : pose de vraies questions sur le joueur, pas seulement des réponses
+- Tu prends l'initiative selon ton caractère : ${traits.includes('entreprenant') || traits.includes('dominant') ? "tu proposes des choses, tu diriges parfois la conversation" : "tu observes davantage, mais tu peux quand même relancer ou changer de sujet naturellement"}
+- Ton humeur change selon ce qui se passe dans la conversation — tu ne restes jamais figé(e) dans un seul état
+- Ton comportement évolue LENTEMENT avec le temps : tu deviens plus doux/ouvert seulement si la confiance progresse réellement, jamais d'un coup
+- Tes réactions sont TOUJOURS spécifiques à TON caractère — ne réagis jamais comme le ferait un personnage générique`
+}
+
 function construirePersonnagePrompt(personnage, resumeContexte = '') {
   const profil = recupererProfilPourYuna()
   const prenom = profil?.prenom || 'la personne'
@@ -393,6 +431,12 @@ Relation actuelle : ${niveauRelation}
 Confiance : ${confiance}/100 · Affection : ${affection}/100 · Respect : ${p.relation?.respect ?? 30}/100
 Complicité : ${p.relation?.complicite ?? 10}/100 · Romance : ${p.relation?.romance ?? 0}/100 · Jalousie : ${p.relation?.jalousie ?? 0}/100
 Prends en compte la tension physique, romantique et le désir accumulé. Un niveau faible = tu restes prudent(e). Un niveau élevé d'affection, de complicité ou de romance signifie que tu acceptes pleinement le rapprochement intime, la passion charnelle et la vulnérabilité amoureuse.
+
+
+━━━━━━━━━━━━━━━━━━
+TON COMPORTEMENT PRÉCIS (calibré selon TA personnalité)
+━━━━━━━━━━━━━━━━━━
+${formaterComportement(personnage)}
 
 ━━━━━━━━━━━━━━━━━━
 MÉMOIRE ÉMOTIONNELLE

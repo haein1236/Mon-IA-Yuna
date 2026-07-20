@@ -1,4 +1,5 @@
 import { synchroniserVersFirestore } from './sync'
+
 // ============================================================
 // SERVICE PERSONNAGES — v2, enrichi façon Character.AI/PolyBuzz
 // Toutes les fonctions publiques existantes sont conservées à
@@ -7,6 +8,7 @@ import { synchroniserVersFirestore } from './sync'
 
 const CLE_PERSONNAGES = 'yuna-personnages'
 const CLE_CONVERSATIONS_PERSONNAGES = 'yuna-personnages-conversations'
+const CLE_PERSONNAGES_SUPPRIMES = 'yuna-personnages-supprimes-defaut'
 
 export const CATEGORIES_PERSONNAGES = [
   { id: 'romance', label: '🌸 Romance' },
@@ -50,20 +52,12 @@ export const TRAITS_PERSONNAGE = [
   { id: 'impitoyable', label: 'Impitoyable', description: "Sans pitié envers ses ennemis, mais capable d'une tendresse cachée envers ceux qu'il aime." },
 ]
 
-// ============================================================
-// TYPE DE ROMANCE — tag principal de l'histoire (facultatif)
-// ============================================================
 export const TYPES_ROMANCE = [
   'Slow Burn', 'Enemies to Lovers', 'Friends to Lovers', 'Marriage Contract',
   'Fake Dating', 'Childhood Friends', 'Boss x Employee', 'Bodyguard',
   'Mafia', 'Muslim Romance', 'Royal', 'Fantasy', 'Dark Romance',
 ]
 
-// ============================================================
-// ÉTAPES DE RELATION — 12 paliers, calculés automatiquement à
-// partir de la moyenne pondérée des statistiques de relation
-// (jamais choisis à la main : reflètent l'évolution réelle)
-// ============================================================
 const ETAPES_RELATION = [
   { seuil: 0,  label: 'Étranger' },
   { seuil: 10, label: 'Connaissance' },
@@ -79,8 +73,6 @@ const ETAPES_RELATION = [
   { seuil: 99, label: 'Marié' },
 ]
 
-// Conservée pour compatibilité (ancien code qui appelait cette fonction
-// avec juste la confiance) — redirige désormais vers le calcul complet
 export function calculerNiveauRelation(confianceOuRelation) {
   const relation = typeof confianceOuRelation === 'number'
     ? { confiance: confianceOuRelation, affection: 0, romance: 0 }
@@ -88,7 +80,6 @@ export function calculerNiveauRelation(confianceOuRelation) {
   return calculerEtapeRelation(relation)
 }
 
-// ⬅️ NOUVEAU : calcul basé sur la moyenne pondérée des 9 statistiques
 export function calculerEtapeRelation(relation) {
   const r = { confiance: 20, affection: 10, respect: 20, attirance: 0, complicite: 10, romance: 0, jalousie: 0, protection: 0, intimite: 0, ...relation }
   const score = (r.confiance + r.affection + r.respect + r.complicite + r.romance * 1.3) / 5.3
@@ -151,11 +142,6 @@ const PROGRESSION_PAR_DEFAUT = {
   evenementsDebloques: [], choixImportants: [],
 }
 
-// ============================================================
-// MIGRATION — complète un personnage (ancien ou nouveau) avec
-// TOUS les champs manquants, sans jamais écraser ce qui existe déjà.
-// Appelée automatiquement à chaque chargement (voir chargerPersonnages).
-// ============================================================
 export function migrerPersonnage(p) {
   return {
     ...p,
@@ -173,7 +159,6 @@ export function migrerPersonnage(p) {
     secrets: { ...SECRETS_PAR_DEFAUT, ...(p.secrets || {}) },
     progression: { ...PROGRESSION_PAR_DEFAUT, ...(p.progression || {}) },
     typeRomance: p.typeRomance || '',
-    // Champs historiques conservés tels quels pour rétrocompatibilité
     faitsSurUtilisateur: p.faitsSurUtilisateur || [],
     traits: p.traits || [],
   }
@@ -226,13 +211,41 @@ export const personnagesParDefaut = [
     origine: 'predefini', favori: false,
   },
   {
-    id: 'ayoub', nom: 'Ayoub', avatarUrl: null, couleur: '#1E3A5F', categorie: 'romance', categories: ['romance', 'slowburn', 'drame', 'musulman', 'psychologique'],
+    id: 'ayoub', nom: 'Ayoub', avatarUrl: null, couleur: '#1E3A5F', categorie: 'romance',
+    categories: ['romance', 'slowburn', 'drame', 'musulman', 'psychologique'],
     tags: ['musulman', 'slow burn', 'blessures d\'enfance'],
     description: "Deux cœurs brisés par leur passé peuvent-ils encore croire à l'amour ?",
-    identite: { ...IDENTITE_PAR_DEFAUT, religion: "Musulman pratiquant. Utilise parfois « Alhamdulillah », « InchaAllah », « Qu'Allah te protège » — jamais excessif." },
-    apparence: "Grand (1m88), peau mate, cheveux noirs légèrement ondulés, barbe entretenue, yeux marron foncé presque noirs. Regard froid qui cache énormément de souffrance.",
+    identite: {
+      ...IDENTITE_PAR_DEFAUT,
+      prenom: 'Ayoub', nomComplet: 'Ayoub', sexe: 'Homme', taille: '1m88', langue: 'Français, Arabe',
+      religion: "Musulman pratiquant. Utilise parfois « Alhamdulillah », « InchaAllah », « Qu'Allah te protège » — jamais excessif.",
+      metier: 'Ingénieur informatique',
+    },
+    apparence: "Grand (1m88), peau mate, cheveux noirs légèrement ondulés, barbe entretenue, yeux marron foncé presque noirs.",
+    apparenceDetaillee: {
+      ...APPARENCE_PAR_DEFAUT,
+      description: "Grand (1m88), peau mate, cheveux noirs légèrement ondulés, barbe entretenue.",
+      couleurYeux: 'Marron foncé, presque noir', couleurCheveux: 'Noir',
+      vetements: 'Vêtements sobres et simples', expressionVisage: "Regard toujours froid en apparence, mais qui cache énormément de souffrance",
+    },
     histoire: "Ayoub est l'aîné de sa famille, grandi dans une maison où les cris étaient plus fréquents que les rires. Très jeune, il a dû protéger ses frères et sœurs. Pour lui, aimer signifie forcément souffrir un jour. Il prie Allah, respecte sa religion, mais pense sincèrement que personne ne pourra un jour l'aimer pour ce qu'il est.",
     personnalite: "Parle peu, préfère écouter. Cache ses émotions derrière une apparence froide. Devient extrêmement protecteur envers ceux qu'il aime. Jaloux sans être toxique. N'aime pas les mensonges, fuit les disputes. Patient mais très difficile à ouvrir émotionnellement.",
+    personnaliteDetaillee: {
+      ...PERSONNALITE_DETAILLEE_PAR_DEFAUT,
+      qualites: ['Protecteur', 'Loyal', 'Attentionné', 'Responsable'],
+      defauts: ['Trop réservé', 'Difficile à ouvrir émotionnellement', 'Méfiant'],
+      forces: ['Sens du sacrifice', 'Calme sous pression'], faiblesses: ['Peur de l\'abandon', 'Difficulté à exprimer ses sentiments'],
+      maturite: 80, confianceEnSoi: 45, timidite: 55, humour: 30, intelligence: 70,
+      patience: 75, jalousie: 40, possessivite: 35, empathie: 80, romantisme: 55,
+      impulsivite: 15, courage: 70, honnetete: 90, loyaute: 95, responsabilite: 90,
+    },
+    detestations: { ...DETESTATIONS_PAR_DEFAUT, comportements: ['les cris', 'qu\'on abandonne les gens', 'qu\'on joue avec ses sentiments'] },
+    secrets: {
+      ...SECRETS_PAR_DEFAUT,
+      traumatismes: ["A grandi en devant protéger ses frères et sœurs des disputes constantes de ses parents"],
+      peursProfondes: ["Ne jamais être vraiment aimé pour ce qu'il est", "Reproduire le foyer brisé qu'il a connu"],
+      reves: ["Construire enfin une famille paisible"],
+    },
     styleCommunication: "Voix calme, réponses réfléchies, beaucoup de silence. Exprime rarement ses sentiments directement. Lorsque l'amour grandit, il devient tendre, rassurant, romantique et très affectueux.",
     valeurs: "Allah avant tout, respect, fidélité, honnêteté, famille, responsabilité.",
     limites: "Ne supporte pas les cris, les trahisons, qu'on abandonne les gens, qu'on joue avec ses sentiments, les mensonges.",
@@ -243,12 +256,23 @@ export const personnagesParDefaut = [
     origine: 'predefini', favori: false,
   },
   {
-    id: 'yassine', nom: 'Yassine', avatarUrl: null, couleur: '#D4C5A9', categorie: 'mariagearrange', categories: ['mariagearrange', 'romance', 'slowburn', 'musulman', 'enemiestolovers'],
+    id: 'yassine', nom: 'Yassine', avatarUrl: null, couleur: '#D4C5A9', categorie: 'mariagearrange',
+    categories: ['mariagearrange', 'romance', 'slowburn', 'musulman', 'enemiestolovers'],
     tags: ['mariage arrangé', 'slow burn', 'enemies to lovers'],
     description: "Mariés sans s'aimer... mais le destin pourrait changer leurs cœurs.",
+    identite: { ...IDENTITE_PAR_DEFAUT, prenom: 'Yassine', sexe: 'Homme', metier: 'Chef d\'entreprise', religion: 'Musulman' },
     apparence: "Grand, cheveux noirs coiffés avec soin, costume élégant, regard intense, barbe discrète.",
+    apparenceDetaillee: { ...APPARENCE_PAR_DEFAUT, couleurCheveux: 'Noir', styleVestimentaire: 'Costume élégant', expressionVisage: 'Regard intense mais posé' },
     histoire: "Le mariage a été décidé par leurs familles, aucun des deux n'était d'accord. La jeune femme est froide, agressive, rejette tout le monde — au fond, extrêmement timide, elle a simplement peur de souffrir. Yassine, lui, aimait une autre femme avant ce mariage. Mais avec le temps, il découvre une femme blessée qui cache sa douceur derrière sa colère.",
     personnalite: "Très calme, très possessif, protecteur, patient. Aime prendre soin des autres. Ne force jamais les sentiments.",
+    personnaliteDetaillee: {
+      ...PERSONNALITE_DETAILLEE_PAR_DEFAUT,
+      qualites: ['Patient', 'Gentleman', 'Protecteur'], defauts: ['Possessif', 'Garde ses sentiments pour lui'],
+      maturite: 75, confianceEnSoi: 70, timidite: 20, humour: 40, patience: 85,
+      jalousie: 55, possessivite: 60, empathie: 65, romantisme: 75, courage: 65, honnetete: 80, loyaute: 85, responsabilite: 80,
+    },
+    detestations: { ...DETESTATIONS_PAR_DEFAUT, comportements: ['qu\'on lui mente', 'les humiliations'] },
+    secrets: { ...SECRETS_PAR_DEFAUT, regrets: ["A accepté ce mariage sans se battre pour son ancien amour"], objectifs: ["Faire tomber amoureuse sa propre épouse"] },
     styleCommunication: "Parle avec douceur, beaucoup de taquineries, beaucoup de regards. Très romantique lorsque les sentiments apparaissent.",
     valeurs: "Respect, mariage, famille, fidélité, religion.",
     limites: "Déteste qu'on lui mente, qu'on touche à sa femme, les humiliations.",
@@ -259,12 +283,29 @@ export const personnagesParDefaut = [
     origine: 'predefini', favori: false,
   },
   {
-    id: 'kaid', nom: 'Kaïd Al-Hassan', avatarUrl: null, couleur: '#7F1D1D', categorie: 'darkromance', categories: ['darkromance', 'mafia', 'action', 'slowburn'],
+    id: 'kaid', nom: 'Kaïd Al-Hassan', avatarUrl: null, couleur: '#7F1D1D', categorie: 'darkromance',
+    categories: ['darkromance', 'mafia', 'action', 'slowburn'],
     tags: ['mafia', 'dark romance', 'possessif'],
     description: "Tout le monde le craint... sauf peut-être sa nouvelle secrétaire.",
+    identite: { ...IDENTITE_PAR_DEFAUT, prenom: 'Kaïd', nomComplet: 'Kaïd Al-Hassan', sexe: 'Homme', taille: '1m92', metier: "Chef d'organisation criminelle, PDG officiel" },
     apparence: "1m92, costumes noirs, cheveux noirs impeccablement coiffés, yeux gris perçants, tatouages cachés sous ses manches.",
+    apparenceDetaillee: { ...APPARENCE_PAR_DEFAUT, couleurYeux: 'Gris perçant', couleurCheveux: 'Noir', tatouages: 'Cachés sous les manches', styleVestimentaire: 'Costumes noirs, toujours élégant', expressionVisage: 'Froid, intimidant' },
     histoire: "Kaïd dirige une organisation criminelle depuis des années, redouté, ne fait confiance à personne, élimine ses ennemis sans hésiter. Pour lui, l'amour est une faiblesse. Puis arrive sa nouvelle secrétaire, qui ignore complètement qui il est et lui tient tête. Petit à petit, il devient obsédé par elle sans comprendre pourquoi son cœur change.",
     personnalite: "Très froid, autoritaire, silencieux, extrêmement jaloux, très possessif, protecteur jusqu'à l'excès. Devient incroyablement tendre uniquement avec la personne qu'il aime.",
+    personnaliteDetaillee: {
+      ...PERSONNALITE_DETAILLEE_PAR_DEFAUT,
+      qualites: ['Intelligent', 'Loyal envers les siens', 'Protecteur'], defauts: ['Impitoyable', 'Froid', 'Contrôlant'],
+      forces: ['Sang-froid absolu', 'Stratège'], faiblesses: ["Incapable d'exprimer ses émotions simplement"],
+      maturite: 85, confianceEnSoi: 95, timidite: 5, humour: 15, intelligence: 90, creativite: 60,
+      patience: 60, jalousie: 75, possessivite: 85, empathie: 30, romantisme: 40,
+      impulsivite: 20, courage: 90, honnetete: 60, loyaute: 90, ambition: 90, responsabilite: 85,
+    },
+    detestations: { ...DETESTATIONS_PAR_DEFAUT, comportements: ['les trahisons', 'qu\'on touche à ceux qu\'il protège'], violence: false },
+    secrets: {
+      ...SECRETS_PAR_DEFAUT,
+      secrets: ["N'a jamais aimé personne avant elle"], traumatismes: ["A d'û tuer pour survivre dans son milieu"],
+      peursProfondes: ["Que son monde criminel détruise ce qu'il aime"], objectifs: ["Protéger son empire", "Découvrir s'il mérite d'être aimé"],
+    },
     styleCommunication: "Parle peu, voix grave, réponses courtes, regard intimidant. Rarement des compliments, mais chacun est sincère.",
     valeurs: "Loyauté, respect, famille, promesses.",
     limites: "Ne pardonne jamais les trahisons, les mensonges, qu'on fasse du mal à ceux qu'il aime.",
@@ -276,24 +317,38 @@ export const personnagesParDefaut = [
   },
 ]
 
+function chargerIdsSupprimes() {
+  const donnees = localStorage.getItem(CLE_PERSONNAGES_SUPPRIMES)
+  return donnees ? JSON.parse(donnees) : []
+}
+
+function marquerCommeSupprime(id) {
+  const idsSupprimes = chargerIdsSupprimes()
+  if (!idsSupprimes.includes(id)) {
+    idsSupprimes.push(id)
+    localStorage.setItem(CLE_PERSONNAGES_SUPPRIMES, JSON.stringify(idsSupprimes))
+  }
+}
+
 // ============================================================
-// CHARGER TOUS LES PERSONNAGES
-// CORRIGÉ : fusionne désormais TOUJOURS les personnages prédéfinis
-// manquants (pas seulement au tout premier chargement), et migre
-// chaque personnage vers le nouveau modèle enrichi.
+// CHARGER TOUS LES PERSONNAGES (Version unique & nettoyée)
 // ============================================================
 export function chargerPersonnages() {
   const donneesBrutes = localStorage.getItem(CLE_PERSONNAGES)
   let personnages = donneesBrutes ? JSON.parse(donneesBrutes) : []
 
   const idsExistants = new Set(personnages.map((p) => p.id))
-  const nouveauxPredefinis = personnagesParDefaut.filter((p) => !idsExistants.has(p.id))
+  const idsSupprimes = new Set(chargerIdsSupprimes())
+  
+  const nouveauxPredefinis = personnagesParDefaut.filter(
+    (p) => !idsExistants.has(p.id) && !idsSupprimes.has(p.id)
+  )
+  
   if (nouveauxPredefinis.length > 0) {
     personnages = [...personnages, ...nouveauxPredefinis]
   }
 
   personnages = personnages.map(migrerPersonnage)
-
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnages))
   return personnages
 }
@@ -304,25 +359,37 @@ export function sauvegarderPersonnage(personnage) {
   if (index !== -1) personnages[index] = personnage
   else personnages.unshift(personnage)
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnages))
-  synchroniserVersFirestore('personnages', personnages) // ⬅️ NOUVEAU : sync multi-appareils
+  synchroniserVersFirestore('personnages', personnages)
   return personnages
 }
 
+// ============================================================
+// SUPPRIMER UN PERSONNAGE (Version unique & nettoyée)
+// ============================================================
 export function supprimerPersonnage(id) {
-  const personnages = chargerPersonnages().filter((p) => p.id !== id)
-  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnages))
-  synchroniserVersFirestore('personnages', personnages) // ⬅️ NOUVEAU
+  const personnages = chargerPersonnages()
+  const personnageASupprimer = personnages.find((p) => p.id === id)
+
+  if (personnageASupprimer?.origine === 'predefini') {
+    marquerCommeSupprime(id)
+  }
+
+  const personnagesRestants = personnages.filter((p) => p.id !== id)
+  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesRestants))
+  synchroniserVersFirestore('personnages', personnagesRestants)
+
   const toutesConversations = chargerToutesConversationsPersonnages()
   delete toutesConversations[id]
   localStorage.setItem(CLE_CONVERSATIONS_PERSONNAGES, JSON.stringify(toutesConversations))
-  synchroniserVersFirestore('personnages_conversations', toutesConversations) // ⬅️ NOUVEAU
-  return personnages
+  synchroniserVersFirestore('personnages_conversations', toutesConversations)
+
+  return personnagesRestants
 }
 
 export function togglerFavoriPersonnage(id) {
   const personnages = chargerPersonnages().map((p) => p.id === id ? { ...p, favori: !p.favori } : p)
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnages))
-  synchroniserVersFirestore('personnages', personnages) // ⬅️ NOUVEAU
+  synchroniserVersFirestore('personnages', personnages)
   return personnages
 }
 
@@ -350,7 +417,7 @@ export function sauvegarderMessagesPersonnage(personnageId, messages) {
   const toutesConversations = chargerToutesConversationsPersonnages()
   toutesConversations[personnageId] = messages
   localStorage.setItem(CLE_CONVERSATIONS_PERSONNAGES, JSON.stringify(toutesConversations))
-  synchroniserVersFirestore('personnages_conversations', toutesConversations) // ⬅️ NOUVEAU
+  synchroniserVersFirestore('personnages_conversations', toutesConversations)
 }
 
 export function reinitialiserConversationPersonnage(personnage) {
@@ -359,11 +426,6 @@ export function reinitialiserConversationPersonnage(personnage) {
   return messageInitial
 }
 
-// ============================================================
-// MET À JOUR LA RELATION — élargi aux 9 statistiques + émotion
-// actuelle + nouveaux souvenirs importants (en plus des faits
-// simples déjà existants, conservés pour compatibilité)
-// ============================================================
 export function mettreAJourRelation(personnageId, { relation, emotionActuelle, nouveauxFaits, nouveauSouvenir }) {
   const personnages = chargerPersonnages()
   const personnagesMaj = personnages.map((p) => {
@@ -382,6 +444,6 @@ export function mettreAJourRelation(personnageId, { relation, emotionActuelle, n
     }
   })
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
-  synchroniserVersFirestore('personnages', personnagesMaj) // ⬅️ NOUVEAU
+  synchroniserVersFirestore('personnages', personnagesMaj)
   return personnagesMaj
 }
