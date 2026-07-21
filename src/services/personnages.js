@@ -98,7 +98,12 @@ const RELATION_PAR_DEFAUT = {
 const IDENTITE_PAR_DEFAUT = {
   prenom: '', nomComplet: '', surnoms: [], sexe: '', taille: '', poids: '',
   dateNaissance: '', nationalite: '', langue: 'Français', religion: '',
-  metier: '', etudes: '', niveauSocial: '',
+  metier: '', etudes: '', niveauSocial: '', routineQuotidienne: '',
+}
+
+const LIEU_TEMPS_PAR_DEFAUT = {
+  lieuActuel: '',
+  dateDebutHistoire: null,
 }
 
 const APPARENCE_PAR_DEFAUT = {
@@ -148,6 +153,11 @@ export function migrerPersonnage(p) {
     categories: Array.isArray(p.categories) && p.categories.length ? p.categories : (p.categorie ? [p.categorie] : []),
     tags: p.tags || [],
     identite: { ...IDENTITE_PAR_DEFAUT, ...(p.identite || {}) },
+    lieuTemps: {
+      ...LIEU_TEMPS_PAR_DEFAUT,
+      ...(p.lieuTemps || {}),
+      dateDebutHistoire: p.lieuTemps?.dateDebutHistoire || new Date().toISOString(),
+    },
     apparenceDetaillee: { ...APPARENCE_PAR_DEFAUT, ...(p.apparenceDetaillee || {}), description: p.apparence || p.apparenceDetaillee?.description || '' },
     personnaliteDetaillee: { ...PERSONNALITE_DETAILLEE_PAR_DEFAUT, ...(p.personnaliteDetaillee || {}) },
     preferences: { ...PREFERENCES_PAR_DEFAUT, ...(p.preferences || {}) },
@@ -162,6 +172,7 @@ export function migrerPersonnage(p) {
     faitsSurUtilisateur: p.faitsSurUtilisateur || [],
     traits: p.traits || [],
     personnagesSecondaires: p.personnagesSecondaires || [],
+    connaitNomUtilisateur: p.connaitNomUtilisateur || false,
   }
 }
 
@@ -336,7 +347,7 @@ function marquerCommeSupprime(id) {
 }
 
 // ============================================================
-// CHARGER TOUS LES PERSONNAGES (Version unique & nettoyée)
+// CHARGER TOUS LES PERSONNAGES
 // ============================================================
 export function chargerPersonnages() {
   const donneesBrutes = localStorage.getItem(CLE_PERSONNAGES)
@@ -369,7 +380,7 @@ export function sauvegarderPersonnage(personnage) {
 }
 
 // ============================================================
-// SUPPRIMER UN PERSONNAGE (Version unique & nettoyée)
+// SUPPRIMER UN PERSONNAGE
 // ============================================================
 export function supprimerPersonnage(id) {
   const personnages = chargerPersonnages()
@@ -398,13 +409,17 @@ export function togglerFavoriPersonnage(id) {
   return personnages
 }
 
+export function marquerNomConnu(personnageId, connuOuNon = true) {
+  const personnages = chargerPersonnages().map((p) =>
+    p.id === personnageId ? { ...p, connaitNomUtilisateur: connuOuNon } : p
+  )
+  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnages))
+  synchroniserVersFirestore('personnages', personnages)
+  return personnages
+}
+
 // ============================================================
 // PERSONNAGES SECONDAIRES
-// Chaque perso principal peut avoir des personnages secondaires liés
-// à son histoire (famille, amis, rivaux...) — le personnage principal
-// peut les mentionner, raconter ce qu'ils font, et même les "faire
-// parler" entre guillemets dans la même réponse quand le contexte
-// s'y prête (ex: "Ma sœur m'a appelé hier, elle a dit : « ... »").
 // ============================================================
 export function creerPersonnageSecondaireVide() {
   return { id: `sec-${Date.now()}`, nom: '', role: '', personnalite: '', lienAvecPrincipal: '' }
@@ -415,7 +430,7 @@ export function creerPersonnageVide() {
     id: `perso-${Date.now()}`, nom: '', avatarUrl: null, couleur: '#C4688A', categorie: 'romance', categories: [],
     tags: [], description: '', histoire: '', personnalite: '', sceneOuverture: '',
     styleCommunication: '', valeurs: '', limites: '', objectifsPersonnels: '',
-    personnagesSecondaires: [],
+    personnagesSecondaires: [], connaitNomUtilisateur: false,
     origine: 'perso', favori: false,
   })
 }
@@ -438,10 +453,29 @@ export function sauvegarderMessagesPersonnage(personnageId, messages) {
   synchroniserVersFirestore('personnages_conversations', toutesConversations)
 }
 
+// ============================================================
+// RECOMMENCER COMPLÈTEMENT L'HISTOIRE
+// ============================================================
 export function reinitialiserConversationPersonnage(personnage) {
+  const personnages = chargerPersonnages().map((p) => {
+    if (p.id !== personnage.id) return p
+    return {
+      ...p,
+      relation: { ...RELATION_PAR_DEFAUT },
+      emotionActuelle: 'détendu',
+      faitsSurUtilisateur: [],
+      souvenirsImportants: [],
+      connaitNomUtilisateur: false,
+      progression: { ...PROGRESSION_PAR_DEFAUT },
+    }
+  })
+  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnages))
+  synchroniserVersFirestore('personnages', personnages)
+  localStorage.removeItem(`yuna-resume-${personnage.id}`)
+
   const messageInitial = [{ id: Date.now(), auteur: 'personnage', texte: personnage.sceneOuverture, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }]
   sauvegarderMessagesPersonnage(personnage.id, messageInitial)
-  return messageInitial
+  return { messages: messageInitial, personnages }
 }
 
 export function mettreAJourRelation(personnageId, { relation, emotionActuelle, nouveauxFaits, nouveauSouvenir }) {
@@ -453,9 +487,6 @@ export function mettreAJourRelation(personnageId, { relation, emotionActuelle, n
       const valeur = relation?.[cle] ?? p.relation[cle]
       relationBornee[cle] = Math.max(0, Math.min(100, valeur))
     }
-    // ⬅️ NOUVEAU : recalcule automatiquement le chapitre à chaque mise
-    // à jour de relation — le personnage progresse dans l'histoire
-    // sans jamais avoir besoin d'y toucher manuellement
     const chapitre = calculerChapitreActuel(relationBornee)
     return {
       ...p,
@@ -473,9 +504,6 @@ export function mettreAJourRelation(personnageId, { relation, emotionActuelle, n
 
 // ============================================================
 // CHAPITRES NARRATIFS
-// Progression automatique en 6 chapitres, calculée à partir du
-// score de relation (le même calcul que calculerEtapeRelation) —
-// universelle à tous les personnages, jamais à définir à la main.
 // ============================================================
 export const DEFINITION_CHAPITRES = [
   { numero: 1, titre: 'Première rencontre', seuil: 0, objectif: "Faire connaissance, poser les bases de la relation, rester prudent." },
@@ -498,4 +526,13 @@ export function calculerChapitreActuel(relation) {
     if (score >= c.seuil) chapitre = c
   }
   return chapitre
+}
+
+// ============================================================
+// DÉTECTE SI L'UTILISATEUR FAIT INTERVENIR UN PERSONNAGE SECONDAIRE
+// ============================================================
+export function detecterPersonnageSecondaireMentionne(personnage, messageUtilisateur) {
+  const secondaires = personnage.personnagesSecondaires || []
+  const texteMinuscule = messageUtilisateur.toLowerCase()
+  return secondaires.find((s) => s.nom && texteMinuscule.includes(s.nom.toLowerCase())) || null
 }

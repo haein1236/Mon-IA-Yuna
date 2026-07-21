@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
 import {
   chargerDernierePosition,
   sauvegarderPosition,
@@ -23,8 +26,11 @@ import {
 } from '../services/amis'
 import { notifierErreur, notifierSucces } from '../services/notifications'
 
+// Palette de couleurs distinctes pour les amis
+const COULEURS_AMIS = ['#C4688A', '#4A6B94', '#6B8F5E', '#8B6FA8', '#D4A017', '#B46A72']
+
 // ============================================================
-// ICÔNES
+// ICÔNES SVG
 // ============================================================
 const IconPin = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
@@ -108,9 +114,8 @@ const IconClock = (props) => (
 )
 
 // ============================================================
-// PETITS UTILITAIRES
+// UTILITAIRES
 // ============================================================
-
 function vibrer(duree = 8) {
   if (navigator.vibrate) navigator.vibrate(duree)
 }
@@ -135,7 +140,7 @@ function formaterDistance(km) {
 }
 
 // ============================================================
-// STYLES D'ANIMATION PARTAGÉS
+// STYLES ANIMATIONS
 // ============================================================
 function StylesAnimations() {
   return (
@@ -227,6 +232,9 @@ function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
   )
 }
 
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
 function LocalisationScreen() {
   const [position, setPosition] = useState(() => chargerDernierePosition())
   const [adresse, setAdresse] = useState(null)
@@ -246,7 +254,7 @@ function LocalisationScreen() {
   const [actualisationAuto, setActualisationAuto] = useState(false)
   const intervalleRef = useRef(null)
 
-  // Nouveaux états pour le système d'amis
+  // Amis
   const [monProfil, setMonProfil] = useState(null)
   const [codeAmiSaisi, setCodeAmiSaisi] = useState('')
   const [demandes, setDemandes] = useState([])
@@ -255,7 +263,87 @@ function LocalisationScreen() {
   const [partageActif, setPartageActif] = useState(true)
   const [messageAmi, setMessageAmi] = useState('')
 
-  // Charger profil et données amis au montage
+  // Leaflet Map Refs
+  const carteRef = useRef(null)
+  const carteInstanceRef = useRef(null)
+  const marqueursRef = useRef([])
+
+  // Initialisation de la carte Leaflet (au montage)
+  useEffect(() => {
+    if (!carteRef.current || carteInstanceRef.current) return
+
+    delete L.Icon.Default.prototype._getIconUrl
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    })
+
+    const initialLat = position?.latitude || 5.34
+    const initialLng = position?.longitude || -4.02
+
+    carteInstanceRef.current = L.map(carteRef.current).setView([initialLat, initialLng], 12)
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+    }).addTo(carteInstanceRef.current)
+
+    return () => {
+      if (carteInstanceRef.current) {
+        carteInstanceRef.current.remove()
+        carteInstanceRef.current = null
+      }
+    }
+  }, [])
+
+  // Mise à jour des marqueurs Leaflet
+  useEffect(() => {
+    const carte = carteInstanceRef.current
+    if (!carte) return
+
+    marqueursRef.current.forEach((m) => carte.removeLayer(m))
+    marqueursRef.current = []
+
+    const tousLesPoints = []
+
+    if (position) {
+      const marqueurMoi = L.marker([position.latitude, position.longitude])
+        .addTo(carte)
+        .bindPopup('<b>Toi</b>')
+      marqueursRef.current.push(marqueurMoi)
+      tousLesPoints.push([position.latitude, position.longitude])
+    }
+
+    positionsAmis.forEach((p, i) => {
+      const couleur = COULEURS_AMIS[i % COULEURS_AMIS.length]
+      const nomAmi = p.profils_publics?.pseudo || 'Ami'
+      const marqueurAmi = L.circleMarker([p.latitude, p.longitude], {
+        radius: 10,
+        fillColor: couleur,
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 0.9,
+      })
+        .addTo(carte)
+        .bindPopup(`<b>${nomAmi}</b><br/>Vu à ${new Date(p.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`)
+
+      marqueursRef.current.push(marqueurAmi)
+      tousLesPoints.push([p.latitude, p.longitude])
+    })
+
+    if (tousLesPoints.length > 0) {
+      carte.fitBounds(tousLesPoints, { padding: [40, 40], maxZoom: 14 })
+    }
+  }, [position, positionsAmis])
+
+  // Centrer dynamiquement si centreCarte change manuellement (ex: clic sur ami ou favori)
+  useEffect(() => {
+    if (centreCarte && carteInstanceRef.current) {
+      carteInstanceRef.current.setView([centreCarte.latitude, centreCarte.longitude], 14)
+    }
+  }, [centreCarte])
+
+  // Charger profil et données au montage
   useEffect(() => {
     obtenirMonProfil().then(setMonProfil)
     chargerDemandesRecues().then(setDemandes)
@@ -276,6 +364,9 @@ function LocalisationScreen() {
 
       const adresseTrouvee = await obtenirAdresseApprox(pos.latitude, pos.longitude)
       setAdresse(adresseTrouvee)
+
+      const amisPositions = await chargerPositionsAmis()
+      setPositionsAmis(amisPositions)
     } catch (e) {
       if (!silencieux) setErreur(e.message)
     } finally {
@@ -326,11 +417,6 @@ function LocalisationScreen() {
     setPartageActif(nouveauStatut)
     await definirPartageActif(nouveauStatut)
   }
-
-  const centre = centreCarte || position
-  const urlCarte = centre
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${centre.longitude - 0.01}%2C${centre.latitude - 0.01}%2C${centre.longitude + 0.01}%2C${centre.latitude + 0.01}&layer=mapnik&marker=${centre.latitude}%2C${centre.longitude}`
-    : null
 
   const centrerSur = (point) => {
     vibrer()
@@ -486,25 +572,20 @@ function LocalisationScreen() {
 
         {position ? (
           <div className="lg:grid lg:grid-cols-[1.45fr_1fr] lg:gap-5 lg:items-start">
-            {/* ===== COLONNE GAUCHE : carte + actions rapides ===== */}
+            {/* ===== COLONNE GAUCHE : carte Leaflet + actions rapides ===== */}
             <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-3 lg:mb-0">
               <div className="yuna-scale-in bg-white rounded-3xl border border-espresso/10 overflow-hidden relative shadow-md">
-                <iframe
-                  key={urlCarte}
-                  title="Carte de ma position"
-                  src={urlCarte}
-                  className="w-full h-[280px] sm:h-[340px] lg:h-[440px] yuna-fade-in"
-                  style={{ border: 'none' }}
-                  loading="lazy"
-                />
+                
+                {/* Conteneur de la Carte Leaflet */}
+                <div ref={carteRef} className="w-full h-[280px] sm:h-[340px] lg:h-[440px] z-0" />
 
-                <div key={labelCarte + centreCarte?.latitude} className="absolute top-3 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full shadow-md yuna-badge-drop">
+                <div key={labelCarte + centreCarte?.latitude} className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full shadow-md yuna-badge-drop">
                   <IconPin style={{ width: '10px', height: '10px' }} className="text-espresso/70 flex-shrink-0" />
                   <span className="text-[10.5px] font-semibold text-espresso truncate max-w-[140px]">{labelCarte}</span>
                 </div>
 
                 {chargement && (
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-full shadow-md yuna-fade-in">
+                  <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-full shadow-md yuna-fade-in">
                     <IconRefresh style={{ width: '11px', height: '11px' }} className="text-espresso/60 animate-spin" />
                     <span className="text-[9.5px] text-espresso/55">Mise à jour…</span>
                   </div>
@@ -513,7 +594,7 @@ function LocalisationScreen() {
                 {centreCarte && position && (centreCarte.latitude !== position.latitude || centreCarte.longitude !== position.longitude) && (
                   <button
                     onClick={() => centrerSur(position)}
-                    className="absolute bottom-3 right-3 text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow-md hover:bg-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                    className="absolute bottom-3 right-3 z-[1000] text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow-md hover:bg-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
                   >
                     Revenir à ma position
                   </button>

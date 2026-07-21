@@ -1,7 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
-import { chargerPersonnages, sauvegarderPersonnage, supprimerPersonnage, togglerFavoriPersonnage, creerPersonnageVide, creerPersonnageSecondaireVide, chargerMessagesPersonnage, sauvegarderMessagesPersonnage, reinitialiserConversationPersonnage, CATEGORIES_PERSONNAGES, TRAITS_PERSONNAGE, calculerNiveauRelation, mettreAJourRelation } from '../services/personnages'
+import {
+  chargerPersonnages,
+  sauvegarderPersonnage,
+  supprimerPersonnage,
+  togglerFavoriPersonnage,
+  creerPersonnageVide,
+  creerPersonnageSecondaireVide,
+  chargerMessagesPersonnage,
+  sauvegarderMessagesPersonnage,
+  reinitialiserConversationPersonnage,
+  marquerNomConnu,
+  CATEGORIES_PERSONNAGES,
+  TRAITS_PERSONNAGE,
+  calculerNiveauRelation,
+  mettreAJourRelation,
+  DEFINITION_CHAPITRES,
+} from '../services/personnages'
 import { envoyerMessageAPersonnage, analyserRelationPersonnage } from '../services/gemini'
-import { DEFINITION_CHAPITRES } from '../services/personnages'
 import { fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
 import { notifierErreur } from '../services/notifications'
@@ -363,6 +378,14 @@ function PersonnagesScreen() {
     const texteUtilisateur = saisie
     const image = photoEnAttente
 
+    const patternPresentation = /je m'appelle|mon prénom est|je me nomme|je m'nomme/i
+    if (patternPresentation.test(texteUtilisateur) && !personnageActif.connaitNomUtilisateur) {
+      const personnagesMaj = marquerNomConnu(personnageActif.id, true)
+      setPersonnages(personnagesMaj)
+      const persoMaj = personnagesMaj.find((p) => p.id === personnageActif.id)
+      if (persoMaj) setPersonnageActif(persoMaj)
+    }
+
     const messageUtilisateur = {
       id: Date.now(), auteur: 'user', texte: texteUtilisateur, image,
       heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
@@ -453,10 +476,12 @@ function PersonnagesScreen() {
   }
 
   const recommencerHistoire = () => {
-    const confirme = window.confirm(`Recommencer l'histoire avec ${personnageActif.nom} depuis le début ? Cette conversation sera effacée.`)
+    const confirme = window.confirm(`Recommencer complètement l'histoire avec ${personnageActif.nom} ? La relation, les souvenirs et tout ce qu'il/elle sait de toi seront effacés — vous repartirez en parfaits inconnus.`)
     if (!confirme) return
-    const messagesReset = reinitialiserConversationPersonnage(personnageActif)
+    const { messages: messagesReset, personnages: personnagesMaj } = reinitialiserConversationPersonnage(personnageActif)
     setMessages(messagesReset)
+    setPersonnages(personnagesMaj)
+    setPersonnageActif(personnagesMaj.find((p) => p.id === personnageActif.id))
   }
 
   const modifierMessagePersonnage = async (idMessage, nouveauTexte) => {
@@ -531,7 +556,6 @@ function PersonnagesScreen() {
     })
   }
 
-  // Fonctions de gestion des personnages secondaires
   const ajouterPersonnageSecondaire = () => {
     setPersonnageEnEdition((a) => ({ ...a, personnagesSecondaires: [...(a.personnagesSecondaires || []), creerPersonnageSecondaireVide()] }))
   }
@@ -689,14 +713,14 @@ function PersonnagesScreen() {
                             modifierMessagePersonnage(message.id, nouveauTexte.trim())
                           }
                         }}
-                        className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline focus-visible:opacity-100"
+                        className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150 underline focus-visible:opacity-100"
                       >
                         modifier
                       </button>
                     )}
                     <button
                       onClick={() => redemarrerApartirDe(message.id)}
-                      className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 underline focus-visible:opacity-100"
+                      className="text-[8px] text-espresso/30 hover:text-espresso/60 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150 underline focus-visible:opacity-100"
                     >
                       redémarrer ici
                     </button>
