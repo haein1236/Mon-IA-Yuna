@@ -1,47 +1,40 @@
 // ============================================================
-// ROUTE SERVEUR UNIFIÉE POUR LES 3 API DE SECOURS
-// Groq, OpenRouter et Cerebras utilisent tous le même format
-// "chat completions" (compatible OpenAI) — un seul fichier suffit,
-// on choisit juste l'URL/clé/modèle selon le "provider" demandé.
-// Les clés restent ICI, côté serveur — jamais exposées au navigateur.
+// CONFIGURATION MULTI-MODÈLES PAR FOURNISSEUR
+// Chaque fournisseur a PLUSIEURS modèles candidats — si le premier
+// n'existe plus (catalogue changé), on essaie le suivant avant
+// d'abandonner ce fournisseur. Rend le système résistant aux
+// changements de catalogue gratuit, fréquents chez ces fournisseurs.
 // ============================================================
-
-// ============================================================
-// ROUTE SERVEUR UNIFIÉE POUR LES 3 API DE SECOURS
-// Groq, OpenRouter et Cerebras utilisent tous le même format
-// "chat completions" (compatible OpenAI) — un seul fichier suffit,
-// on choisit juste l'URL/clé/modèle selon le "provider" demandé.
-// Les clés restent ICI, côté serveur — jamais exposées au navigateur.
-// ============================================================
-// ============================================================
-// ROUTE SERVEUR UNIFIÉE POUR LES 3 API DE SECOURS
-// Groq, OpenRouter et Cerebras utilisent tous le même format
-// "chat completions" (compatible OpenAI) — un seul fichier suffit,
-// on choisit juste l'URL/clé/modèle selon le "provider" demandé.
-// Les clés restent ICI, côté serveur — jamais exposées au navigateur.
-// ============================================================
-
 const CONFIGURATION_PROVIDERS = {
-  groq: { 
-    url: 'https://api.groq.com/openai/v1/chat/completions', 
-    cle: process.env.GROQ_API_KEY, 
-    modele: 'llama-3.3-70b-versatile',
-    temperature: 0.8 
+  groq: {
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    cle: process.env.GROQ_API_KEY,
+    modeles: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'],
   },
-  openrouter: { 
-    url: 'https://openrouter.ai/api/v1/chat/completions', 
-    cle: process.env.OPENROUTER_API_KEY, 
-    // 💡 MODIFIÉ : Utilisation de Dolphin Mistral 24B (Venice Edition) qui est 100% GRATUIT
-    // et conçu de manière "Uncensored" (sans filtres de censure ou de moralisation).
-    modele: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free', 
-    temperature: 0.9 // Température ajustée à 0.9 pour maximiser l'imagination et l'initiative du personnage
+  openrouter: {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    cle: process.env.OPENROUTER_API_KEY,
+    modeles: ['meta-llama/llama-3.2-3b-instruct:free', 'google/gemma-2-9b-it:free', 'mistralai/mistral-7b-instruct:free'],
   },
-  cerebras: { 
-    url: 'https://api.cerebras.ai/v1/chat/completions', 
-    cle: process.env.CEREBRAS_API_KEY, 
-    modele: 'llama-3.3-70b',
-    temperature: 0.8
+  cerebras: {
+    url: 'https://api.cerebras.ai/v1/chat/completions',
+    cle: process.env.CEREBRAS_API_KEY,
+    modeles: ['llama-3.3-70b', 'llama3.1-8b'],
   },
+}
+
+async function essayerUnModele(url, cle, modele, messages) {
+  const reponse = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cle}` },
+    body: JSON.stringify({ model: modele, temperature: 0.8, messages }),
+  })
+  if (!reponse.ok) {
+    const detail = await reponse.text()
+    throw new Error(`${reponse.status} — ${detail.slice(0, 200)}`)
+  }
+  const data = await reponse.json()
+  return data.choices[0].message.content
 }
 
 export default async function handler(req, res) {
@@ -52,28 +45,24 @@ export default async function handler(req, res) {
     const config = CONFIGURATION_PROVIDERS[provider]
 
     if (!config) return res.status(400).json({ error: `Fournisseur inconnu : ${provider}` })
-
-    // Message d'erreur précis pour identifier facilement quelle clé manque dans les logs Vercel
     if (!config.cle) {
-      console.error(`[api/chat] Variable d'environnement manquante pour "${provider}"`)
-      return res.status(500).json({ error: `Clé API manquante pour ${provider} — vérifie la variable d'environnement sur Vercel et redéploie.` })
+      console.error(`[api/chat] Clé manquante pour "${provider}"`)
+      return res.status(500).json({ error: `Clé API manquante pour ${provider} — vérifie la variable d'environnement sur Vercel.` })
     }
 
-    const reponse = await fetch(config.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.cle}` },
-      // La température et le modèle s'adaptent désormais dynamiquement selon la configuration du provider
-      body: JSON.stringify({ model: config.modele, temperature: config.temperature, messages }),
-    })
-
-    if (!reponse.ok) {
-      const detail = await reponse.text()
-      console.error(`[api/chat] Erreur ${provider} (${reponse.status}) :`, detail)
-      return res.status(reponse.status).json({ error: `${provider} a échoué (${reponse.status})`, detail })
+    let derniereErreur = null
+    for (const modele of config.modeles) {
+      try {
+        const reply = await essayerUnModele(config.url, config.cle, modele, messages)
+        return res.status(200).json({ reply, modeleUtilise: modele })
+      } catch (e) {
+        console.error(`[api/chat] ${provider}/${modele} a échoué :`, e.message)
+        derniereErreur = e
+        // continue vers le modèle suivant de ce même fournisseur
+      }
     }
 
-    const data = await reponse.json()
-    res.status(200).json({ reply: data.choices[0].message.content })
+    return res.status(502).json({ error: `Tous les modèles de ${provider} ont échoué`, detail: derniereErreur?.message })
 
   } catch (e) {
     console.error('[api/chat] Erreur serveur inattendue :', e)

@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 const CLE_LOCALISATION = 'yuna-derniere-position'
 const CLE_HISTORIQUE = 'yuna-historique-positions'
 const CLE_LIEUX_FAVORIS = 'yuna-lieux-favoris'
@@ -118,4 +120,34 @@ export async function obtenirAdresseApprox(latitude, longitude) {
   } catch {
     return null
   }
+}
+
+
+
+// ... garde toutes les fonctions déjà existantes (chargerDernierePosition, obtenirPositionActuelle, obtenirAdresseApprox) ...
+
+// ⬅️ NOUVEAU : publie ta position sur Supabase (visible par tes amis acceptés)
+export async function publierPositionPartagee(position) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase.from('positions_partagees').upsert({
+    user_id: user.id, latitude: position.latitude, longitude: position.longitude,
+    precision_m: position.precision, mis_a_jour_le: new Date().toISOString(),
+  })
+}
+
+// ⬅️ NOUVEAU : récupère les positions de tes amis (RLS filtre déjà
+// automatiquement — tu ne reçois QUE celles des amis acceptés)
+export async function chargerPositionsAmis() {
+  const { data } = await supabase
+    .from('positions_partagees')
+    .select('user_id, latitude, longitude, mis_a_jour_le, profils_publics(pseudo)')
+    .eq('partage_actif', true)
+  const { data: { user } } = await supabase.auth.getUser()
+  return (data || []).filter((p) => p.user_id !== user.id)
+}
+
+export async function definirPartageActif(actif) {
+  const { data: { user } } = await supabase.auth.getUser()
+  await supabase.from('positions_partagees').update({ partage_actif: actif }).eq('user_id', user.id)
 }

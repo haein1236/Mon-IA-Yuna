@@ -10,7 +10,17 @@ import {
   supprimerLieuFavori,
   modifierLieuFavori,
   calculerDistanceKm,
+  publierPositionPartagee,
+  chargerPositionsAmis,
+  definirPartageActif,
 } from '../services/localisation'
+import {
+  envoyerDemandeAmi,
+  repondreDemandeAmi,
+  chargerDemandesRecues,
+  chargerMesAmis,
+  obtenirMonProfil,
+} from '../services/amis'
 import { notifierErreur, notifierSucces } from '../services/notifications'
 
 // ============================================================
@@ -101,13 +111,10 @@ const IconClock = (props) => (
 // PETITS UTILITAIRES
 // ============================================================
 
-// Vibration légère pour renforcer les actions, quand le navigateur
-// le permet (silencieusement ignoré sinon — jamais bloquant)
 function vibrer(duree = 8) {
   if (navigator.vibrate) navigator.vibrate(duree)
 }
 
-// Retourne un badge {texte, couleur, emoji} selon la précision GPS en mètres
 function evaluerPrecision(metres) {
   if (metres <= 20) return { texte: 'Excellente', couleur: '#3E8E5A', emoji: '🟢' }
   if (metres <= 100) return { texte: 'Bonne', couleur: '#C99A2E', emoji: '🟡' }
@@ -129,9 +136,6 @@ function formaterDistance(km) {
 
 // ============================================================
 // STYLES D'ANIMATION PARTAGÉS
-// Regroupés ici une seule fois (au lieu de classes Tailwind
-// personnalisées) pour ne pas toucher à la config Tailwind.
-// Respecte prefers-reduced-motion.
 // ============================================================
 function StylesAnimations() {
   return (
@@ -162,7 +166,6 @@ function StylesAnimations() {
   )
 }
 
-// Carte d'information réutilisable — garde un rythme visuel cohérent
 function CarteInfo({ icon: Icon, iconColor = '#6B5B4B', label, className = '', children }) {
   return (
     <div className={`yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}>
@@ -179,8 +182,6 @@ function CarteInfo({ icon: Icon, iconColor = '#6B5B4B', label, className = '', c
   )
 }
 
-// Bouton d'action rapide — carte interactive avec effet ripple et
-// légère élévation, au lieu d'un simple bouton plat
 function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
   const [ripples, setRipples] = useState([])
   const ref = useRef(null)
@@ -232,8 +233,6 @@ function LocalisationScreen() {
   const [chargement, setChargement] = useState(false)
   const [erreur, setErreur] = useState('')
 
-  // Le point actuellement centré sur la carte : soit ma position,
-  // soit un lieu favori / une entrée d'historique cliqué(e)
   const [centreCarte, setCentreCarte] = useState(null)
 
   const [historique, setHistorique] = useState([])
@@ -241,13 +240,28 @@ function LocalisationScreen() {
   const [nomNouveauFavori, setNomNouveauFavori] = useState('')
   const [afficherFormFavori, setAfficherFormFavori] = useState(false)
 
-  // Édition d'un favori existant (renommer)
-  const [favoriEnEdition, setFavoriEnEdition] = useState(null) // { id, nom }
-  // Petite animation de sortie avant suppression définitive
+  const [favoriEnEdition, setFavoriEnEdition] = useState(null)
   const [favoriEnSuppression, setFavoriEnSuppression] = useState(null)
 
   const [actualisationAuto, setActualisationAuto] = useState(false)
   const intervalleRef = useRef(null)
+
+  // Nouveaux états pour le système d'amis
+  const [monProfil, setMonProfil] = useState(null)
+  const [codeAmiSaisi, setCodeAmiSaisi] = useState('')
+  const [demandes, setDemandes] = useState([])
+  const [amis, setAmis] = useState([])
+  const [positionsAmis, setPositionsAmis] = useState([])
+  const [partageActif, setPartageActif] = useState(true)
+  const [messageAmi, setMessageAmi] = useState('')
+
+  // Charger profil et données amis au montage
+  useEffect(() => {
+    obtenirMonProfil().then(setMonProfil)
+    chargerDemandesRecues().then(setDemandes)
+    chargerMesAmis().then(setAmis)
+    chargerPositionsAmis().then(setPositionsAmis)
+  }, [])
 
   const localiser = async (silencieux = false) => {
     setChargement(true)
@@ -257,6 +271,7 @@ function LocalisationScreen() {
       setPosition(pos)
       setCentreCarte(pos)
       sauvegarderPosition(pos)
+      await publierPositionPartagee(pos)
       setHistorique(chargerHistoriquePositions())
 
       const adresseTrouvee = await obtenirAdresseApprox(pos.latitude, pos.longitude)
@@ -268,8 +283,6 @@ function LocalisationScreen() {
     }
   }
 
-  // Localise automatiquement au premier chargement si aucune
-  // position n'a jamais été enregistrée
   useEffect(() => {
     setHistorique(chargerHistoriquePositions())
     setLieuxFavoris(chargerLieuxFavoris())
@@ -282,7 +295,6 @@ function LocalisationScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Actualisation automatique toutes les 2 minutes si activée
   useEffect(() => {
     if (actualisationAuto) {
       intervalleRef.current = setInterval(() => localiser(true), 2 * 60 * 1000)
@@ -292,6 +304,28 @@ function LocalisationScreen() {
     return () => clearInterval(intervalleRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualisationAuto])
+
+  const gererAjoutAmi = async () => {
+    try {
+      const pseudo = await envoyerDemandeAmi(codeAmiSaisi)
+      setMessageAmi(`Demande envoyée à ${pseudo} !`)
+      setCodeAmiSaisi('')
+    } catch (e) {
+      setMessageAmi(e.message)
+    }
+  }
+
+  const gererReponseDemande = async (id, accepter) => {
+    await repondreDemandeAmi(id, accepter)
+    setDemandes(await chargerDemandesRecues())
+    setAmis(await chargerMesAmis())
+  }
+
+  const toggleMonPartage = async () => {
+    const nouveauStatut = !partageActif
+    setPartageActif(nouveauStatut)
+    await definirPartageActif(nouveauStatut)
+  }
 
   const centre = centreCarte || position
   const urlCarte = centre
@@ -321,7 +355,7 @@ function LocalisationScreen() {
       try {
         await navigator.share({ title: 'Ma position', text: 'Voici où je suis :', url: lien })
       } catch {
-        // annulé par l'utilisateur, rien à faire
+        // annulé par l'utilisateur
       }
     } else {
       await navigator.clipboard.writeText(lien)
@@ -334,8 +368,6 @@ function LocalisationScreen() {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`, '_blank')
   }
 
-  // AJOUT — copier / partager l'adresse lisible (mêmes patterns que
-  // pour les coordonnées, juste appliqués au texte de l'adresse)
   const copierAdresse = async () => {
     if (!adresse) return
     try {
@@ -374,8 +406,6 @@ function LocalisationScreen() {
     notifierSucces(`"${nomNouveauFavori.trim()}" ajouté à tes lieux favoris ⭐`)
   }
 
-  // Suppression avec petite animation de sortie avant de retirer
-  // réellement l'élément de la liste
   const retirerFavori = (e, id) => {
     e.stopPropagation()
     setFavoriEnSuppression(id)
@@ -407,7 +437,6 @@ function LocalisationScreen() {
 
   const precisionInfo = position ? evaluerPrecision(position.precision) : null
 
-  // Libellé du badge flottant affiché au-dessus de la carte
   const labelCarte = (() => {
     if (!centreCarte || !position) return 'Position actuelle'
     if (centreCarte.latitude === position.latitude && centreCarte.longitude === position.longitude) return 'Position actuelle'
@@ -415,10 +444,16 @@ function LocalisationScreen() {
       (l) => l.latitude === centreCarte.latitude && l.longitude === centreCarte.longitude
     )
     if (favoriCorrespondant) return favoriCorrespondant.nom
+    const amiCorrespondant = positionsAmis.find(
+      (p) => p.latitude === centreCarte.latitude && p.longitude === centreCarte.longitude
+    )
+    if (amiCorrespondant) {
+      const amiInfo = amis.find((a) => a.id === amiCorrespondant.user_id)
+      return amiInfo ? `Position de ${amiInfo.pseudo}` : 'Position ami'
+    }
     return "Point de l'historique"
   })()
 
-  // Sous-titre dynamique du header
   const sousTitre = (() => {
     if (chargement && !position) return 'Recherche de ta position en cours…'
     if (adresse) return `Actuellement près de ${adresse.split(',').slice(0, 2).join(',')}`
@@ -443,16 +478,6 @@ function LocalisationScreen() {
           </div>
         </div>
 
-        {/* ============================================================
-            Note honnête : la position d'amis n'est PAS incluse ici —
-            ça demande un vrai backend (comptes utilisateurs, base de
-            données partagée) avec leur consentement explicite, ce
-            n'est pas quelque chose que localStorage peut faire.
-            ============================================================ */}
-        <p className="text-[10.5px] text-espresso/40 leading-relaxed mb-6 italic max-w-[640px]">
-          Pour l'instant, seule ta propre position est affichée ici — le partage de position entre amis demande un vrai système de comptes et un serveur partagé (pas seulement ce fichier), avec leur consentement explicite. Prochaine étape possible si tu veux t'y mettre.
-        </p>
-
         {erreur && (
           <div role="alert" className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 yuna-scale-in">
             <p className="text-[11.5px] text-red-600">{erreur}</p>
@@ -461,7 +486,7 @@ function LocalisationScreen() {
 
         {position ? (
           <div className="lg:grid lg:grid-cols-[1.45fr_1fr] lg:gap-5 lg:items-start">
-            {/* ===== COLONNE GAUCHE : carte + actions rapides (fixe au scroll sur desktop) ===== */}
+            {/* ===== COLONNE GAUCHE : carte + actions rapides ===== */}
             <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-3 lg:mb-0">
               <div className="yuna-scale-in bg-white rounded-3xl border border-espresso/10 overflow-hidden relative shadow-md">
                 <iframe
@@ -473,7 +498,6 @@ function LocalisationScreen() {
                   loading="lazy"
                 />
 
-                {/* Badge flottant : indique ce qui est actuellement centré */}
                 <div key={labelCarte + centreCarte?.latitude} className="absolute top-3 left-3 flex items-center gap-1.5 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full shadow-md yuna-badge-drop">
                   <IconPin style={{ width: '10px', height: '10px' }} className="text-espresso/70 flex-shrink-0" />
                   <span className="text-[10.5px] font-semibold text-espresso truncate max-w-[140px]">{labelCarte}</span>
@@ -496,14 +520,13 @@ function LocalisationScreen() {
                 )}
               </div>
 
-              {/* Actions rapides — cartes interactives avec ripple */}
+              {/* Actions rapides */}
               <div className="grid grid-cols-3 gap-2">
                 <BoutonAction icon={IconCopier} label="Copier" ariaLabel="Copier mes coordonnées" onClick={copierCoordonnees} accent="#6B5B4B" />
                 <BoutonAction icon={IconPartager} label="Partager" ariaLabel="Partager ma position" onClick={partagerPosition} accent="#3E6E8E" />
                 <BoutonAction icon={IconItineraire} label="Itinéraire" ariaLabel="Lancer un itinéraire vers ma position" onClick={() => ouvrirItineraire(position.latitude, position.longitude)} accent="#3E8E5A" />
               </div>
 
-              {/* Sur desktop, le bouton d'actualisation reste avec la carte, bien visible sans scroller */}
               <div className="hidden lg:block">
                 <button
                   onClick={() => { vibrer(10); localiser() }}
@@ -534,6 +557,62 @@ function LocalisationScreen() {
                 {!chargement && (
                   <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
                 )}
+
+                {/* ===== BLOCS AMIS (DESKTOP) ===== */}
+                {monProfil && (
+                  <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-5 yuna-slide-up">
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Mon code ami — partage-le pour être ajouté</p>
+                    <p className="text-[16px] font-bold text-espresso tracking-wider">{monProfil.code_ami}</p>
+                  </div>
+                )}
+
+                <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up">
+                  <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Ajouter un ami par son code</p>
+                  <div className="flex gap-2">
+                    <input value={codeAmiSaisi} onChange={(e) => setCodeAmiSaisi(e.target.value)} placeholder="Ex : SAKI-4821"
+                      className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] outline-none border border-espresso/15" />
+                    <button onClick={gererAjoutAmi} className="bg-espresso text-peony rounded-xl px-4 text-[11px] font-semibold hover:-translate-y-0.5 transition-transform">Ajouter</button>
+                  </div>
+                  {messageAmi && <p className="text-[10.5px] text-espresso/50 mt-2">{messageAmi}</p>}
+                </div>
+
+                {demandes.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up">
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Demandes reçues</p>
+                    {demandes.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-espresso/5 last:border-0">
+                        <span className="text-[12px] text-espresso font-medium">{d.profils_publics?.pseudo}</span>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => gererReponseDemande(d.id, true)} className="text-[10px] bg-espresso text-peony rounded-full px-3 py-1 font-medium">Accepter</button>
+                          <button onClick={() => gererReponseDemande(d.id, false)} className="text-[10px] text-espresso/40 hover:text-espresso">Refuser</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes amis ({amis.length})</p>
+                    <button onClick={toggleMonPartage} className="text-[9px] font-semibold px-2.5 py-1 rounded-full transition-colors" style={{ background: partageActif ? '#4ade80' : '#F0EEEB', color: partageActif ? '#1a3a1a' : '#3E2723' }}>
+                      {partageActif ? 'Je partage ma position' : 'Partage désactivé'}
+                    </button>
+                  </div>
+                  {amis.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun ami pour l'instant</p>}
+                  {amis.map((ami) => {
+                    const pos = positionsAmis.find((p) => p.user_id === ami.id)
+                    return (
+                      <div
+                        key={ami.id}
+                        onClick={() => pos && centrerSur(pos)}
+                        className={`flex items-center justify-between py-2 border-b border-espresso/5 last:border-0 ${pos ? 'cursor-pointer hover:bg-[#F0EEEB]/50 px-2 rounded-lg transition-colors' : ''}`}
+                      >
+                        <span className="text-[12px] text-espresso font-medium">{ami.pseudo}</span>
+                        <span className="text-[9.5px] text-espresso/40">{pos ? `Vu ${new Date(pos.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Aucune position partagée'}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
@@ -692,7 +771,7 @@ function LocalisationScreen() {
                 )}
               </div>
 
-              {/* ===== HISTORIQUE — présenté comme une timeline ===== */}
+              {/* ===== HISTORIQUE ===== */}
               {historique.length > 1 && (
                 <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
@@ -730,7 +809,7 @@ function LocalisationScreen() {
             </div>
           </div>
         ) : (
-          // ===== ÉCRAN DE CHARGEMENT (skeleton) — remplace le simple texte =====
+          /* ===== ÉCRAN DE CHARGEMENT ===== */
           chargement ? (
             <div className="flex flex-col gap-3 yuna-fade-in" aria-busy="true" aria-label="Recherche de ta position en cours">
               <div className="yuna-shimmer rounded-3xl h-[280px] sm:h-[340px]" />
@@ -753,7 +832,7 @@ function LocalisationScreen() {
           )
         )}
 
-        {/* Sur mobile/tablette, les contrôles restent en bas de page, centrés et limités en largeur sur desktop */}
+        {/* CONTRÔLES MOBILES ET BLOCS AMIS SUR PETITS ÉCRANS */}
         <div className={position ? 'lg:hidden mt-5' : 'mt-5'}>
           <div className="max-w-[420px] mx-auto lg:max-w-none">
             <button
@@ -786,6 +865,62 @@ function LocalisationScreen() {
             {position && !chargement && (
               <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
             )}
+
+            {/* ===== BLOCS AMIS (MOBILE) ===== */}
+            {monProfil && (
+              <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-5">
+                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Mon code ami — partage-le pour être ajouté</p>
+                <p className="text-[16px] font-bold text-espresso tracking-wider">{monProfil.code_ami}</p>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3">
+              <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Ajouter un ami par son code</p>
+              <div className="flex gap-2">
+                <input value={codeAmiSaisi} onChange={(e) => setCodeAmiSaisi(e.target.value)} placeholder="Ex : SAKI-4821"
+                  className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] outline-none border border-espresso/15" />
+                <button onClick={gererAjoutAmi} className="bg-espresso text-peony rounded-xl px-4 text-[11px] font-semibold">Ajouter</button>
+              </div>
+              {messageAmi && <p className="text-[10.5px] text-espresso/50 mt-2">{messageAmi}</p>}
+            </div>
+
+            {demandes.length > 0 && (
+              <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3">
+                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Demandes reçues</p>
+                {demandes.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-espresso/5 last:border-0">
+                    <span className="text-[12px] text-espresso font-medium">{d.profils_publics?.pseudo}</span>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => gererReponseDemande(d.id, true)} className="text-[10px] bg-espresso text-peony rounded-full px-3 py-1 font-medium">Accepter</button>
+                      <button onClick={() => gererReponseDemande(d.id, false)} className="text-[10px] text-espresso/40">Refuser</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes amis ({amis.length})</p>
+                <button onClick={toggleMonPartage} className="text-[9px] font-semibold px-2.5 py-1 rounded-full" style={{ background: partageActif ? '#4ade80' : '#F0EEEB', color: partageActif ? '#1a3a1a' : '#3E2723' }}>
+                  {partageActif ? 'Je partage ma position' : 'Partage désactivé'}
+                </button>
+              </div>
+              {amis.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun ami pour l'instant</p>}
+              {amis.map((ami) => {
+                const pos = positionsAmis.find((p) => p.user_id === ami.id)
+                return (
+                  <div
+                    key={ami.id}
+                    onClick={() => pos && centrerSur(pos)}
+                    className={`flex items-center justify-between py-2 border-b border-espresso/5 last:border-0 ${pos ? 'cursor-pointer hover:bg-[#F0EEEB]/50 px-2 rounded-lg' : ''}`}
+                  >
+                    <span className="text-[12px] text-espresso font-medium">{ami.pseudo}</span>
+                    <span className="text-[9.5px] text-espresso/40">{pos ? `Vu ${new Date(pos.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Aucune position partagée'}</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

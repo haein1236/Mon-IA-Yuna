@@ -67,3 +67,22 @@ export async function connecterAvecGoogle() {
   })
   if (error) throw error
 }
+
+
+
+// Génère un code ami court et lisible, du style "SAKI-4821"
+function genererCodeAmi(pseudo) {
+  const base = (pseudo || 'AMI').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'YUNA'
+  const chiffres = Math.floor(1000 + Math.random() * 9000)
+  return `${base}-${chiffres}`
+}
+
+// ⬅️ NOUVEAU : crée le profil public s'il n'existe pas encore —
+// appelée après connexion (voir App.jsx)
+export async function garantirProfilPublic(user) {
+  const { data: existant } = await supabase.from('profils_publics').select('id').eq('id', user.id).maybeSingle()
+  if (existant) return
+
+  const pseudo = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Utilisateur'
+  await supabase.from('profils_publics').insert({ id: user.id, pseudo, code_ami: genererCodeAmi(pseudo) })
+}

@@ -161,6 +161,7 @@ export function migrerPersonnage(p) {
     typeRomance: p.typeRomance || '',
     faitsSurUtilisateur: p.faitsSurUtilisateur || [],
     traits: p.traits || [],
+    personnagesSecondaires: p.personnagesSecondaires || [],
   }
 }
 
@@ -246,6 +247,10 @@ export const personnagesParDefaut = [
       peursProfondes: ["Ne jamais être vraiment aimé pour ce qu'il est", "Reproduire le foyer brisé qu'il a connu"],
       reves: ["Construire enfin une famille paisible"],
     },
+    personnagesSecondaires: [
+      { id: 'sec-1', nom: 'Sami', role: 'Petit frère', personnalite: "Espiègle, admire énormément Ayoub, cherche toujours son approbation", lienAvecPrincipal: "Ayoub l'a élevé quasiment seul, très protecteur envers lui" },
+      { id: 'sec-2', nom: 'Nadia', role: 'Mère d\'Ayoub', personnalite: "Fatiguée par les années difficiles, aime profondément ses enfants mais peine à l'exprimer", lienAvecPrincipal: "Relation compliquée, beaucoup de non-dits, mais un amour sincère" },
+    ],
     styleCommunication: "Voix calme, réponses réfléchies, beaucoup de silence. Exprime rarement ses sentiments directement. Lorsque l'amour grandit, il devient tendre, rassurant, romantique et très affectueux.",
     valeurs: "Allah avant tout, respect, fidélité, honnêteté, famille, responsabilité.",
     limites: "Ne supporte pas les cris, les trahisons, qu'on abandonne les gens, qu'on joue avec ses sentiments, les mensonges.",
@@ -303,7 +308,7 @@ export const personnagesParDefaut = [
     detestations: { ...DETESTATIONS_PAR_DEFAUT, comportements: ['les trahisons', 'qu\'on touche à ceux qu\'il protège'], violence: false },
     secrets: {
       ...SECRETS_PAR_DEFAUT,
-      secrets: ["N'a jamais aimé personne avant elle"], traumatismes: ["A d'û tuer pour survivre dans son milieu"],
+      secrets: ["N'a jamais aimé personne avant elle"], traumatismes: ["A dû tuer pour survivre dans son milieu"],
       peursProfondes: ["Que son monde criminel détruise ce qu'il aime"], objectifs: ["Protéger son empire", "Découvrir s'il mérite d'être aimé"],
     },
     styleCommunication: "Parle peu, voix grave, réponses courtes, regard intimidant. Rarement des compliments, mais chacun est sincère.",
@@ -393,11 +398,24 @@ export function togglerFavoriPersonnage(id) {
   return personnages
 }
 
+// ============================================================
+// PERSONNAGES SECONDAIRES
+// Chaque perso principal peut avoir des personnages secondaires liés
+// à son histoire (famille, amis, rivaux...) — le personnage principal
+// peut les mentionner, raconter ce qu'ils font, et même les "faire
+// parler" entre guillemets dans la même réponse quand le contexte
+// s'y prête (ex: "Ma sœur m'a appelé hier, elle a dit : « ... »").
+// ============================================================
+export function creerPersonnageSecondaireVide() {
+  return { id: `sec-${Date.now()}`, nom: '', role: '', personnalite: '', lienAvecPrincipal: '' }
+}
+
 export function creerPersonnageVide() {
   return migrerPersonnage({
     id: `perso-${Date.now()}`, nom: '', avatarUrl: null, couleur: '#C4688A', categorie: 'romance', categories: [],
     tags: [], description: '', histoire: '', personnalite: '', sceneOuverture: '',
     styleCommunication: '', valeurs: '', limites: '', objectifsPersonnels: '',
+    personnagesSecondaires: [],
     origine: 'perso', favori: false,
   })
 }
@@ -435,15 +453,49 @@ export function mettreAJourRelation(personnageId, { relation, emotionActuelle, n
       const valeur = relation?.[cle] ?? p.relation[cle]
       relationBornee[cle] = Math.max(0, Math.min(100, valeur))
     }
+    // ⬅️ NOUVEAU : recalcule automatiquement le chapitre à chaque mise
+    // à jour de relation — le personnage progresse dans l'histoire
+    // sans jamais avoir besoin d'y toucher manuellement
+    const chapitre = calculerChapitreActuel(relationBornee)
     return {
       ...p,
       relation: relationBornee,
       emotionActuelle: emotionActuelle || p.emotionActuelle,
       faitsSurUtilisateur: [...new Set([...(p.faitsSurUtilisateur || []), ...(nouveauxFaits || [])])].slice(-15),
       souvenirsImportants: nouveauSouvenir ? [...(p.souvenirsImportants || []), nouveauSouvenir].slice(-20) : p.souvenirsImportants,
+      progression: { ...p.progression, chapitreActuel: chapitre.numero, objectifActuel: chapitre.objectif },
     }
   })
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
   synchroniserVersFirestore('personnages', personnagesMaj)
   return personnagesMaj
+}
+
+// ============================================================
+// CHAPITRES NARRATIFS
+// Progression automatique en 6 chapitres, calculée à partir du
+// score de relation (le même calcul que calculerEtapeRelation) —
+// universelle à tous les personnages, jamais à définir à la main.
+// ============================================================
+export const DEFINITION_CHAPITRES = [
+  { numero: 1, titre: 'Première rencontre', seuil: 0, objectif: "Faire connaissance, poser les bases de la relation, rester prudent." },
+  { numero: 2, titre: 'Rapprochement', seuil: 25, objectif: "Construire une vraie confiance mutuelle, petits pas vers l'ouverture." },
+  { numero: 3, titre: 'Complicité', seuil: 45, objectif: "Développer une vraie complicité, plus de légèreté et de sincérité." },
+  { numero: 4, titre: 'Tension', seuil: 60, objectif: "Les sentiments deviennent plus clairs, tension et hésitation." },
+  { numero: 5, titre: 'Vulnérabilité', seuil: 75, objectif: "Le personnage se livre davantage, partage des choses plus intimes." },
+  { numero: 6, titre: 'Épanouissement', seuil: 88, objectif: "La relation s'épanouit pleinement, confiance quasi totale." },
+]
+
+function scoreRelationBrut(relation) {
+  const r = { confiance: 20, affection: 10, respect: 20, complicite: 10, romance: 0, ...relation }
+  return (r.confiance + r.affection + r.respect + r.complicite + r.romance * 1.3) / 5.3
+}
+
+export function calculerChapitreActuel(relation) {
+  const score = scoreRelationBrut(relation)
+  let chapitre = DEFINITION_CHAPITRES[0]
+  for (const c of DEFINITION_CHAPITRES) {
+    if (score >= c.seuil) chapitre = c
+  }
+  return chapitre
 }

@@ -3,7 +3,7 @@ import {
   HarmCategory,
   HarmBlockThreshold,
 } from "@google/generative-ai";
-import { TRAITS_PERSONNAGE, calculerEtapeRelation } from './personnages';
+import { TRAITS_PERSONNAGE, calculerEtapeRelation, calculerChapitreActuel, DEFINITION_CHAPITRES  } from './personnages';
 import { chargerParametres } from "./parametres";
 import { chargerFaits, ajouterFaits } from "./memoire";
 import { calculerInterdictions, validerReponse } from './personnages/regles';
@@ -372,6 +372,7 @@ function construirePersonnagePrompt(personnage, resumeContexte = '', interdictio
     ...(p.secrets?.peursProfondes || []),
   ];
 
+  const chapitreActuel = DEFINITION_CHAPITRES.find((c) => c.numero === personnage.progression?.chapitreActuel) || calculerChapitreActuel(personnage.relation)
   const souvenirsRecents = (p.souvenirsImportants || []).slice(-5)
     .map((s) => `- ${s.titre} (${s.date}) : ${s.description} [émotion : ${s.emotion}]`)
     .join('\n');
@@ -442,6 +443,13 @@ Complicité : ${p.relation?.complicite ?? 10}/100 · Romance : ${p.relation?.rom
 Prends en compte la tension physique, romantique et le désir accumulé. Un niveau faible = tu restes prudent(e). Un niveau élevé d'affection, de complicité ou de romance signifie que tu acceptes pleinement le rapprochement intime, la passion charnelle et la vulnérabilité amoureuse.
 
 ━━━━━━━━━━━━━━━━━━
+CHAPITRE ACTUEL DE VOTRE HISTOIRE
+━━━━━━━━━━━━━━━━━━
+Chapitre ${chapitreActuel.numero} : "${chapitreActuel.titre}"
+Objectif narratif de ce chapitre : ${chapitreActuel.objectif}
+Adapte ton comportement à ce moment précis de l'histoire — ne saute jamais des étapes.
+
+━━━━━━━━━━━━━━━━━━
 TON COMPORTEMENT PRÉCIS (calibré selon TA personnalité)
 ━━━━━━━━━━━━━━━━━━
 ${formaterComportement(personnage)}
@@ -499,6 +507,13 @@ Toujours en français. 2 à 5 phrases maximum (sauf nécessité narrative). Form
 *Action, pensée ou réaction physique.*
 "Dialogue."
 Pas de narration extérieure, pas d'explication du fonctionnement interne.
+
+${(personnage.personnagesSecondaires || []).length > 0 ? `
+━━━━━━━━━━━━━━━━━━
+PERSONNAGES SECONDAIRES DE TON HISTOIRE (tu peux les mentionner, raconter ce qu'ils font, ou les citer entre guillemets si pertinent)
+━━━━━━━━━━━━━━━━━━
+${personnage.personnagesSecondaires.map((s) => `- ${s.nom} (${s.role}) : ${s.personnalite}. Votre lien : ${s.lienAvecPrincipal}`).join('\n')}
+` : ''}
 
 ━━━━━━━━━━━━━━━━━━
 RÈGLES DE GESTION DES HISTOIRES MATURES

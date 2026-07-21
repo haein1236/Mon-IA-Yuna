@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { chargerPersonnages, sauvegarderPersonnage, supprimerPersonnage, togglerFavoriPersonnage, creerPersonnageVide, chargerMessagesPersonnage, sauvegarderMessagesPersonnage, reinitialiserConversationPersonnage, CATEGORIES_PERSONNAGES, TRAITS_PERSONNAGE, calculerNiveauRelation, mettreAJourRelation } from '../services/personnages'
+import { chargerPersonnages, sauvegarderPersonnage, supprimerPersonnage, togglerFavoriPersonnage, creerPersonnageVide, creerPersonnageSecondaireVide, chargerMessagesPersonnage, sauvegarderMessagesPersonnage, reinitialiserConversationPersonnage, CATEGORIES_PERSONNAGES, TRAITS_PERSONNAGE, calculerNiveauRelation, mettreAJourRelation } from '../services/personnages'
 import { envoyerMessageAPersonnage, analyserRelationPersonnage } from '../services/gemini'
+import { DEFINITION_CHAPITRES } from '../services/personnages'
 import { fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
 import { notifierErreur } from '../services/notifications'
@@ -114,9 +115,6 @@ function libelleCategorie(id) {
   return CATEGORIES_PERSONNAGES.find((c) => c.id === id)?.label || id
 }
 
-// AJOUT — petit emoji représentant l'état émotionnel courant, purement
-// visuel (la donnée `emotionActuelle` existait déjà mais n'était
-// affichée nulle part dans l'ancienne interface)
 const EMOJIS_EMOTION = {
   détendu: '😌', heureux: '😊', joyeux: '😄', triste: '😔', énervé: '😤',
   jaloux: '😒', gêné: '😳', amoureux: '🥰', inquiet: '😟', nostalgique: '🥲',
@@ -126,8 +124,6 @@ function emojiEmotion(emotion) {
   return EMOJIS_EMOTION[emotion?.toLowerCase?.()] || '💭'
 }
 
-// Styles d'animation centralisés — évite de dupliquer des classes
-// Tailwind personnalisées un peu partout, respecte prefers-reduced-motion
 function StylesAnimations() {
   return (
     <style>{`
@@ -189,7 +185,6 @@ function AvatarPersonnage({ personnage, taille = 48, modifiable = false, onModif
   )
 }
 
-// Petite barre de progression réutilisable pour la relation / l'affection
 function BarreProgression({ label, valeur, couleur, icone }) {
   return (
     <div>
@@ -229,7 +224,6 @@ function PersonnagesScreen() {
   const [personnages, setPersonnages] = useState([])
   const [categoriesFiltre, setCategoriesFiltre] = useState([])
   const [recherche, setRecherche] = useState('')
-  // AJOUT — trier les favoris en premier (purement visuel, ne touche à rien en stockage)
   const [favorisDabord, setFavorisDabord] = useState(false)
 
   const [personnageActif, setPersonnageActif] = useState(null)
@@ -246,6 +240,8 @@ function PersonnagesScreen() {
   const [afficherCreateur, setAfficherCreateur] = useState(false)
   const [personnageEnEdition, setPersonnageEnEdition] = useState(null)
   const [modeEdition, setModeEdition] = useState(false)
+
+  const [afficherFiche, setAfficherFiche] = useState(false)
 
   const basDeListeRef = useRef(null)
   const inputAvatarRef = useRef(null)
@@ -278,7 +274,6 @@ function PersonnagesScreen() {
         p.tags.some((t) => t.toLowerCase().includes(recherche.toLowerCase()))
       return correspondCategorie && correspondRecherche
     })
-    // AJOUT — tri optionnel favoris d'abord (stable, ne modifie pas le tableau source)
     .sort((a, b) => (favorisDabord ? (b.favori ? 1 : 0) - (a.favori ? 1 : 0) : 0))
 
   const toggleFiltreCategorie = (id) => {
@@ -294,7 +289,6 @@ function PersonnagesScreen() {
     setEmojiPickerOuvert(false)
   }
 
-  // AJOUT — ouvrir un personnage au hasard parmi la liste actuellement filtrée
   const ouvrirPersonnageAleatoire = () => {
     const liste = personnagesFiltres.length > 0 ? personnagesFiltres : personnages
     if (liste.length === 0) return
@@ -536,6 +530,21 @@ function PersonnagesScreen() {
       return { ...ancien, traits: nouveaux }
     })
   }
+
+  // Fonctions de gestion des personnages secondaires
+  const ajouterPersonnageSecondaire = () => {
+    setPersonnageEnEdition((a) => ({ ...a, personnagesSecondaires: [...(a.personnagesSecondaires || []), creerPersonnageSecondaireVide()] }))
+  }
+  const modifierPersonnageSecondaire = (id, champ, valeur) => {
+    setPersonnageEnEdition((a) => ({
+      ...a,
+      personnagesSecondaires: (a.personnagesSecondaires || []).map((s) => s.id === id ? { ...s, [champ]: valeur } : s),
+    }))
+  }
+  const supprimerPersonnageSecondaire = (id) => {
+    setPersonnageEnEdition((a) => ({ ...a, personnagesSecondaires: (a.personnagesSecondaires || []).filter((s) => s.id !== id) }))
+  }
+
   const gererUploadAvatar = async (e) => {
     const fichier = e.target.files[0]
     if (!fichier) return
@@ -552,9 +561,6 @@ function PersonnagesScreen() {
     const personnagesMaj = sauvegarderPersonnage(personnageAEnregistrer)
     setPersonnages(personnagesMaj)
     if (personnageActif?.id === personnageAEnregistrer.id) setPersonnageActif(personnageAEnregistrer)
-    // Correction d'un bug existant : la fonction s'appelait "fererCreateur"
-    // (n'existait pas) — elle empêchait la fermeture de la modale après
-    // l'enregistrement. Remplacée par le vrai nom : fermerCreateur.
     fermerCreateur()
   }
 
@@ -623,6 +629,14 @@ function PersonnagesScreen() {
           </div>
           <button onClick={() => ouvrirCreateur(personnageActif)} aria-label="Modifier ce personnage" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Modifier ce personnage">
             <IconCrayon style={{ width: '14px', height: '14px' }} className="text-espresso/50" />
+          </button>
+          <button onClick={() => setAfficherFiche(true)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0" title="Voir la fiche personnage">
+            <svg viewBox="0 0 24 24" fill="none" style={{ width: '14px', height: '14px' }} className="text-espresso/50">
+              <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+              <line x1="8" y1="8" x2="16" y2="8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="8" y1="16" x2="12" y2="16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
           </button>
           <button onClick={recommencerHistoire} aria-label="Recommencer l'histoire" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-espresso/5 transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Recommencer l'histoire">
             <IconRefresh style={{ width: '15px', height: '15px' }} className="text-espresso/50" />
@@ -787,6 +801,105 @@ function PersonnagesScreen() {
             {estAppareilTactile ? 'Astuce : entoure ton texte de * pour une action' : 'Entrée pour envoyer'}
           </p>
         </div>
+
+        {/* MODAL FICHE PERSONNAGE */}
+        {afficherFiche && (() => {
+          const chapitreActuel = DEFINITION_CHAPITRES.find((c) => c.numero === personnageActif.progression?.chapitreActuel) || DEFINITION_CHAPITRES[0]
+          const r = personnageActif.relation || {}
+          const statsAffichees = [
+            { label: 'Confiance', valeur: r.confiance ?? 20 }, { label: 'Affection', valeur: r.affection ?? 10 },
+            { label: 'Respect', valeur: r.respect ?? 20 }, { label: 'Complicité', valeur: r.complicite ?? 10 },
+            { label: 'Romance', valeur: r.romance ?? 0 }, { label: 'Jalousie', valeur: r.jalousie ?? 0 },
+          ]
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-espresso/60 yuna-fade-in" onClick={() => setAfficherFiche(false)}>
+              <div className="yuna-modal-in bg-white rounded-3xl w-full max-w-[520px] max-h-[85vh] overflow-y-auto scroll-suave p-5 md:p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <AvatarPersonnage personnage={personnageActif} taille={44} />
+                    <div>
+                      <p className="font-semibold text-espresso" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '17px' }}>{personnageActif.nom}</p>
+                      <p className="text-[10px] text-espresso/45">Émotion actuelle : {personnageActif.emotionActuelle || 'détendu'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setAfficherFiche(false)} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-espresso/5">
+                    <IconCroix style={{ width: '16px', height: '16px' }} className="text-espresso/50" />
+                  </button>
+                </div>
+
+                {/* Chapitre */}
+                <div className="rounded-2xl p-4 mb-4" style={{ background: `${personnageActif.couleur}12` }}>
+                  <p className="text-[9px] uppercase tracking-wide font-semibold" style={{ color: personnageActif.couleur }}>
+                    Chapitre {chapitreActuel.numero} sur {DEFINITION_CHAPITRES.length}
+                  </p>
+                  <p className="text-[14px] font-semibold text-espresso mt-0.5">{chapitreActuel.titre}</p>
+                  <p className="text-[10.5px] text-espresso/55 mt-1">{chapitreActuel.objectif}</p>
+                  <div className="h-1.5 rounded-full bg-espresso/10 overflow-hidden mt-2.5">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(chapitreActuel.numero / DEFINITION_CHAPITRES.length) * 100}%`, background: personnageActif.couleur }} />
+                  </div>
+                </div>
+
+                {/* Statistiques de relation */}
+                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Votre relation</p>
+                <div className="grid grid-cols-2 gap-2.5 mb-4">
+                  {statsAffichees.map((s) => (
+                    <div key={s.label}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] text-espresso/55">{s.label}</span>
+                        <span className="text-[10px] font-semibold text-espresso">{s.valeur}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-espresso/10 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${s.valeur}%`, background: personnageActif.couleur }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Ce qu'il sait de toi */}
+                {(personnageActif.faitsSurUtilisateur || []).length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Ce qu'il/elle sait de toi</p>
+                    <div className="flex flex-col gap-1">
+                      {personnageActif.faitsSurUtilisateur.map((f, i) => (
+                        <p key={i} className="text-[11.5px] text-espresso bg-[#F0EEEB] rounded-lg px-3 py-1.5">{f}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Souvenirs importants (timeline) */}
+                {(personnageActif.souvenirsImportants || []).length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Souvenirs marquants</p>
+                    <div className="flex flex-col gap-2">
+                      {[...personnageActif.souvenirsImportants].reverse().map((s, i) => (
+                        <div key={i} className="border-l-2 pl-3" style={{ borderColor: personnageActif.couleur }}>
+                          <p className="text-[11px] font-semibold text-espresso">{s.titre}</p>
+                          <p className="text-[10px] text-espresso/55">{s.description}</p>
+                          <p className="text-[9px] text-espresso/35 mt-0.5">{s.date} · {s.emotion}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Personnages secondaires */}
+                {(personnageActif.personnagesSecondaires || []).length > 0 && (
+                  <div>
+                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Personnages de son entourage</p>
+                    <div className="flex flex-col gap-1.5">
+                      {personnageActif.personnagesSecondaires.map((s) => (
+                        <div key={s.id} className="bg-[#F0EEEB] rounded-lg px-3 py-2">
+                          <p className="text-[11px] font-semibold text-espresso">{s.nom} <span className="text-espresso/45 font-normal">— {s.role}</span></p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
       </div>
     )
   }
@@ -1140,6 +1253,25 @@ function PersonnagesScreen() {
                 <textarea value={personnageEnEdition.objectifsPersonnels || ''} onChange={(e) => modifierChampCreation('objectifsPersonnels', e.target.value)}
                   placeholder="Ce que le personnage recherche pour lui-même, indépendamment de toi..." rows={2}
                   className="w-full bg-[#F0EEEB] rounded-xl px-3.5 py-2.5 text-[12.5px] text-espresso mt-1 outline-none border border-espresso/15 focus:border-espresso transition-colors resize-y" />
+              </div>
+
+              {/* ===== SECTION : Personnages secondaires ===== */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[9px] text-espresso/40 uppercase tracking-wide">Personnages secondaires (famille, amis, rivaux...)</label>
+                  <button type="button" onClick={ajouterPersonnageSecondaire} className="text-[10px] font-semibold text-espresso underline">+ Ajouter</button>
+                </div>
+                {(personnageEnEdition.personnagesSecondaires || []).map((s) => (
+                  <div key={s.id} className="bg-[#F0EEEB] rounded-xl p-3 mb-2">
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <input value={s.nom} onChange={(e) => modifierPersonnageSecondaire(s.id, 'nom', e.target.value)} placeholder="Nom" className="bg-white rounded-lg px-2.5 py-1.5 text-[12px] outline-none border border-espresso/15" />
+                      <input value={s.role} onChange={(e) => modifierPersonnageSecondaire(s.id, 'role', e.target.value)} placeholder="Rôle (frère, ami...)" className="bg-white rounded-lg px-2.5 py-1.5 text-[12px] outline-none border border-espresso/15" />
+                    </div>
+                    <textarea value={s.personnalite} onChange={(e) => modifierPersonnageSecondaire(s.id, 'personnalite', e.target.value)} placeholder="Sa personnalité" rows={2} className="w-full bg-white rounded-lg px-2.5 py-1.5 text-[12px] outline-none border border-espresso/15 mb-2 resize-y" />
+                    <textarea value={s.lienAvecPrincipal} onChange={(e) => modifierPersonnageSecondaire(s.id, 'lienAvecPrincipal', e.target.value)} placeholder="Son lien avec le personnage principal" rows={2} className="w-full bg-white rounded-lg px-2.5 py-1.5 text-[12px] outline-none border border-espresso/15 mb-2 resize-y" />
+                    <button type="button" onClick={() => supprimerPersonnageSecondaire(s.id)} className="text-[10px] text-red-500">Supprimer</button>
+                  </div>
+                ))}
               </div>
 
               {/* ===== SECTION : Scène d'ouverture ===== */}

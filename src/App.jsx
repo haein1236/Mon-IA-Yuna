@@ -11,10 +11,10 @@ import JournalScreen    from './screens/JournalScreen'
 import LocalisationScreen from './screens/LocalisationScreen'
 import Sidebar          from './components/Sidebar'
 import NotificationHost from './components/NotificationHost'
+import { garantirProfilPublic, surveillerConnexion } from './services/authentification'
 import { synchroniserAuDemarrage } from './services/sync'
 import AccesProtege     from './components/AccesProtege'
 import ConnexionScreen from './screens/ConnexionScreen'
-import { surveillerConnexion } from './services/authentification'
 import { creerNouvelleConversation } from './services/conversations'
 import { useHauteurEcran } from './hooks/useHauteurEcran'
 import { chargerSuivi, enregistrerVisite, joursDepuis } from './services/suivi'
@@ -47,6 +47,7 @@ function App() {
       clearTimeout(filetSecurite)
       setUtilisateur(user)
       if (user) {
+        await garantirProfilPublic(user)
         await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
         await synchroniserAuDemarrage('yuna-parametres', 'parametres')
         // Synchronise aussi conversations Yuna + personnages
