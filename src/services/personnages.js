@@ -1,9 +1,9 @@
 import { synchroniserVersFirestore } from './sync'
+import { structureMemoireVide, completerStructure, fusionnerNiveau } from './memoire/utilsNiveaux'
 
 // ============================================================
-// SERVICE PERSONNAGES — v2, enrichi façon Character.AI/PolyBuzz
-// Toutes les fonctions publiques existantes sont conservées à
-// l'identique (mêmes noms, mêmes signatures) pour ne rien casser.
+// SERVICE PERSONNAGES — v2.2, enrichi façon Character.AI/PolyBuzz
+// Moteur relationnel déterministe & propagation dynamique par traits
 // ============================================================
 
 const CLE_PERSONNAGES = 'yuna-personnages'
@@ -44,7 +44,7 @@ export const TRAITS_PERSONNAGE = [
   { id: 'fidele', label: 'Fidèle', description: "Tient ses engagements sans faille, ne trahit jamais sa parole." },
   { id: 'mature', label: 'Mature', description: "Réfléchit avant d'agir, gère les conflits avec calme." },
   { id: 'calculateur', label: 'Calculateur', description: "Pèse chaque mot, anticipe les conséquences." },
-  { id: 'charismatique', label: 'Charismatique', description: "Impose naturellement le respect et l'attention." },
+  { id: 'charismatique', label: 'Charismatique', description: "Impose naturally le respect et l'attention." },
   { id: 'froid', label: 'Froid', description: "Contrôle ses émotions en apparence, sourit rarement." },
   { id: 'empathique', label: 'Empathique', description: "Ressent profondément les émotions des autres." },
   { id: 'gentleman', label: 'Gentleman', description: "Toujours respectueux, courtois, prévenant dans ses gestes." },
@@ -137,6 +137,8 @@ const MEMOIRE_PAR_DEFAUT = {
   cadeauxRecus: [], promesses: [], disputes: [], reconciliations: [], momentsImportants: [],
 }
 
+const MEMOIRE_NIVEAUX_PAR_DEFAUT = structureMemoireVide()
+
 const SECRETS_PAR_DEFAUT = {
   secrets: [], traumatismes: [], blessures: [], regrets: [], reves: [],
   objectifs: [], peursProfondes: [],
@@ -166,6 +168,7 @@ export function migrerPersonnage(p) {
     relation: { ...RELATION_PAR_DEFAUT, ...(p.relation || {}) },
     memoire: { ...MEMOIRE_PAR_DEFAUT, ...(p.memoire || {}) },
     souvenirsImportants: p.souvenirsImportants || [],
+    memoireNiveaux: completerStructure(p.memoireNiveaux),
     secrets: { ...SECRETS_PAR_DEFAUT, ...(p.secrets || {}) },
     progression: { ...PROGRESSION_PAR_DEFAUT, ...(p.progression || {}) },
     typeRomance: p.typeRomance || '',
@@ -465,6 +468,7 @@ export function reinitialiserConversationPersonnage(personnage) {
       emotionActuelle: 'détendu',
       faitsSurUtilisateur: [],
       souvenirsImportants: [],
+      memoireNiveaux: structureMemoireVide(),
       connaitNomUtilisateur: false,
       progression: { ...PROGRESSION_PAR_DEFAUT },
     }
@@ -478,16 +482,116 @@ export function reinitialiserConversationPersonnage(personnage) {
   return { messages: messageInitial, personnages }
 }
 
+// ============================================================
+// MODIFICATEURS PAR TRAIT
+// Ajuste la vitesse à laquelle certaines statistiques montent/descendent.
+// ============================================================
+const TRAIT_MODIFICATEURS_RELATION = {
+  mefiant:      { confianceGain: 0.55, confiancePerte: 1.5 },  // fait confiance lentement, la perd vite
+  fidele:       { confiancePerte: 0.55 },                       // une erreur isolée ne casse pas tout
+  loyal:        { confiancePerte: 0.65 },
+  impulsif:     { variance: 1.35 },                             // réagit plus fort, dans les deux sens
+  mature:       { variance: 0.75 },                              // change avec plus de retenue
+  calculateur:  { variance: 0.8, confianceGain: 0.85 },          // posé, mais aussi plus lent à s'ouvrir
+  possessif:    { jalousieGain: 1.7 },
+  romantique:   { romanceGain: 1.3 },
+  froid:        { affectionGain: 0.65 },                         // montre son attachement lentement
+  empathique:   { affectionGain: 1.2, compliciteGain: 1.15 },
+  timide:       { romanceGain: 0.7 },                            // met du temps à s'autoriser à ressentir
+  reserve:      { romanceGain: 0.75, affectionGain: 0.85 },
+  entreprenant: { romanceGain: 1.2, compliciteGain: 1.15 },
+  charismatique:{ compliciteGain: 1.15 },
+  melancolique: { affectionGain: 0.85 },
+  protecteur:   { affectionGain: 1.15 },
+  gentleman:    { respectGain: 1.15 },
+  impitoyable:  { confiancePerte: 1.4 },                         // ne pardonne pas facilement une trahison
+}
+
+function calculerMultiplicateur(traits, cle) {
+  let mult = 1
+  for (const trait of traits || []) {
+    const mod = TRAIT_MODIFICATEURS_RELATION[trait]
+    if (mod?.[cle] !== undefined) mult *= mod[cle]
+  }
+  return mult
+}
+
+function ajusterDeltaSelonTraits(statistique, delta, traits) {
+  if (delta === 0) return 0
+
+  const varianceMult = calculerMultiplicateur(traits, 'variance')
+
+  const cleSpecifique = delta > 0
+    ? { confiance: 'confianceGain', affection: 'affectionGain', romance: 'romanceGain', complicite: 'compliciteGain', jalousie: 'jalousieGain', respect: 'respectGain' }[statistique]
+    : { confiance: 'confiancePerte' }[statistique]
+
+  const multSpecifique = cleSpecifique ? calculerMultiplicateur(traits, cleSpecifique) : 1
+
+  return delta * varianceMult * multSpecifique
+}
+
+// ============================================================
+// PROPAGATION RELATIONNELLE DÉTERMINISTE
+// ============================================================
+function propagerInfluencesRelationnelles(relationActuelle, relationProposee, traits = []) {
+  const cles = Object.keys(RELATION_PAR_DEFAUT)
+
+  // Étape 1 — delta brut proposé par l'IA, puis ajusté selon les traits
+  const deltaAjuste = {}
+  for (const cle of cles) {
+    const avant = relationActuelle[cle] ?? RELATION_PAR_DEFAUT[cle]
+    const propose = relationProposee[cle] ?? avant
+    const deltaBrut = propose - avant
+    deltaAjuste[cle] = ajusterDeltaSelonTraits(cle, deltaBrut, traits)
+  }
+
+  const resultat = {}
+  for (const cle of cles) {
+    const avant = relationActuelle[cle] ?? RELATION_PAR_DEFAUT[cle]
+    resultat[cle] = avant + deltaAjuste[cle]
+  }
+
+  // Étape 2 — propagation entre statistiques liées
+  if (deltaAjuste.respect < 0) {
+    resultat.confiance += deltaAjuste.respect * 0.4
+  }
+  if (deltaAjuste.confiance < 0) {
+    resultat.romance += deltaAjuste.confiance * 0.3
+  }
+  if (deltaAjuste.complicite > 0 && deltaAjuste.affection > 0) {
+    resultat.romance += Math.min(deltaAjuste.complicite, deltaAjuste.affection) * 0.2
+  }
+  if (deltaAjuste.affection > 0) {
+    resultat.protection += deltaAjuste.affection * 0.25
+  }
+  
+  if (deltaAjuste.romance > 0) {
+    const multJalousie = calculerMultiplicateur(traits, 'jalousieGain')
+    if (multJalousie > 1) {
+      resultat.jalousie += deltaAjuste.romance * 0.3 * (multJalousie - 1)
+    }
+  }
+
+  return resultat
+}
+
 export function mettreAJourRelation(personnageId, { relation, emotionActuelle, nouveauxFaits, nouveauSouvenir }) {
   const personnages = chargerPersonnages()
   const personnagesMaj = personnages.map((p) => {
     if (p.id !== personnageId) return p
+
+    // Propagation relationnelle selon les traits
+    const relationProposee = relation
+      ? propagerInfluencesRelationnelles(p.relation, relation, p.traits)
+      : p.relation
+
     const relationBornee = {}
     for (const cle of Object.keys(RELATION_PAR_DEFAUT)) {
-      const valeur = relation?.[cle] ?? p.relation[cle]
+      const valeur = relationProposee?.[cle] ?? p.relation[cle]
       relationBornee[cle] = Math.max(0, Math.min(100, valeur))
     }
     const chapitre = calculerChapitreActuel(relationBornee)
+
     return {
       ...p,
       relation: relationBornee,
@@ -496,6 +600,21 @@ export function mettreAJourRelation(personnageId, { relation, emotionActuelle, n
       souvenirsImportants: nouveauSouvenir ? [...(p.souvenirsImportants || []), nouveauSouvenir].slice(-20) : p.souvenirsImportants,
       progression: { ...p.progression, chapitreActuel: chapitre.numero, objectifActuel: chapitre.objectif },
     }
+  })
+  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
+  synchroniserVersFirestore('personnages', personnagesMaj)
+  return personnagesMaj
+}
+
+// ============================================================
+// AJOUTE UN SOUVENIR DANS UN NIVEAU PRÉCIS POUR UN PERSONNAGE
+// (habitudes, promesses, permanente, emotionnelle...)
+// ============================================================
+export function ajouterSouvenirPersonnage(personnageId, niveau, items) {
+  const personnages = chargerPersonnages()
+  const personnagesMaj = personnages.map((p) => {
+    if (p.id !== personnageId) return p
+    return { ...p, memoireNiveaux: fusionnerNiveau(p.memoireNiveaux, niveau, items) }
   })
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
   synchroniserVersFirestore('personnages', personnagesMaj)
@@ -529,16 +648,13 @@ export function calculerChapitreActuel(relation) {
 }
 
 // ============================================================
-// DÉTECTE SI UN PERSONNAGE SECONDAIRE EST MENTIONNÉ
-// Normalise le texte (accents retirés, minuscules) pour une
-// détection plus fiable, et cherche le nom comme un vrai "mot"
-// (pas juste une sous-chaîne qui pourrait matcher par accident).
+// DÉTECTION PERSONNAGE SECONDAIRE
 // ============================================================
 function normaliserTexte(texte) {
   return texte
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // retire les accents
+    .replace(/[\u0300-\u036f]/g, '')
 }
 
 export function detecterPersonnageSecondaireMentionne(personnage, messageUtilisateur) {
@@ -550,7 +666,6 @@ export function detecterPersonnageSecondaireMentionne(personnage, messageUtilisa
   return secondaires.find((s) => {
     if (!s.nom) return false
     const nomNormalise = normaliserTexte(s.nom)
-    // Vérifie que le nom apparaît comme un mot entier (limites de mot \b)
     const regex = new RegExp(`\\b${nomNormalise}\\b`)
     return regex.test(texteNormalise)
   }) || null

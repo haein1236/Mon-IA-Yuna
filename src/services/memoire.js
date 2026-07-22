@@ -1,52 +1,72 @@
 // ============================================================
-// SERVICE MÉMOIRE
-// Stocke des "faits marquants" extraits automatiquement des
-// conversations passées (ex: "prépare un examen", "aime les chats"),
-// pour que Yuna puisse s'en souvenir d'une conversation à l'autre —
-// une mémoire à long terme simple, gardée uniquement dans ce navigateur.
+// SERVICE MÉMOIRE — YUNA
+// Fine couche au-dessus du moteur générique (moteurMemoire.js),
+// avec l'espace 'yuna'. Les fonctions exportées ici gardent
+// exactement la même signature qu'avant pour ne rien casser dans
+// MemoireScreen.jsx ni gemini.js.
 // ============================================================
 
-const CLE_MEMOIRE = 'yuna-memoire-faits'
-const NOMBRE_MAX_FAITS = 25 // au-delà, les plus anciens sont oubliés
+import {
+  chargerMemoire,
+  ajouterSouvenir,
+  supprimerSouvenir,
+  modifierSouvenir,
+  oublierSouvenirsExpires,
+  obtenirSouvenirsPourPrompt,
+  effacerMemoire as effacerMemoireGenerique,
+} from './memoire/moteurMemoire'
 
-// Charge la liste des faits mémorisés (tableau de phrases courtes)
+const ESPACE = 'yuna'
+
+// Ancienne API : renvoyait un simple tableau de strings.
+// On la reconstruit à partir de tous les niveaux, pour ne rien casser
+// dans MemoireScreen.jsx qui affiche `faits.map((fait, index) => ...)`.
 export function chargerFaits() {
-  const donneesBrutes = localStorage.getItem(CLE_MEMOIRE)
-  if (!donneesBrutes) return []
-  return JSON.parse(donneesBrutes)
+  oublierSouvenirsExpires(ESPACE)
+  return obtenirSouvenirsPourPrompt(ESPACE)
 }
 
-// Ajoute de nouveaux faits à la mémoire, en évitant les doublons exacts,
-// et en gardant seulement les NOMBRE_MAX_FAITS plus récents
+// Ancienne API : ajoutait des faits bruts. On les range dans "recente"
+// par défaut.
 export function ajouterFaits(nouveauxFaits) {
-  if (!nouveauxFaits || nouveauxFaits.length === 0) return
-
-  const faitsExistants = chargerFaits()
-  const faitsUniques = nouveauxFaits.filter((f) => !faitsExistants.includes(f))
-
-  // slice(-N) garde les N DERNIERS éléments du tableau (les plus récents)
-  const faitsMisAJour = [...faitsExistants, ...faitsUniques].slice(-NOMBRE_MAX_FAITS)
-
-  localStorage.setItem(CLE_MEMOIRE, JSON.stringify(faitsMisAJour))
+  ajouterSouvenir(ESPACE, 'recente', nouveauxFaits)
 }
 
-// Supprime un fait précis — utile si tu veux "corriger" un souvenir erroné
 export function supprimerFait(fait) {
-  const faitsRestants = chargerFaits().filter((f) => f !== fait)
-  localStorage.setItem(CLE_MEMOIRE, JSON.stringify(faitsRestants))
+  // Cherche le niveau réel qui contient ce texte pour le supprimer au bon endroit
+  const memoire = chargerMemoire(ESPACE)
+  for (const niveau of Object.keys(memoire)) {
+    if (memoire[niveau].some((s) => s.texte === fait)) {
+      supprimerSouvenir(ESPACE, niveau, fait)
+      break
+    }
+  }
+  return chargerFaits()
 }
 
-// Efface toute la mémoire (déjà couvert automatiquement par le bouton
-// "Tout réinitialiser" des Paramètres, car la clé commence par "yuna-")
-export function effacerMemoire() {
-  localStorage.removeItem(CLE_MEMOIRE)
-}
-
-// Modifie un fait existant (par son index dans le tableau)
 export function modifierFait(index, nouveauTexte) {
-  const faits = chargerFaits()
-  if (index < 0 || index >= faits.length) return faits
-  faits[index] = nouveauTexte
-  localStorage.setItem(CLE_MEMOIRE, JSON.stringify(faits))
-  return faits
+  // L'ancienne API travaillait par index sur un tableau plat. On retrouve
+  // le niveau et l'index réel correspondant à cet index "plat".
+  const memoire = chargerMemoire(ESPACE)
+  let compteur = 0
+  for (const niveau of Object.keys(memoire)) {
+    for (let i = 0; i < memoire[niveau].length; i++) {
+      if (compteur === index) {
+        modifierSouvenir(ESPACE, niveau, i, nouveauTexte)
+        return chargerFaits()
+      }
+      compteur++
+    }
+  }
+  return chargerFaits()
+}
+
+export function effacerMemoire() {
+  effacerMemoireGenerique(ESPACE)
+}
+
+// Nouvelle fonction optionnelle : permet d'ajouter directement
+// un souvenir dans un niveau spécifique ('ancrage', 'a_long_terme', 'recente', etc.)
+export function ajouterSouvenirNiveau(niveau, items) {
+  return ajouterSouvenir(ESPACE, niveau, items)
 }

@@ -19,7 +19,7 @@ import {
 import { envoyerMessageAPersonnage, analyserRelationPersonnage } from '../services/gemini'
 import { fichierVersBase64 } from '../services/images'
 import { chargerParametres, FONDS_CHAT_DISPONIBLES } from '../services/parametres'
-import { notifierErreur } from '../services/notifications'
+import { notifierErreur, notifierSucces } from '../services/notifications'
 
 const IconCroix = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
@@ -420,10 +420,26 @@ function PersonnagesScreen() {
       if (messagesAvecReponse.length % 6 === 0) {
         analyserRelationPersonnage(personnageActif, messagesAvecReponse.slice(-6)).then((resultat) => {
           if (resultat) {
+            const niveauAncien = calculerNiveauRelation(personnageActif.relation?.confiance ?? 20)
+            const chapitreAncien = personnageActif.progression?.chapitreActuel ?? 1
+
             const personnagesMaj = mettreAJourRelation(personnageActif.id, resultat)
             setPersonnages(personnagesMaj)
+
             const persoMaj = personnagesMaj.find((p) => p.id === personnageActif.id)
-            if (persoMaj) setPersonnageActif(persoMaj)
+            if (persoMaj) {
+              setPersonnageActif(persoMaj)
+
+              const niveauNouveau = calculerNiveauRelation(persoMaj.relation?.confiance ?? 20)
+              const chapitreNouveau = persoMaj.progression?.chapitreActuel ?? 1
+
+              if (chapitreNouveau > chapitreAncien) {
+                const defChapitre = DEFINITION_CHAPITRES.find((c) => c.numero === chapitreNouveau)
+                notifierSucces(`Nouveau chapitre débloqué avec ${persoMaj.nom} : ${defChapitre?.titre || `Chapitre ${chapitreNouveau}`}`)
+              } else if (niveauNouveau !== niveauAncien) {
+                notifierSucces(`Votre relation avec ${persoMaj.nom} a évolué : ${niveauNouveau}`)
+              }
+            }
           }
         })
       }

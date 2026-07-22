@@ -8,10 +8,14 @@ import {
   calculerEtapeRelation,
   calculerChapitreActuel,
   DEFINITION_CHAPITRES,
-  detecterPersonnageSecondaireMentionne,
+  ajouterSouvenirPersonnage,
 } from "./personnages";
+import {
+  mettreAJourScene,
+  construireInstructionScene,
+} from "./personnages/moteurScene";
 import { chargerParametres } from "./parametres";
-import { chargerFaits, ajouterFaits } from "./memoire";
+import { chargerFaits, ajouterSouvenirNiveau } from "./memoire";
 import { calculerInterdictions, validerReponse } from "./personnages/regles";
 
 const cleAPI = import.meta.env.VITE_GEMINI_API_KEY;
@@ -63,7 +67,11 @@ const safetySettingsMatures = [
 function recupererProfilPourYuna() {
   const profilSauvegarde = localStorage.getItem("yuna-profil-saki");
   if (!profilSauvegarde) return null;
-  return JSON.parse(profilSauvegarde);
+  try {
+    return JSON.parse(profilSauvegarde);
+  } catch {
+    return null;
+  }
 }
 
 function calculerMomentDeLaJournee() {
@@ -212,7 +220,7 @@ function construirePersonnalite() {
   const faitsMemorises = chargerFaits();
 
   const infosUtilisateur = profil
-    ? `\nINFORMATIONS SUR LA PERSONNE À QUI TU PARLES :\n- Prénom : ${profil.prenom}\n- Âge : ${profil.age} ans\n- Ville : ${profil.ville || "non renseignée"}\n- Centres d'intérêt : ${profil.interets.join(", ")}\nUtilise son prénom naturellement dans la conversation, et réfère-toi à ses centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.\n`
+    ? `\nINFORMATIONS SUR LA PERSONNE À QUI TU PARLES :\n- Prénom : ${profil.prenom}\n- Âge : ${profil.age} ans\n- Ville : ${profil.ville || "non renseignée"}\n- Centres d'intérêt : ${profil.interets.join(", ")}\nUtilise son prénom naturally dans la conversation, et réfère-toi à ses centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.\n`
     : "";
 
   const surnom = parametres.surnom || profil?.prenom || "toi";
@@ -228,7 +236,7 @@ function construirePersonnalite() {
 
   const blocMemoire =
     faitsMemorises.length > 0
-      ? `\nCE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :\n${faitsMemorises.map((f) => `- ${f}`).join("\n")}\nUtilise ces souvenirs naturally quand c'est pertinent, comme une amie qui se souvient vraiment de toi — sans jamais les réciter comme une liste.\n`
+      ? `\nCE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :\n${faitsMemorises.map((f) => `- ${f}`).join("\n")}\nUtilise ces souvenirs naturellement quand c'est pertinent, comme une amie qui se souvient vraiment de toi — sans jamais les réciter comme une liste.\n`
       : "";
 
   return `
@@ -395,6 +403,9 @@ export async function envoyerNoteVocaleAYuna(historique, audioBase64) {
   }
 }
 
+/**
+ * Extrait les faits marquants et les répartit dynamiquement par niveau de mémoire.
+ */
 export async function extraireEtMemoriserFaits(historique) {
   if (!historique || historique.length < 3) return;
   try {
@@ -405,22 +416,41 @@ export async function extraireEtMemoriserFaits(historique) {
     const conversationTexte = historique
       .map(
         (msg) =>
-          `${msg.auteur === "user" ? "Personne" : "Yuna"} : ${msg.texte === "[NOTE_VOCALE]" ? "[note vocale]" : msg.texte}`,
+          `${msg.auteur === "user" ? "Personne" : "Yuna"} : ${
+            msg.texte === "[NOTE_VOCALE]" ? "[note vocale]" : msg.texte
+          }`,
       )
       .join("\n");
-    const instruction = `Voici un extrait de conversation entre une IA (Yuna) et une personne :\n\n${conversationTexte}\n\nExtrais 0 à 3 faits marquants et durables sur cette personne (goûts, situation de vie, événements importants, préoccupations récurrentes). Ignore les détails anodins ou temporaires. Réponds UNIQUEMENT avec un tableau JSON de strings courtes, sans aucun texte autour. Exemple : ["prépare un examen d'informatique"]\nSi rien de marquant ne ressort, réponds : []`;
 
-    const resultat = await modele.generateContent(instruction);
-    const texteNettoye = resultat.response
-      .text()
-      .trim()
-      .replace(/```json|```/g, "")
-      .trim();
+    const instruction = `Voici un extrait de conversation entre une IA (Yuna) et une personne :
+
+${conversationTexte}
+
+Extrais les informations marquantes sur la personne en les classant par niveau. Réponds UNIQUEMENT avec un objet JSON valide (sans texte autour, sans balise markdown) :
+{
+  "permanente": ["faits durables : prénom, métier, ville, proches, loisirs ancrés"],
+  "recente": ["faits temporaires ou projets en cours : révise un examen, stress du moment"],
+  "emotionnelle": ["états d'esprit marquants : triste suite à une rupture, fier d'un projet"],
+  "habitudes": ["routines observées : se couche tard, aime boire du café le matin"]
+}
+Chaque tableau peut être vide si rien ne correspond. Ignore les détails anodins.`;
+
+    const resultat = await avecTimeout(modele.generateContent(instruction));
+    const texteBrut = resultat.response.text().trim();
+    const texteNettoye = texteBrut.replace(/```json|```/g, "").trim();
+
     const faitsExtraits = JSON.parse(texteNettoye);
-    if (Array.isArray(faitsExtraits) && faitsExtraits.length > 0)
-      ajouterFaits(faitsExtraits);
+
+    if (faitsExtraits && typeof faitsExtraits === "object") {
+      Object.keys(faitsExtraits).forEach((niveau) => {
+        const items = faitsExtraits[niveau];
+        if (Array.isArray(items) && items.length > 0) {
+          ajouterSouvenirNiveau(niveau, items);
+        }
+      });
+    }
   } catch (erreur) {
-    console.error("Erreur extraction mémoire (silencieuse) :", erreur);
+    console.error("Erreur extraction mémoire structurée (silencieuse) :", erreur);
   }
 }
 
@@ -469,7 +499,7 @@ export async function verifierMessageSpontane(dateDernierMessage) {
     const instruction =
       contexteSpecial ||
       "[Tu prends de ses nouvelles de façon naturelle et spontanée, comme une amie qui pense à elle sans raison particulière. Pose une question ouverte ou partage une pensée du jour.]";
-    const resultat = await modele.generateContent(instruction);
+    const resultat = await avecTimeout(modele.generateContent(instruction));
     return resultat.response.text();
   } catch (erreur) {
     console.error("Erreur message spontané (silencieuse) :", erreur);
@@ -626,6 +656,8 @@ ${preferencesFormatees ? `━━━━━━━━━━━━━━━━━━
 CE QUE TU SAIS SUR ${prenom.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━
 ${(p.faitsSurUtilisateur || []).length > 0 ? p.faitsSurUtilisateur.map((f) => `- ${f}`).join("\n") : "Rien appris pour l'instant. Pose-lui des questions !"}
+${(p.memoireNiveaux?.habitudes || []).length > 0 ? `\nHabitudes observées :\n${p.memoireNiveaux.habitudes.map((h) => `- ${h.texte}`).join("\n")}` : ""}
+${(p.memoireNiveaux?.promesses || []).length > 0 ? `\nPromesses en cours :\n${p.memoireNiveaux.promesses.map((pr) => `- ${pr.texte}`).join("\n")}` : ""}
 
 ${souvenirsRecents ? `━━━━━━━━━━━━━━━━━━\nSOUVENIRS IMPORTANTS\n━━━━━━━━━━━━━━━━━━\n${souvenirsRecents}\n` : ""}
 ${resumeContexte ? `━━━━━━━━━━━━━━━━━━\nRÉSUMÉ DES ÉVÉNEMENTS PASSÉS\n━━━━━━━━━━━━━━━━━━\n${resumeContexte}\n` : ""}
@@ -711,7 +743,10 @@ EXTRAIT :
 ${conversationTexte}
 
 Réponds UNIQUEMENT avec un objet JSON (sans texte autour, sans \`\`\`) :
-{"relation": {"confiance": n, "affection": n, "respect": n, "attirance": n, "complicite": n, "romance": n, "jalousie": n, "protection": n, "intimite": n}, "emotionActuelle": "un mot", "nouveauxFaits": ["fait court"], "nouveauSouvenir": null}
+{"relation": {"confiance": n, "affection": n, "respect": n, "attirance": n, "complicite": n, "romance": n, "jalousie": n, "protection": n, "intimite": n}, "emotionActuelle": "un mot", "nouveauxFaits": ["fait court"], "nouveauSouvenir": null, "nouvellesHabitudes": [], "nouvellesPromesses": []}
+
+"nouvellesHabitudes" : routines ou préférences répétées que tu observes chez le joueur (ex: "boit toujours son café noir", "évite de parler de sa famille"). Laisse vide si rien de nouveau.
+"nouvellesPromesses" : engagements pris par l'un des deux personnages durant cet extrait (ex: "a promis de l'appeler demain soir"). Laisse vide si rien de nouveau.
 
 ÉVOLUTION RÉALISTE ET LENTE :
 Chaque statistique doit évoluer très lentement (+1 à +3 points par échange sincère). Si le joueur va trop vite ou est brusque, la confiance/respect peut BAISSER. "emotionActuelle" est un mot parmi : heureux, triste, en colère, jaloux, gêné, amoureux, stressé, inquiet, nostalgique, timide, détendu, protecteur, froid, distant, joueur, romantique.
@@ -742,7 +777,7 @@ async function genererResumePersonnage(ancienResume, messagesACondenser) {
       )
       .join("\n");
     const promptResume = `Résume cette portion d'histoire de jeu de rôle en 3-5 phrases maximum, en intégrant l'ancien résumé. Reste factuel, mentionne les événements clés et l'évolution de la relation entre les deux personnages.\n\nANCIEN RÉSUMÉ :\n${ancienResume || "Aucun historique pour le moment."}\n\nNOUVEAUX ÉVÉNEMENTS :\n${texteAResumer}`;
-    const resultat = await modele.generateContent(promptResume);
+    const resultat = await avecTimeout(modele.generateContent(promptResume));
     return resultat.response.text();
   } catch (erreur) {
     console.error("Erreur génération résumé personnage :", erreur);
@@ -777,24 +812,23 @@ export async function envoyerMessageAPersonnage(
     interdictions,
   );
 
-  // Détection du personnage secondaire mentionné
-  const secondaireMentionne = detecterPersonnageSecondaireMentionne(
+  const dernierMessagePersonnage = [...historique]
+    .reverse()
+    .find((m) => m.auteur !== "user")?.texte || "";
+
+  const personnagesPresents = mettreAJourScene(
     personnage,
     nouveauMessage,
+    dernierMessagePersonnage,
   );
 
-  // Injection directe de l'instruction dans le message courant
-  let messageEnrichi = nouveauMessage;
-  if (secondaireMentionne) {
-    messageEnrichi = `${nouveauMessage}
-
-[INSTRUCTION IMPÉRATIVE POUR CETTE RÉPONSE UNIQUEMENT : ${secondaireMentionne.nom} (${secondaireMentionne.role}) doit réellement prendre la parole dans ta réponse, avec de vraies répliques entre "guillemets", dans SA PROPRE personnalité : ${secondaireMentionne.personnalite}. Son lien avec toi : ${secondaireMentionne.lienAvecPrincipal}. Ne te contente PAS de le mentionner — fais-le parler pour de vrai, comme un vrai dialogue entre vous deux devant le joueur.]`;
-  }
+  const instructionScene = construireInstructionScene(personnagesPresents);
+  const messageEnrichi = nouveauMessage;
 
   const genererUneFois = async (instructionSupplementaire = "") => {
     const modele = client.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
-      systemInstruction: promptSysteme + instructionSupplementaire,
+      model: "gemini-2.5-flash",
+      systemInstruction: promptSysteme + instructionScene + instructionSupplementaire,
       safetySettings: safetySettingsMatures,
     });
 
@@ -849,7 +883,7 @@ export async function envoyerMessageAPersonnage(
       );
     }
     return await essayerChaineDeSecours(
-      promptSysteme,
+      promptSysteme + instructionScene,
       historiqueUtilise,
       messageEnrichi,
     );
@@ -872,7 +906,7 @@ export async function genererResumeJournal(entrees) {
       model: "gemini-2.5-flash",
       safetySettings: safetySettingsMatures,
     });
-    const resultat = await modele.generateContent(instruction);
+    const resultat = await avecTimeout(modele.generateContent(instruction));
     return resultat.response.text();
   } catch (erreur) {
     console.error(
