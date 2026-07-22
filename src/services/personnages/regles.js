@@ -64,3 +64,42 @@ export function validerReponse(personnage, texteReponse, nombreMessages) {
   }
   return { valide: true }
 }
+
+// ============================================================
+// RÈGLES POUR LES PERSONNAGES SECONDAIRES PRÉSENTS DANS LA SCÈNE
+// Moins strict que pour le personnage principal (on ne peut pas garantir
+// à 100% quelle réplique appartient à quel personnage dans un texte à
+// plusieurs voix) — mais mieux qu'aucun filet du tout.
+// ============================================================
+
+const MOTS_TRAHISON = ["t'ai menti", "je t'ai trahi", "en fait je mens", "je te trahis"]
+
+export function calculerInterdictionsSecondaires(personnagesPresents) {
+  const interdictions = []
+  for (const s of personnagesPresents || []) {
+    const traits = s.traits || []
+    if (traits.includes('fidele') || traits.includes('loyal')) {
+      interdictions.push(`${s.nom} est loyal/fidèle — il/elle ne doit jamais mentir sciemment ni trahir le personnage principal.`)
+    }
+    if (traits.includes('timide') || traits.includes('reserve')) {
+      interdictions.push(`${s.nom} est timide/réservé — ses répliques doivent rester courtes, pas de longues tirades.`)
+    }
+    if (traits.includes('froid')) {
+      interdictions.push(`${s.nom} est froid — évite les démonstrations d'affection excessives de sa part.`)
+    }
+    if (traits.includes('impitoyable')) {
+      interdictions.push(`${s.nom} est impitoyable envers ses ennemis mais pas envers ceux qu'il/elle aime — pas de dureté gratuite envers le joueur ou le personnage principal sans raison narrative claire.`)
+    }
+  }
+  return interdictions
+}
+
+export function validerReponseScene(personnagesPresents, texteReponse) {
+  for (const s of personnagesPresents || []) {
+    const traits = s.traits || []
+    if ((traits.includes('fidele') || traits.includes('loyal')) && contientUnDe(texteReponse, MOTS_TRAHISON)) {
+      return { valide: false, raison: `${s.nom} (loyal/fidèle) semble trahir ou mentir, ce qui contredit directement son trait.` }
+    }
+  }
+  return { valide: true }
+}

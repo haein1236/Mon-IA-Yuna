@@ -188,6 +188,17 @@ export function calculerProfilComportemental(traits, numeroChapitre = 1) {
   return phrases
 }
 
+// Score d'initiative pur, réutilisé pour décider comment le personnage
+// doit se comporter quand on lui demande de "continuer" la scène seul
+// (bouton dédié), sans reconstruire tout le profil textuel.
+export function calculerScoreInitiative(traits) {
+  let score = 0
+  for (const trait of traits || []) {
+    score += AXES_COMPORTEMENT_PAR_TRAIT[trait]?.initiative || 0
+  }
+  return Math.max(-2, Math.min(2, score))
+}
+
 export const TYPES_ROMANCE = [
   'Slow Burn', 'Enemies to Lovers', 'Friends to Lovers', 'Marriage Contract',
   'Fake Dating', 'Childhood Friends', 'Boss x Employee', 'Bodyguard',
@@ -331,6 +342,9 @@ export const personnagesParDefaut = [
     objectifsPersonnels: "Terminer ses études tout en trouvant sa place.",
     sceneOuverture: "En cherchant ta salle de cours, tu percutes un jeune homme qui laisse tomber ses livres.\n\nAiden : « On dirait que le destin aime provoquer les rencontres... Tu vas bien ? »",
     traits: ['timide', 'protecteur'],
+    personnagesSecondaires: [
+  { id: 'aiden-sec-1', nom: 'Léa', role: 'Meilleure amie', personnalite: "Extravertie, protectrice envers Aiden, adore taquiner tout le monde avec humour.", lienAvecPrincipal: "Amis depuis le lycée, elle le connaît mieux que quiconque et n'hésite pas à intervenir dans ses conversations." },
+    ],
     origine: 'predefini', favori: false,
   },
   {
@@ -346,6 +360,9 @@ export const personnagesParDefaut = [
     objectifsPersonnels: "Prouver sa valeur à sa famille.",
     sceneOuverture: "Le mariage a été signé ce matin.\n\nKaïs : « À partir de maintenant, tu m'appartiens autant que je t'appartiens. »",
     traits: ['possessif', 'protecteur', 'dominant'],
+    personnagesSecondaires: [
+  { id: 'kais-sec-1', nom: 'Karim', role: 'Frère cadet', personnalite: "Plus détendu et chaleureux que Kaïs, sert souvent de contraste — il désamorce les tensions avec humour.", lienAvecPrincipal: "Seul membre de la famille avec qui Kaïs baisse un peu sa garde." },
+],
     origine: 'predefini', favori: false,
   },
   {
@@ -361,6 +378,9 @@ export const personnagesParDefaut = [
     objectifsPersonnels: "Réussir ses études sans se laisser distraire.",
     sceneOuverture: "Professeur : « Va t'asseoir à côté de Kenji. »\n\nKenji : « Salut... J'espère que tu n'es pas aussi ennuyeux que les autres. »",
     traits: ['timide', 'reserve'],
+    personnagesSecondaires: [
+  { id: 'kenji-sec-1', nom: 'Yuto', role: 'Meilleur ami', personnalite: "Bavard, sociable, essaie sans cesse de pousser Kenji à s'ouvrir davantage aux autres.", lienAvecPrincipal: "Amis d'enfance ; Yuto est un des seuls à voir le vrai visage de Kenji derrière sa froideur." },
+],
     origine: 'predefini', favori: false,
   },
   {
@@ -436,6 +456,9 @@ export const personnagesParDefaut = [
     objectifsPersonnels: "Faire tomber amoureuse sa propre épouse. Créer un vrai foyer malgré un mariage imposé.",
     sceneOuverture: "Aujourd'hui était votre mariage. Une fois la cérémonie terminée, vous vous retrouvez seuls dans votre nouvelle maison. Il ferme doucement la porte.\n\nYassine : « Je ne te forcerai jamais à m'aimer... mais laisse-moi au moins essayer d'être un bon mari. »",
     traits: ['possessif', 'protecteur', 'gentleman', 'romantique'],
+    personnagesSecondaires: [
+  { id: 'yassine-sec-1', nom: 'Sofiane', role: "Associé d'affaires", personnalite: "Curieux et un peu moqueur, pose souvent des questions indiscrètes sur le mariage arrangé de Yassine.", lienAvecPrincipal: "Collègue de longue date, l'un des rares à qui Yassine se confie parfois malgré lui." },
+],
     typeRomance: 'Marriage Contract',
     origine: 'predefini', favori: false,
   },
@@ -469,6 +492,9 @@ export const personnagesParDefaut = [
     objectifsPersonnels: "Protéger son empire. Découvrir si quelqu'un comme lui mérite encore d'être aimé.",
     sceneOuverture: "Premier jour de travail. Tu pousses la porte du dernier étage de la tour Al-Hassan. Sans même se retourner, il dit d'une voix calme :\n\nKaïd : « Tu es en retard de trente-deux secondes. »\n\nLorsqu'il se retourne enfin, son regard se pose sur toi... et, pour la première fois depuis très longtemps, quelque chose vacille dans son cœur.",
     traits: ['froid', 'dominant', 'possessif', 'protecteur', 'calculateur', 'impitoyable'],
+    personnagesSecondaires: [
+  { id: 'kaid-sec-1', nom: 'Rami', role: 'Bras droit', personnalite: "Loyal jusqu'au bout, calme et efficace, parle peu mais agit vite. Un des seuls en qui Kaïd a une confiance totale.", lienAvecPrincipal: "Travaille avec Kaïd depuis des années, connaît ses secrets mieux que quiconque." },
+],
     typeRomance: 'Mafia',
     origine: 'predefini', favori: false,
   },
@@ -563,7 +589,7 @@ export function marquerNomConnu(personnageId, connuOuNon = true) {
 // PERSONNAGES SECONDAIRES
 // ============================================================
 export function creerPersonnageSecondaireVide() {
-  return { id: `sec-${Date.now()}`, nom: '', role: '', personnalite: '', lienAvecPrincipal: '' }
+  return { id: `sec-${Date.now()}`, nom: '', role: '', personnalite: '', lienAvecPrincipal: '', traits: [] }
 }
 
 export function creerPersonnageVide() {

@@ -2,7 +2,12 @@ import { client, safetySettingsMatures, avecTimeout } from "../ia/client";
 import { alignerHistoriquePourGemini } from "../ia/utils";
 import { essayerChaineDeSecours } from "../ia/providersSecours";
 import { construirePersonnagePrompt } from "./promptPersonnage";
-import { calculerInterdictions, validerReponse } from "./regles";
+import { 
+  calculerInterdictions, 
+  validerReponse, 
+  calculerInterdictionsSecondaires, 
+  validerReponseScene 
+} from "./regles";
 import { mettreAJourScene, construireInstructionScene } from "./moteurScene";
 
 async function genererResumePersonnage(ancienResume, messagesACondenser) {
@@ -35,13 +40,17 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     historiqueUtilise = historique.slice(12);
   }
 
-  const interdictions = calculerInterdictions(personnage, historique.length);
-  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation, interdictions);
-
   const dernierMessagePersonnage = [...historique].reverse().find((m) => m.auteur !== "user")?.texte || "";
 
-  const personnagesPresents = mettreAJourScene(personnage, nouveauMessage, dernierMessagePersonnage);
-  const instructionScene = construireInstructionScene(personnage, personnagesPresents);
+  const detectionScene = mettreAJourScene(personnage, nouveauMessage, dernierMessagePersonnage);
+  const instructionScene = construireInstructionScene(personnage, detectionScene);
+
+  const interdictions = [
+    ...calculerInterdictions(personnage, historique.length),
+    ...calculerInterdictionsSecondaires(detectionScene.nommes),
+  ];
+  const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation, interdictions);
+
   const messageEnrichi = nouveauMessage;
 
   const genererUneFois = async (instructionSupplementaire = "") => {
@@ -78,11 +87,15 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
 
   try {
     let texte = await genererUneFois();
-    const validation = validerReponse(personnage, texte, historique.length);
-    if (!validation.valide) {
-      console.warn("Réponse rejetée par le validateur :", validation.raison, "— régénération...");
+    const validationPrincipal = validerReponse(personnage, texte, historique.length);
+    const validationScene = validationPrincipal.valide
+      ? validerReponseScene(detectionScene.nommes, texte)
+      : validationPrincipal;
+
+    if (!validationScene.valide) {
+      console.warn("Réponse rejetée par le validateur :", validationScene.raison, "— régénération...");
       texte = await genererUneFois(
-        `\n\nATTENTION : ta précédente tentative a été rejetée car : "${validation.raison}". Génère une nouvelle réponse qui respecte STRICTEMENT ce point.`,
+        `\n\nATTENTION : ta précédente tentative a été rejetée car : "${validationScene.raison}". Génère une nouvelle réponse qui respecte STRICTEMENT ce point.`,
       );
     }
     return texte;
