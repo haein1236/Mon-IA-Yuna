@@ -13,7 +13,7 @@ import {
   CATEGORIES_PERSONNAGES,
   TRAITS_PERSONNAGE,
   calculerNiveauRelation,
-  mettreAJourRelation,
+  mettreAJourRelationEtMemoire,
   DEFINITION_CHAPITRES,
 } from '../services/personnages'
 import { envoyerMessageAPersonnage, analyserRelationPersonnage } from '../services/gemini'
@@ -423,7 +423,7 @@ function PersonnagesScreen() {
             const niveauAncien = calculerNiveauRelation(personnageActif.relation?.confiance ?? 20)
             const chapitreAncien = personnageActif.progression?.chapitreActuel ?? 1
 
-            const personnagesMaj = mettreAJourRelation(personnageActif.id, resultat)
+            const personnagesMaj = mettreAJourRelationEtMemoire(personnageActif.id, resultat)
             setPersonnages(personnagesMaj)
 
             const persoMaj = personnagesMaj.find((p) => p.id === personnageActif.id)

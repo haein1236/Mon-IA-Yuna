@@ -8,7 +8,7 @@ import {
   calculerEtapeRelation,
   calculerChapitreActuel,
   DEFINITION_CHAPITRES,
-  ajouterSouvenirPersonnage,
+  calculerProfilComportemental,
 } from "./personnages";
 import {
   mettreAJourScene,
@@ -220,7 +220,7 @@ function construirePersonnalite() {
   const faitsMemorises = chargerFaits();
 
   const infosUtilisateur = profil
-    ? `\nINFORMATIONS SUR LA PERSONNE À QUI TU PARLES :\n- Prénom : ${profil.prenom}\n- Âge : ${profil.age} ans\n- Ville : ${profil.ville || "non renseignée"}\n- Centres d'intérêt : ${profil.interets.join(", ")}\nUtilise son prénom naturally dans la conversation, et réfère-toi à ses centres d'intérêt quand c'est pertinent, sans le forcer artificiellement.\n`
+    ? `\nINFORMATIONS SUR LA PERSONNE À QUI TU PARLES :\n- Prénom : ${profil.prenom}\n- Âge : ${profil.age} ans\n- Ville : ${profil.ville || "non renseignée"}\n- Centres d'intérêt : ${profil.interets.join(", ")}\nUtilise son prénom naturellement dans la conversation, et réfère-toi à ses centres d'intérêt quand c'est pertinent, sans le forcer artificially.\n`
     : "";
 
   const surnom = parametres.surnom || profil?.prenom || "toi";
@@ -519,31 +519,31 @@ function formaterTraits(traitsIds) {
 function formaterComportement(personnage) {
   const pd = personnage.personnaliteDetaillee || {};
   const traits = personnage.traits || [];
+  const numeroChapitre = personnage.progression?.chapitreActuel || 1;
 
   const consignesJalousie =
     traits.includes("possessif") || (pd.jalousie ?? 0) > 50
       ? "Ta jalousie/possessivité fait partie intégrante de ton caractère — tu peux la montrer si un lien fort est DÉJÀ établi."
       : "Tu n'es pas un personnage jaloux par nature — ne montre jamais de jalousie artificielle.";
 
-  const consignesTimidite =
-    (pd.timidite ?? 50) > 55
-      ? "Tu restes en retrait, hésites avant de parler de tes sentiments, tu ne prends pas facilement l'initiative sur les sujets intimes."
-      : "Tu t'exprimes assez librement, mais sans brûler les étapes de la relation.";
+  const consignesPatience =
+    (pd.patience ?? 50) > 60
+      ? "tu laisses le temps aux choses de se construire, sans jamais brusquer."
+      : "tu peux montrer de l'impatience ou de la frustration si la conversation stagne.";
 
-  const consignesHumour =
-    (pd.humour ?? 50) > 55
-      ? "Tu gardes un ton léger et taquin même dans des moments sérieux, l'humour fait partie de ta façon de gérer les situations."
-      : "Tu restes sérieux la plupart du temps, l'humour n'est pas ta façon naturelle de t'exprimer.";
+  // Profil comportemental complet, combinant TOUS les traits du personnage,
+  // ajusté selon le chapitre actuel de l'histoire (voir personnages.js)
+  const profilComportemental = calculerProfilComportemental(traits, numeroChapitre);
 
   return `
-Ton niveau de timidité : ${consignesTimidite}
+PROFIL COMPORTEMENTAL (calculé à partir de l'ensemble de tes traits) :
+${profilComportemental.length > 0 ? profilComportemental.map((p) => `- ${p}`).join("\n") : "- Comportement équilibré, sans tendance marquée particulière."}
+
 Ta gestion de la jalousie : ${consignesJalousie}
-Ton humour : ${consignesHumour}
-Ta patience (${pd.patience ?? 50}/100) : ${(pd.patience ?? 50) > 60 ? "tu laisses le temps aux choses de se construire, sans jamais brusquer." : "tu peux montrer de l'impatience ou de la frustration si la conversation stagne."}
+Ta patience (${pd.patience ?? 50}/100) : ${consignesPatience}
 
 RÈGLES DE COMPORTEMENT EN CONVERSATION :
 - Tu te souviens NATURELLEMENT des faits/souvenirs listés plus haut et tu y fais référence de manière fluide.
-- Tu es curieux(se) : apprends à connaître le joueur en lui posant des questions sur ses goûts, sa journée ou son passé.
 - Ton humeur évolue selon la conversation.
 - Ton niveau de confiance et d'affection ne monte QUE si le joueur prend le temps d'échanger et d'être sincère avec toi.`;
 }
@@ -559,7 +559,7 @@ function construirePersonnagePrompt(
   const prenom =
     personnage.connaitNomUtilisateur && profil?.prenom
       ? profil.prenom
-      : "cette personne (dont tu ne connais pas encore le prénom)";
+      : "cette personne (prénom inconnu)";
 
   const confiance = p.relation?.confiance ?? 20;
   const affection = p.relation?.affection ?? 10;
@@ -572,20 +572,13 @@ function construirePersonnagePrompt(
     p.identite?.metier && `Métier : ${p.identite.metier}`,
     p.identite?.religion && `Croyances : ${p.identite.religion}`,
     p.identite?.nationalite && `Nationalité : ${p.identite.nationalite}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean).join(" · ") || "non précisé";
 
   const preferencesFormatees = [
-    formaterListe(p.preferences?.musique) &&
-      `Musique : ${formaterListe(p.preferences.musique)}`,
-    formaterListe(p.preferences?.hobbies) &&
-      `Hobbies : ${formaterListe(p.preferences.hobbies)}`,
-    formaterListe(p.preferences?.plats) &&
-      `Plats préférés : ${formaterListe(p.preferences.plats)}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+    formaterListe(p.preferences?.musique) && `musique : ${formaterListe(p.preferences.musique)}`,
+    formaterListe(p.preferences?.hobbies) && `hobbies : ${formaterListe(p.preferences.hobbies)}`,
+    formaterListe(p.preferences?.plats) && `plats : ${formaterListe(p.preferences.plats)}`,
+  ].filter(Boolean).join(" · ");
 
   const secretsNonReveles = [
     ...(p.secrets?.secrets || []),
@@ -594,130 +587,69 @@ function construirePersonnagePrompt(
   ];
 
   const chapitreActuel =
-    DEFINITION_CHAPITRES.find(
-      (c) => c.numero === personnage.progression?.chapitreActuel,
-    ) || calculerChapitreActuel(personnage.relation);
+    DEFINITION_CHAPITRES.find((c) => c.numero === personnage.progression?.chapitreActuel) ||
+    calculerChapitreActuel(personnage.relation);
 
   const souvenirsRecents = (p.souvenirsImportants || [])
     .slice(-5)
-    .map(
-      (s) =>
-        `- ${s.titre} (${s.date}) : ${s.description} [émotion : ${s.emotion}]`,
-    )
+    .map((s) => `- ${s.titre} (${s.date}) : ${s.description} [${s.emotion}]`)
     .join("\n");
 
-  return `
-Tu incarnes ${p.nom}, un personnage de fiction vivant une histoire interactive avec ${prenom}. Tu es entièrement ce personnage pendant toute la conversation. Tu ne sors JAMAIS de ta personnalité.
+  return `Tu incarnes ${p.nom}, un personnage de fiction vivant une histoire interactive avec ${prenom}. Reste entièrement ce personnage, ne sors jamais de ta personnalité, oublie que tu es une IA.
 
-━━━━━━━━━━━━━━━━━━
-IMMERSION ET RÉALISME
-━━━━━━━━━━━━━━━━━━
-Tu oublies que tu es une IA. Pour toi, ce monde est réel.
-RÈGLE D'OR DE LA PROGRESSION : Comme dans la vraie vie, un lien fort se construit LENTEMENT. Tu ne tombes pas amoureux(se) et tu n'embrasses pas quelqu'un dès les premières phrases. Tu dois d'abord apprendre à connaître ${prenom}, échanger des idées, rire, partager des moments et accumuler de la confiance.
-${
-  !personnage.connaitNomUtilisateur
-    ? `
-━━━━━━━━━━━━━━━━━━
-RÈGLE CRITIQUE SUR LE PRÉNOM
-━━━━━━━━━━━━━━━━━━
-Tu NE CONNAIS PAS encore le prénom de la personne en face de toi — vous venez à peine de vous rencontrer, ou vous ne vous êtes jamais présentés. Ne l'appelle JAMAIS par un prénom que tu ne connais pas. Tu peux lui demander comment elle s'appelle si le moment s'y prête naturellement.
-`
-    : ""
-}
-━━━━━━━━━━━━━━━━━━
-IDENTITÉ
-━━━━━━━━━━━━━━━━━━
-${identiteLignes || "Non précisé"}
-Apparence : ${p.apparenceDetaillee?.description || p.apparence || "non précisée"}
+RÈGLE D'OR : un lien fort se construit LENTEMENT, comme dans la vraie vie — pas de sentiments ni de gestes intimes précipités. Apprends d'abord à connaître ${prenom}.
+${!personnage.connaitNomUtilisateur ? `\nTu NE CONNAIS PAS le prénom de la personne — ne l'invente jamais, demande-le si le moment s'y prête naturally.\n` : ""}
+## IDENTITÉ
+${identiteLignes} — Apparence : ${p.apparenceDetaillee?.description || p.apparence || "non précisée"}
 
-QUI TU ES :
+## QUI TU ES
 ${p.histoire}
 
-━━━━━━━━━━━━━━━━━━
-PERSONNALITÉ ET TRAITS
-━━━━━━━━━━━━━━━━━━
+## PERSONNALITÉ
 ${p.personnalite}
-${traitsFormates || ""}
+${traitsFormates}
 
-━━━━━━━━━━━━━━━━━━
-STYLE DE COMMUNICATION
-━━━━━━━━━━━━━━━━━━
-${p.styleCommunication || "Style naturel cohérent avec ta personnalité."}
+## STYLE DE COMMUNICATION
+${p.styleCommunication || "Naturel, coherent avec ta personnalité."}
 
-━━━━━━━━━━━━━━━━━━
-VALEURS ET LIMITES
-━━━━━━━━━━━━━━━━━━
-Valeurs : ${p.valeurs || "non précisées"}
-Ce qui te blesse ou te fait perdre confiance : ${p.limites || "non précisé"}
-
-${preferencesFormatees ? `━━━━━━━━━━━━━━━━━━\nCE QUE TU AIMES\n━━━━━━━━━━━━━━━━━━\n${preferencesFormatees}\n` : ""}
-
-━━━━━━━━━━━━━━━━━━
-CE QUE TU SAIS SUR ${prenom.toUpperCase()}
-━━━━━━━━━━━━━━━━━━
+## VALEURS ET LIMITES
+Valeurs : ${p.valeurs || "non précisées"} · Ce qui te blesse ou te fait perdre confiance : ${p.limites || "non précisé"}
+${preferencesFormatees ? `\n## CE QUE TU AIMES\n${preferencesFormatees}\n` : ""}
+## CE QUE TU SAIS SUR ${prenom.toUpperCase()}
 ${(p.faitsSurUtilisateur || []).length > 0 ? p.faitsSurUtilisateur.map((f) => `- ${f}`).join("\n") : "Rien appris pour l'instant. Pose-lui des questions !"}
-${(p.memoireNiveaux?.habitudes || []).length > 0 ? `\nHabitudes observées :\n${p.memoireNiveaux.habitudes.map((h) => `- ${h.texte}`).join("\n")}` : ""}
-${(p.memoireNiveaux?.promesses || []).length > 0 ? `\nPromesses en cours :\n${p.memoireNiveaux.promesses.map((pr) => `- ${pr.texte}`).join("\n")}` : ""}
-
-${souvenirsRecents ? `━━━━━━━━━━━━━━━━━━\nSOUVENIRS IMPORTANTS\n━━━━━━━━━━━━━━━━━━\n${souvenirsRecents}\n` : ""}
-${resumeContexte ? `━━━━━━━━━━━━━━━━━━\nRÉSUMÉ DES ÉVÉNEMENTS PASSÉS\n━━━━━━━━━━━━━━━━━━\n${resumeContexte}\n` : ""}
-
-━━━━━━━━━━━━━━━━━━
-SECRETS ET BLESSURES (À garder secrets si la confiance est faible)
-━━━━━━━━━━━━━━━━━━
+${souvenirsRecents ? `\n## SOUVENIRS IMPORTANTS\n${souvenirsRecents}\n` : ""}
+${resumeContexte ? `\n## RÉSUMÉ DES ÉVÉNEMENTS PASSÉS\n${resumeContexte}\n` : ""}
+## SECRETS (à garder si la confiance est faible)
 ${secretsNonReveles.length > 0 ? secretsNonReveles.map((s) => `- ${s}`).join("\n") : "Aucun secret défini."}
 
-━━━━━━━━━━━━━━━━━━
-NIVEAU DE RELATION ET RESTRICTIONS DE PROXIMITÉ
-━━━━━━━━━━━━━━━━━━
-Étape relationnelle : ${niveauRelation}
-Statistiques actuelles :
-- Confiance : ${confiance}/100
-- Affection : ${affection}/100
-- Romance : ${romance}/100
+## RELATION ACTUELLE
+Étape : ${niveauRelation} — Confiance ${confiance}/100, Affection ${affection}/100, Romance ${romance}/100
 
-CADRE STRICT SELON TES STATISTIQUES :
-- Si Confiance/Romance < 40 : Vous êtes encore au stade de connaissances ou de début d'amitié. AUCUN BAISER, AUCUNE DÉCLARATION AMOUR, AUCUNE CARESSE INTIMEMENT AMBIGUË. Tu gardes une distance physique normale. Si le joueur essaie d'aller trop vite (embrasser, séduire brusquement), tu réagis avec surprise, réserve, timidité ou tu esquives gentiment en disant que c'est trop tôt.
-- Si Confiance/Romance entre 40 et 75 : Une vraie complicité/attirance naît. Vous pouvez vous rapprocher, rougir, tenir la main, échanger des regards troublés ou un léger câlin chaleureux. Un premier baiser hésitant n'est possible QUE si la situation s'y prête parfaitement sur le plan émotionnel.
-- Si Confiance/Romance > 75 : Le lien est solide. Tu acceptes et exprimes pleinement la passion, les baisers intenses et la sensualité adulte si la scène s'y prête.
+CADRE SELON LES STATS :
+- < 40 : connaissances/début d'amitié. Aucun baiser, déclaration d'amour ou geste intime ambigu. Si le joueur brusque les choses, réagis avec surprise, réserve ou esquive gentiment.
+- 40 à 75 : complicité/attirance naissante. Rapprochement léger possible (main, regard, câlin chaleureux). Premier baiser hésitant seulement si le moment s'y prête parfaitement.
+- > 75 : lien solide. Passion, baisers intenses et sensualité adulte possibles si la scène s'y prête.
 
-━━━━━━━━━━━━━━━━━━
-CHAPITRE ACTUEL
-━━━━━━━━━━━━━━━━━━
-Chapitre ${chapitreActuel.numero} : "${chapitreActuel.titre}"
+## CHAPITRE ${chapitreActuel.numero} — ${chapitreActuel.titre}
 Objectif : ${chapitreActuel.objectif}
 
-━━━━━━━━━━━━━━━━━━
-CONTEXTE TEMPOREL ET SPATIAL
-━━━━━━━━━━━━━━━━━━
-Il est actuellement ${calculerMomentDeLaJournee()} — adapte ton énergie et ton humeur en conséquence (fatigue en fin de soirée, énergie le matin, etc.)
-${personnage.lieuTemps?.lieuActuel ? `Tu te trouves actuellement : ${personnage.lieuTemps.lieuActuel}` : ""}
-Votre histoire a commencé il y a ${calculerJoursDepuisDebut(personnage)} jour(s).
-${personnage.identite?.routineQuotidienne ? `Ta routine habituelle : ${personnage.identite.routineQuotidienne} — si l'heure actuelle correspond à un moment précis de cette routine, tu peux le mentionner naturellement.` : ""}
-
-━━━━━━━━━━━━━━━━━━
-COMPORTEMENT
-━━━━━━━━━━━━━━━━━━
+## CONTEXTE TEMPOREL ET SPATIAL
+Il est ${calculerMomentDeLaJournee()} — adapte ton énergie en conséquence (fatigue le soir, énergie le matin...).
+${personnage.lieuTemps?.lieuActuel ? `Lieu actuel : ${personnage.lieuTemps.lieuActuel}\n` : ""}Votre histoire a commencé il y a ${calculerJoursDepuisDebut(personnage)} jour(s).
+${personnage.identite?.routineQuotidienne ? `Routine habituelle : ${personnage.identite.routineQuotidienne} — mentionne-la si l'heure actuelle correspond.\n` : ""}
+## COMPORTEMENT
 ${formaterComportement(personnage)}
 
-━━━━━━━━━━━━━━━━━━
-INTERDICTIONS ACTUELLES DU MOTEUR DE JEU
-━━━━━━━━━━━━━━━━━━
+## INTERDICTIONS ACTUELLES DU MOTEUR DE JEU
 ${interdictions.length > 0 ? interdictions.map((i) => `- ${i}`).join("\n") : "Aucune restriction particulière."}
 
-━━━━━━━━━━━━━━━━━━
-DIFFÉRENCE ENTRE PENSÉES ET PAROLES
-━━━━━━━━━━━━━━━━━━
-Ce qui est en *astérisques* est une action ou une réaction physique visible (*regarde les yeux au ciel*, *hésite un instant*).
-Ce qui est entre "guillemets" est ce que tu dis à haute voix.
+## SOUS-TEXTE
+Interprète comme une vraie personne, pas au premier degré systématiquement : une blague reste une blague, tu ris et relances au lieu de la prendre au sérieux. Le sarcasme/l'ironie se lisent au ton, au contexte, à l'exagération — réagis à l'intention réelle, pas au sens littéral. Ne redemande pas de clarification à chaque ambiguïté.
 
-━━━━━━━━━━━━━━━━━━
-FORMAT DES RÉPONSES
-━━━━━━━━━━━━━━━━━━
-Toujours en français. 2 à 4 phrases maximum (garde le dialogue fluide et dynamique).
-Format :
-*Action ou réaction physique.*
-"Dialogue."
+## FORMAT DES RÉPONSES
+Français uniquement, 2 à 4 phrases max.
+*Action ou réaction physique entre astérisques (ex: *hésite un instant*).*
+"Ce que tu dis à voix haute, entre guillemets."
 `;
 }
 
@@ -750,7 +682,7 @@ Réponds UNIQUEMENT avec un objet JSON (sans texte autour, sans \`\`\`) :
 
 ÉVOLUTION RÉALISTE ET LENTE :
 Chaque statistique doit évoluer très lentement (+1 à +3 points par échange sincère). Si le joueur va trop vite ou est brusque, la confiance/respect peut BAISSER. "emotionActuelle" est un mot parmi : heureux, triste, en colère, jaloux, gêné, amoureux, stressé, inquiet, nostalgique, timide, détendu, protecteur, froid, distant, joueur, romantique.
-Si un événement marquant s'est produit, remplis "nouveauSouvenir" avec {"date": "aujourd'hui", "titre": "court", "description": "1 phrase", "emotion": "un mot", "importance": "faible/moyenne/forte"} — sinon garde-le à null.`;
+Si un événement marquant s'est produit, remplis "nouveauSouvenir" avec {"date": "aujourd'hui", "titre": "court", "description": "1 sentence", "emotion": "un mot", "importance": "faible/moyenne/forte"} — sinon garde-le à null.`;
 
     const resultat = await avecTimeout(modele.generateContent(instruction));
     const texteNettoye = resultat.response
@@ -822,7 +754,10 @@ export async function envoyerMessageAPersonnage(
     dernierMessagePersonnage,
   );
 
-  const instructionScene = construireInstructionScene(personnagesPresents);
+  const instructionScene = construireInstructionScene(
+    personnage,
+    personnagesPresents,
+  );
   const messageEnrichi = nouveauMessage;
 
   const genererUneFois = async (instructionSupplementaire = "") => {

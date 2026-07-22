@@ -1,15 +1,15 @@
 // ============================================================
 // MOTEUR DE SCÈNE — gère quels personnages secondaires sont
-// "présents" dans la conversation, au-delà du simple message
-// courant. Remplace detecterPersonnageSecondaireMentionne (qui
-// ne retournait qu'un seul personnage et oubliait tout entre
-// deux tours).
+// "présents" dans la conversation.
+//
+// Clé isolée par personnage pour éviter de charger/réécrire
+// l'état global à chaque tour de parole.
 //
 // À placer dans : src/services/personnages/moteurScene.js
 // ============================================================
 
-const CLE_SCENE = 'yuna-scene-active'
-const TOURS_PRESENCE_PAR_DEFAUT = 4 // combien de tours un perso reste "présent" sans être re-mentionné
+const PREFIXE_CLE_SCENE = 'yuna-scene-active'
+const TOURS_PRESENCE_PAR_DEFAUT = 4 // tours de présence d'un perso sans re-mention
 
 function normaliserTexte(texte) {
   return texte
@@ -18,16 +18,21 @@ function normaliserTexte(texte) {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
-function chargerScenes() {
-  const donnees = localStorage.getItem(CLE_SCENE)
-  return donnees ? JSON.parse(donnees) : {}
+// Génère une clé localStorage propre à chaque personnage principal
+function cleScene(personnageId) {
+  return `${PREFIXE_CLE_SCENE}-${personnageId}`
 }
 
-function sauvegarderScenes(scenes) {
-  localStorage.setItem(CLE_SCENE, JSON.stringify(scenes))
+function chargerScene(personnageId) {
+  const donnees = localStorage.getItem(cleScene(personnageId))
+  return donnees ? JSON.parse(donnees) : { presents: {}, dernierAParle: null }
 }
 
-// Détecte TOUS les personnages secondaires mentionnés dans un texte (pas un seul)
+function sauvegarderScene(personnageId, scene) {
+  localStorage.setItem(cleScene(personnageId), JSON.stringify(scene))
+}
+
+// Détecte TOUS les personnages secondaires mentionnés dans un texte
 function detecterMentions(personnage, texte) {
   const secondaires = personnage.personnagesSecondaires || []
   if (secondaires.length === 0 || !texte) return []
@@ -35,40 +40,32 @@ function detecterMentions(personnage, texte) {
   return secondaires.filter((s) => {
     if (!s.nom) return false
     const nomNormalise = normaliserTexte(s.nom)
-    const regex = new RegExp(`\\b${nomNormalise}\\b`)
+    const regex = new RegExp(`\\b${nomNormalise}\\b`, 'i')
     return regex.test(texteNormalise)
   })
 }
 
-// Récupère l'état de scène actuel pour un personnage principal
-function obtenirScene(personnageId) {
-  const scenes = chargerScenes()
-  return scenes[personnageId] || { presents: {} } // presents: { idSecondaire: toursRestants }
+/**
+ * Récupère l'état de scène actuel pour un personnage principal
+ */
+export function obtenirScene(personnageId) {
+  return chargerScene(personnageId)
 }
 
 /**
  * Met à jour et renvoie la liste des personnages secondaires actuellement
  * "présents" dans la scène. À appeler avant chaque envoi de message.
- *
- * - Un perso mentionné dans le message du joueur OU dans la dernière
- *   réponse du personnage principal redevient/reste présent.
- * - Un perso présent le reste pendant TOURS_PRESENCE_PAR_DEFAUT tours
- *   même sans être re-mentionné (pour permettre les dialogues à trois
- *   sans que le joueur retape son nom à chaque fois).
- * - Passé ce délai, il "quitte" naturellement la scène.
  */
 export function mettreAJourScene(personnage, messageUtilisateur, dernierMessagePersonnage = '') {
-  const scenes = chargerScenes()
-  const scene = scenes[personnage.id] || { presents: {} }
+  const scene = chargerScene(personnage.id)
 
-  // 1. décrémente tout le monde d'un tour
+  // 1. Décrémente tout le monde d'un tour
   for (const id of Object.keys(scene.presents)) {
     scene.presents[id] -= 1
     if (scene.presents[id] <= 0) delete scene.presents[id]
   }
 
-  // 2. ajoute/rafraîchit les personnages mentionnés dans le message du joueur
-  //    et dans la dernière réponse du personnage principal
+  // 2. Ajoute/rafraîchit les personnages mentionnés
   const mentionnesJoueur = detecterMentions(personnage, messageUtilisateur)
   const mentionnesPersonnage = detecterMentions(personnage, dernierMessagePersonnage)
   const tousMentionnes = [...mentionnesJoueur, ...mentionnesPersonnage]
@@ -77,37 +74,43 @@ export function mettreAJourScene(personnage, messageUtilisateur, dernierMessageP
     scene.presents[s.id] = TOURS_PRESENCE_PAR_DEFAUT
   }
 
-  scenes[personnage.id] = scene
-  sauvegarderScenes(scenes)
+  sauvegarderScene(personnage.id, scene)
 
-  // 3. renvoie les objets complets des personnages actuellement présents
+  // 3. Renvoie les objets complets des personnages actuellement présents
   const secondaires = personnage.personnagesSecondaires || []
   return Object.keys(scene.presents)
     .map((id) => secondaires.find((s) => s.id === id))
     .filter(Boolean)
 }
 
-// Force la sortie d'un personnage de la scène (ex: le personnage principal dit "il est parti")
+/**
+ * Force la sortie d'un personnage de la scène
+ */
 export function retirerDeLaScene(personnageId, secondaireId) {
-  const scenes = chargerScenes()
-  if (scenes[personnageId]?.presents?.[secondaireId] !== undefined) {
-    delete scenes[personnageId].presents[secondaireId]
-    sauvegarderScenes(scenes)
+  const scene = chargerScene(personnageId)
+  if (scene.presents[secondaireId] !== undefined) {
+    delete scene.presents[secondaireId]
+    sauvegarderScene(personnageId, scene)
   }
 }
 
+/**
+ * Réinitialise la scène active d'un personnage
+ */
 export function reinitialiserScene(personnageId) {
-  const scenes = chargerScenes()
-  delete scenes[personnageId]
-  sauvegarderScenes(scenes)
+  localStorage.removeItem(cleScene(personnageId))
 }
 
 /**
- * Construit le bloc d'instruction à injecter dans le prompt, pour
- * UN ou PLUSIEURS personnages secondaires présents à la fois.
+ * Construit le bloc d'instruction à injecter dans le prompt.
  */
-export function construireInstructionScene(personnagesPresents) {
+export function construireInstructionScene(personnagesPresents, personnageId = null) {
   if (!personnagesPresents || personnagesPresents.length === 0) return ''
+
+  let dernierAParle = null
+  if (personnageId) {
+    dernierAParle = chargerScene(personnageId).dernierAParle
+  }
 
   const blocs = personnagesPresents
     .map(
@@ -116,10 +119,14 @@ export function construireInstructionScene(personnagesPresents) {
     )
     .join('\n')
 
+  const contexteDernierLocuteur = dernierAParle
+    ? `\nRemarque : Le dernier personnage secondaire ayant pris la parole était "${dernierAParle}".`
+    : ''
+
   return `
 
 [INSTRUCTION IMPÉRATIVE — PERSONNAGES SECONDAIRES PRÉSENTS DANS LA SCÈNE :
-${blocs}
+${blocs}${contexteDernierLocuteur}
 
 Ces personnages sont physiquement présents dans la scène actuelle. Selon ce qui est cohérent avec la situation, ils peuvent réellement prendre la parole (avec de vraies répliques entre "guillemets", dans LEUR PROPRE personnalité, pas la tienne), réagir, interrompre, ou rester silencieux si ce n'est pas leur moment. Ne les ignore pas simplement parce que le joueur ne les a pas nommés dans son dernier message — ils sont toujours là jusqu'à ce qu'ils quittent explicitement la scène.]`
 }

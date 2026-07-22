@@ -44,13 +44,149 @@ export const TRAITS_PERSONNAGE = [
   { id: 'fidele', label: 'Fidèle', description: "Tient ses engagements sans faille, ne trahit jamais sa parole." },
   { id: 'mature', label: 'Mature', description: "Réfléchit avant d'agir, gère les conflits avec calme." },
   { id: 'calculateur', label: 'Calculateur', description: "Pèse chaque mot, anticipe les conséquences." },
-  { id: 'charismatique', label: 'Charismatique', description: "Impose naturally le respect et l'attention." },
+  { id: 'charismatique', label: 'Charismatique', description: "Impose naturellement le respect et l'attention." },
   { id: 'froid', label: 'Froid', description: "Contrôle ses émotions en apparence, sourit rarement." },
   { id: 'empathique', label: 'Empathique', description: "Ressent profondément les émotions des autres." },
   { id: 'gentleman', label: 'Gentleman', description: "Toujours respectueux, courtois, prévenant dans ses gestes." },
   { id: 'romantique', label: 'Romantique', description: "Exprime volontiers son affection, aime les gestes attentionnés." },
   { id: 'impitoyable', label: 'Impitoyable', description: "Sans pitié envers ses ennemis, mais capable d'une tendresse cachée envers ceux qu'il aime." },
 ]
+
+// ============================================================
+// AXES DE COMPORTEMENT PAR TRAIT
+// Chaque trait ajuste un ou plusieurs axes, sur une échelle de -2 à +2 :
+//
+// initiative   : -2 n'engage jamais / +2 engage tout le temps
+// honnetete    : -2 peut déformer/cacher la vérité / +2 toujours transparent
+// expressivite : -2 cache ses émotions / +2 les montre ouvertement
+// conflit      : -2 fuit ou se referme / +2 affronte directement
+// protection   : -2 indifférent aux autres / +2 veille spontanément sur eux
+// formalite    : -2 très familier/direct / +2 poli et soigné
+//
+// Un personnage cumule les effets de TOUS ses traits (addition), donc la
+// combinaison de traits crée un profil unique plutôt qu'une catégorie figée.
+// ============================================================
+export const AXES_COMPORTEMENT_PAR_TRAIT = {
+  possessif:     { expressivite: 1, protection: 2 },
+  timide:        { initiative: -2, expressivite: -1 },
+  entreprenant:  { initiative: 2 },
+  protecteur:    { protection: 2, initiative: 1 },
+  dominant:      { initiative: 2, conflit: 2 },
+  espiegle:      { formalite: -1, expressivite: 1 },
+  melancolique:  { expressivite: -1 },
+  loyal:         { protection: 1, honnetete: 1 },
+  impulsif:      { conflit: 2, expressivite: 1 },
+  reserve:       { initiative: -2, expressivite: -1 },
+  mefiant:       { initiative: -1, honnetete: -1, conflit: -1 },
+  fidele:        { honnetete: 2, protection: 1 },
+  mature:        { conflit: -1 },
+  calculateur:   { honnetete: -1, initiative: -1, conflit: -1 },
+  charismatique: { initiative: 1 },
+  froid:         { initiative: -2, expressivite: -2, conflit: -1 },
+  empathique:    { expressivite: 1, protection: 1, conflit: -1 },
+  gentleman:     { formalite: 2, protection: 1 },
+  romantique:    { expressivite: 2 },
+  impitoyable:   { conflit: 2, protection: 1 }, // impitoyable envers les ennemis, protecteur envers les siens
+}
+
+const TEXTES_AXES = {
+  initiative: {
+    tresFaible: "Tu n'inities jamais la conversation, tu ne poses pas de questions personnelles en premier, tu attends que le joueur fasse les efforts.",
+    faible: "Tu prends rarement l'initiative — tu réponds plus que tu ne relances.",
+    neutre: "Tu prends l'initiative avec mesure, ni trop ni trop peu.",
+    forte: "Tu relances facilement la conversation, tu proposes des idées ou des activités de ton propre chef.",
+    tresForte: "Tu prends l'initiative constantly : tu changes de sujet, proposes des activités, racontes des souvenirs sans attendre qu'on te le demande.",
+  },
+  honnetete: {
+    tresFaible: "Tu peux déformer la vérité ou cacher des choses si ça te protège émotionnellement — jamais par pure méchanceté, mais par instinct de préservation.",
+    faible: "Tu éludes ou restes vague plutôt que de mentir franchement, quand un sujet te met mal à l'aise.",
+    neutre: "",
+    forte: "",
+    tresForte: "Tu es toujours honnête, même quand la vérité est inconfortable à dire — c'est une valeur non négociable pour toi.",
+  },
+  expressivite: {
+    tresFaible: "Tu caches presque totalement tes émotions ; ton visage et tes mots trahissent rarement ce que tu ressens vraiment.",
+    faible: "Tu montres peu tes émotions, il faut du temps et de la confiance pour que ça transparaisse.",
+    neutre: "",
+    forte: "Tu exprimes assez librement ce que tu ressens.",
+    tresForte: "Tu exprimes tes émotions ouvertement et sans retenue, positives comme négatives.",
+  },
+  conflit: {
+    tresFaible: "Face à une tension ou un manque de respect, tu te refermes et deviens distant plutôt que d'affronter.",
+    faible: "Tu évites la confrontation directe, tu préfères minimiser ou changer de sujet.",
+    neutre: "Face à une tension, tu en parles calmement, sans fuir ni t'énerver.",
+    forte: "Tu n'hésites pas à hausser le ton ou remettre les choses à leur place si on te manque de respect.",
+    tresForte: "Tu affrontes directement, sans détour, toute tension ou manque de respect.",
+  },
+  protection: {
+    tresFaible: "", faible: "",
+    neutre: "",
+    forte: "Tu veilles naturellement sur le bien-être du joueur et de ceux qui te sont proches.",
+    tresForte: "Protéger ceux que tu aimes est une priorité constante pour toi, parfois avant ta propre tranquillité.",
+  },
+  formalite: {
+    tresFaible: "Ton langage est très familier, direct, parfois brut.",
+    faible: "Ton langage est décontracté.",
+    neutre: "",
+    forte: "Ton langage est soigné et poli.",
+    tresForte: "Ton langage est toujours élégant, courtois, presque cérémonieux.",
+  },
+}
+
+function texteSelonScore(axe, score) {
+  const textes = TEXTES_AXES[axe]
+  if (score <= -2) return textes.tresFaible
+  if (score === -1) return textes.faible
+  if (score === 0) return textes.neutre
+  if (score === 1) return textes.forte
+  return textes.tresForte
+}
+
+// Le chapitre actuel module SEULEMENT l'initiative : même un personnage
+// entreprenant reste un peu plus réservé au tout début de l'histoire.
+function facteurInitiativeSelonChapitre(numeroChapitre) {
+  const paliers = { 1: 0.5, 2: 0.7, 3: 0.85, 4: 1, 5: 1.1, 6: 1.2 }
+  return paliers[numeroChapitre] ?? 1
+}
+
+/**
+ * Calcule le profil comportemental complet d'un personnage à partir de
+ * TOUS ses traits combinés, ajusté selon le chapitre actuel de l'histoire.
+ * Renvoie un tableau de phrases prêtes à insérer dans le prompt.
+ */
+export function calculerProfilComportemental(traits, numeroChapitre = 1) {
+  const scores = { initiative: 0, honnetete: 0, expressivite: 0, conflit: 0, protection: 0, formalite: 0 }
+
+  for (const trait of traits || []) {
+    const effets = AXES_COMPORTEMENT_PAR_TRAIT[trait]
+    if (!effets) continue
+    for (const axe of Object.keys(effets)) {
+      scores[axe] += effets[axe]
+    }
+  }
+
+  // Applique le facteur de chapitre uniquement sur l'initiative
+  if (scores.initiative > 0) {
+    scores.initiative = Math.round(scores.initiative * facteurInitiativeSelonChapitre(numeroChapitre))
+  }
+
+  for (const axe of Object.keys(scores)) {
+    scores[axe] = Math.max(-2, Math.min(2, scores[axe]))
+  }
+
+  const phrases = []
+  for (const axe of Object.keys(scores)) {
+    const texte = texteSelonScore(axe, scores[axe])
+    if (texte) phrases.push(texte)
+  }
+
+  // Nuance spéciale pour "impitoyable" : dur avec les ennemis, pas avec les proches
+  if ((traits || []).includes('impitoyable')) {
+    phrases.push("Ta dureté (conflit direct, sans pitié) vise tes ennemis ou ceux qui te trahissent — envers le joueur et ceux que tu aimes, cette même intensité se transforme en protection farouche, pas en agressivité.")
+  }
+
+  return phrases
+}
 
 export const TYPES_ROMANCE = [
   'Slow Burn', 'Enemies to Lovers', 'Friends to Lovers', 'Marriage Contract',
@@ -104,6 +240,8 @@ const IDENTITE_PAR_DEFAUT = {
 const LIEU_TEMPS_PAR_DEFAUT = {
   lieuActuel: '',
   dateDebutHistoire: null,
+  objetsPresents: [],     // ex: ["une tasse de thé", "un vieux carnet"]
+  ambianceActuelle: '',   // ex: "tendue", "chaleureuse et calme"
 }
 
 const APPARENCE_PAR_DEFAUT = {
