@@ -983,7 +983,7 @@ function PersonnagesScreen() {
   // GRILLE DES PERSONNAGES (façon "Explorer")
   // ================================================================
   return (
-    <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave" style={{ background: '#0a0a0e' }}>
+    <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
       <StylesAnimations />
       <input ref={inputAvatarRapideRef} type="file" accept="image/*" onChange={gererChangementPhotoRapide} className="hidden" />
       <div className="px-3 sm:px-5 md:px-8 py-4 md:py-6 pb-10">
@@ -991,8 +991,8 @@ function PersonnagesScreen() {
         {/* ===== HEADER ===== */}
         <div className="flex items-center justify-between mb-4 gap-3 yuna-fade-in">
           <div className="min-w-0">
-            <h1 className="text-white font-semibold truncate" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '25px' }}>Personnages</h1>
-            <p className="text-[10px] text-white/40 mt-0.5 truncate">
+            <h1 className="text-espresso font-semibold truncate" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '25px' }}>Personnages</h1>
+            <p className="text-[10px] text-espresso/45 mt-0.5 truncate">
               {personnages.length} personnage{personnages.length > 1 ? 's' : ''}
               {personnages.some((p) => p.favori) && ` · ${personnages.filter((p) => p.favori).length} favori${personnages.filter((p) => p.favori).length > 1 ? 's' : ''}`}
             </p>
@@ -1003,16 +1003,15 @@ function PersonnagesScreen() {
                 onClick={ouvrirPersonnageAleatoire}
                 title="Ouvrir un personnage au hasard"
                 aria-label="Ouvrir un personnage au hasard"
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/8 border border-white/10 hover:bg-white/15 transition-colors duration-200"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-white border border-espresso/10 hover:bg-espresso/5 transition-colors duration-200"
               >
-                <IconDes style={{ width: '15px', height: '15px' }} className="text-white/75" />
+                <IconDes style={{ width: '15px', height: '15px' }} className="text-espresso/60" />
               </button>
             )}
             <button
               onClick={() => ouvrirCreateur()}
               aria-label="Créer un personnage"
-              className="flex items-center gap-1.5 rounded-full px-4 h-10 text-[11.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-              style={{ background: 'linear-gradient(135deg, #FFD84D, #F0B33A)', color: '#241a02' }}
+              className="flex items-center gap-1.5 bg-espresso text-peony rounded-full px-4 h-10 text-[11.5px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
             >
               <IconPlus style={{ width: '13px', height: '13px' }} />
               <span className="hidden sm:inline">Créer</span>
@@ -1022,25 +1021,25 @@ function PersonnagesScreen() {
 
         {/* ===== RECHERCHE ===== */}
         <div className="relative mb-4">
-          <IconRecherche style={{ width: '14px', height: '14px' }} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35 pointer-events-none" />
+          <IconRecherche style={{ width: '14px', height: '14px' }} className="absolute left-4 top-1/2 -translate-y-1/2 text-espresso/35 pointer-events-none" />
           <input
             type="text" value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher un personnage..."
             aria-label="Rechercher un personnage"
-            className="w-full bg-white/8 border border-white/10 rounded-full pl-10 pr-9 py-3 text-[12px] text-white placeholder:text-white/35 outline-none focus:border-white/30 focus:bg-white/12 transition-all duration-200"
+            className="w-full bg-white border border-espresso/10 rounded-full pl-10 pr-9 py-3 text-[12px] text-espresso placeholder:text-espresso/35 outline-none focus:border-espresso/30 focus:shadow-sm transition-all duration-200"
           />
           {recherche && (
-            <button onClick={() => setRecherche('')} aria-label="Effacer la recherche" className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors duration-150">
-              <IconCroix style={{ width: '9px', height: '9px' }} className="text-white/60" />
+            <button onClick={() => setRecherche('')} aria-label="Effacer la recherche" className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-espresso/8 hover:bg-espresso/15 flex items-center justify-center transition-colors duration-150">
+              <IconCroix style={{ width: '9px', height: '9px' }} className="text-espresso/50" />
             </button>
           )}
         </div>
 
         {/* ===== CATÉGORIES (style onglets) + FAVORIS ===== */}
-        <div className="flex items-center gap-4 mb-5 overflow-x-auto pb-0 border-b border-white/8" style={{ scrollbarWidth: 'none', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex items-center gap-4 mb-5 overflow-x-auto pb-0 border-b border-espresso/10" style={{ scrollbarWidth: 'none', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}>
           <button
             onClick={() => setCategoriesFiltre([])}
             className="flex-shrink-0 text-[12.5px] font-semibold pb-2.5 pt-0.5 transition-all duration-200 border-b-2 whitespace-nowrap"
-            style={{ color: categoriesFiltre.length === 0 ? '#fff' : 'rgba(255,255,255,0.4)', borderColor: categoriesFiltre.length === 0 ? '#FFD84D' : 'transparent' }}
+            style={{ color: categoriesFiltre.length === 0 ? 'var(--color-espresso)' : 'rgba(62,39,35,0.4)', borderColor: categoriesFiltre.length === 0 ? 'var(--color-espresso)' : 'transparent' }}
           >
             Tous
           </button>
@@ -1051,7 +1050,7 @@ function PersonnagesScreen() {
                 key={cat.id}
                 onClick={() => toggleFiltreCategorie(cat.id)}
                 className="flex-shrink-0 text-[12.5px] font-semibold pb-2.5 pt-0.5 transition-all duration-200 border-b-2 whitespace-nowrap"
-                style={{ color: actif ? '#fff' : 'rgba(255,255,255,0.4)', borderColor: actif ? '#FFD84D' : 'transparent' }}
+                style={{ color: actif ? 'var(--color-espresso)' : 'rgba(62,39,35,0.4)', borderColor: actif ? 'var(--color-espresso)' : 'transparent' }}
               >
                 {cat.label}
               </button>
@@ -1060,20 +1059,20 @@ function PersonnagesScreen() {
           <button
             onClick={() => setFavorisDabord((v) => !v)}
             className="flex-shrink-0 flex items-center gap-1 ml-auto mb-1.5 rounded-full text-[10.5px] font-medium px-3 py-1.5 transition-all duration-200 active:scale-95"
-            style={{ background: favorisDabord ? 'rgba(255,216,77,0.18)' : 'rgba(255,255,255,0.08)', color: favorisDabord ? '#FFD84D' : 'rgba(255,255,255,0.55)' }}
+            style={{ background: favorisDabord ? '#F4EBC8' : 'rgba(62,39,35,0.06)', color: favorisDabord ? '#8A6D1F' : 'rgba(62,39,35,0.55)' }}
             title="Afficher les favoris en premier"
           >
-            <IconCoeur style={{ width: '10px', height: '10px' }} fill={favorisDabord ? '#FFD84D' : 'none'} stroke="currentColor" strokeWidth="2" />
+            <IconCoeur style={{ width: '10px', height: '10px' }} fill={favorisDabord ? '#8A6D1F' : 'none'} stroke="currentColor" strokeWidth="2" />
             <span className="hidden sm:inline">Favoris</span>
           </button>
         </div>
 
         {personnagesFiltres.length === 0 && (
           <div className="text-center py-16 yuna-fade-in">
-            <p className="text-white/40 italic text-[12px] mb-3">
+            <p className="text-espresso/40 italic text-[12px] mb-3">
               {personnages.length === 0 ? "Tu n'as encore aucun personnage" : "Aucun personnage ne correspond à ta recherche"}
             </p>
-            <button onClick={() => ouvrirCreateur()} className="text-[11px] font-semibold text-white underline underline-offset-2 hover:text-white/70">
+            <button onClick={() => ouvrirCreateur()} className="text-[11px] font-semibold text-espresso underline underline-offset-2 hover:text-espresso/70">
               Créer ton premier personnage
             </button>
           </div>
@@ -1091,16 +1090,16 @@ function PersonnagesScreen() {
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrirPersonnage(personnage) } }}
-                className="yuna-card-in group relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 active:scale-[0.98] aspect-[3/4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                style={{ animationDelay: `${Math.min(index, 11) * 40}ms`, background: '#151519' }}
+                className="yuna-card-in group relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 active:scale-[0.98] aspect-[3/4] border border-espresso/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                style={{ animationDelay: `${Math.min(index, 11) * 40}ms`, background: 'white', boxShadow: '0 4px 14px rgba(62,39,35,0.08)' }}
               >
                 {/* Fond */}
                 {personnage.avatarUrl ? (
                   <img src={personnage.avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 ) : (
-                  <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 45%))` }} />
+                  <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${personnage.couleur}, color-mix(in srgb, ${personnage.couleur}, black 30%))` }} />
                 )}
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.12) 42%, rgba(0,0,0,0.92) 100%)' }} />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${personnage.couleur}00 0%, ${personnage.couleur}25 42%, color-mix(in srgb, ${personnage.couleur}, black 55%) 100%)` }} />
 
                 {/* Compteur de messages */}
                 <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/45 backdrop-blur-sm rounded-full pl-1.5 pr-2 py-1">
