@@ -357,6 +357,11 @@ function tirerCaption(mood) {
 const EMOJIS_CONFETTI = ['✨', '💕', '🎉', '⭐', '🌸', '💫']
 const MOODS_ROUE_PAR_DEFAUT = ['Floral', 'Cosy', 'Nuit', 'Nature', 'Dreamy', 'Calme']
 
+// AJOUT — palette de couleurs des segments de la roue des humeurs,
+// dans le même esprit chaleureux/pastel que le reste de la galerie
+const COULEURS_ROUE = ['#D4869A', '#C99A2E', '#8B9E7A', '#9B7A8C', '#C4917A', '#6B4F5E', '#B49AAE', '#E8B4C4']
+const DUREE_SPIN_ROUE_MS = 3200
+
 // GalleryScreen accepte un callback optionnel onOuvrirJournal(dateISO)
 // pour naviguer vers la page Journal à une date précise, si ton
 // système de navigation le permet. Sans ce prop, le lien "Ce jour-là
@@ -411,12 +416,12 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   // ===== AJOUT — CONFETTIS (petite pluie décorative) =====
   const [confettis, setConfettis] = useState([])
 
-  // ===== AJOUT — ROUE DES HUMEURS =====
+  // ===== AJOUT — ROUE DES HUMEURS (vraie roue tournante en CSS) =====
   const [roueOuverte, setRoueOuverte] = useState(false)
   const [roueEnRotation, setRoueEnRotation] = useState(false)
-  const [roueAffichage, setRoueAffichage] = useState('')
+  const [rotationRoue, setRotationRoue] = useState(0)
   const [roueResultat, setRoueResultat] = useState(null)
-  const roueIntervalRef = useRef(null)
+  const roueSpinTimeoutRef = useRef(null)
 
   const positionSwipeDebut = useRef(null)
 
@@ -515,7 +520,7 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   // surprise si l'écran est quitté en plein milieu d'une animation
   useEffect(() => {
     return () => {
-      clearInterval(roueIntervalRef.current)
+      clearTimeout(roueSpinTimeoutRef.current)
       clearTimeout(carteTimeoutRef.current)
     }
   }, [])
@@ -811,8 +816,9 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
   }
 
   // ============================================================
-  // AJOUT — ROUE DES HUMEURS : petit tirage au sort ludique parmi
-  // les moods déjà présents dans la galerie. Le résultat est
+  // AJOUT — ROUE DES HUMEURS : vraie roue tournante (segments
+  // colorés en conic-gradient) qui s'arrête sur un mood tiré au
+  // sort parmi ceux déjà présents dans la galerie. Le résultat est
   // simplement injecté dans la recherche existante (qui filtre déjà
   // par mood), donc aucune logique de filtrage n'est dupliquée.
   // ============================================================
@@ -821,33 +827,52 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
     return liste.length > 0 ? liste : MOODS_ROUE_PAR_DEFAUT
   }, [images])
 
+  const segmentAngleRoue = 360 / moodsDisponibles.length
+
+  const conicGradientRoue = useMemo(() => {
+    const stops = moodsDisponibles.map((_, i) => {
+      const couleur = COULEURS_ROUE[i % COULEURS_ROUE.length]
+      return `${couleur} ${i * segmentAngleRoue}deg ${(i + 1) * segmentAngleRoue}deg`
+    })
+    return `conic-gradient(${stops.join(', ')})`
+  }, [moodsDisponibles, segmentAngleRoue])
+
   const lancerRoue = () => {
     if (roueEnRotation) return
     setRoueOuverte(true)
     setRoueEnRotation(true)
     setRoueResultat(null)
-    let compteur = 0
-    const total = 14
-    clearInterval(roueIntervalRef.current)
-    roueIntervalRef.current = setInterval(() => {
-      setRoueAffichage(moodsDisponibles[Math.floor(Math.random() * moodsDisponibles.length)])
-      compteur++
-      if (compteur >= total) {
-        clearInterval(roueIntervalRef.current)
-        const resultatFinal = moodsDisponibles[Math.floor(Math.random() * moodsDisponibles.length)]
-        setRoueAffichage(resultatFinal)
-        setRoueResultat(resultatFinal)
-        setRoueEnRotation(false)
-        declencherConfettis(window.innerWidth / 2, window.innerHeight / 3, 12)
-      }
-    }, 90)
+
+    const total = moodsDisponibles.length
+    const indexGagnant = Math.floor(Math.random() * total)
+    const centreSegment = segmentAngleRoue * indexGagnant + segmentAngleRoue / 2
+    const toursSupplementaires = 5
+
+    // On repart toujours d'un multiple de 360° pour garder une
+    // rotation fluide et continue, même en relançant plusieurs fois
+    // de suite (la roue ne "revient jamais en arrière" visuellement).
+    setRotationRoue((rotationActuelle) => {
+      const baseComplete = Math.ceil(rotationActuelle / 360) * 360
+      return baseComplete + toursSupplementaires * 360 + (360 - centreSegment)
+    })
+
+    clearTimeout(roueSpinTimeoutRef.current)
+    roueSpinTimeoutRef.current = setTimeout(() => {
+      const resultatFinal = moodsDisponibles[indexGagnant]
+      setRoueResultat(resultatFinal)
+      setRoueEnRotation(false)
+      declencherConfettis(window.innerWidth / 2, window.innerHeight / 3, 14)
+    }, DUREE_SPIN_ROUE_MS)
   }
   const voirResultatsRoue = () => {
     if (!roueResultat) return
     setRecherche(roueResultat)
     setRoueOuverte(false)
   }
-  const fermerRoue = () => setRoueOuverte(false)
+  const fermerRoue = () => {
+    if (roueEnRotation) return
+    setRoueOuverte(false)
+  }
 
   const totalFavoris = images.filter((i) => i.favori).length
   const totalYuna    = images.filter((i) => i.source === 'yuna').length
@@ -1422,6 +1447,12 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
             </div>
           )}
 
+          <p className="text-[10px] text-espresso/40 italic mb-4 mt-3">
+            Tes photos sont enregistrées uniquement sur cet appareil — elles ne sont
+            pas sauvegardées dans le cloud. Si tu changes de téléphone ou effaces les
+            données du navigateur, elles seront perdues.
+          </p>
+
           <footer className="text-center pt-10 pb-4 mt-10 border-t border-espresso/[0.08]">
             <div className="text-espresso/30 text-[10px] tracking-[0.3em] mb-2">✦ ── ✦ ── ✦</div>
             <p className="italic text-espresso/40" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '12px' }}>
@@ -1558,17 +1589,66 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
       )}
 
       {/* ============================================================
-          AJOUT — ROUE DES HUMEURS : petit tirage au sort ludique
+          AJOUT — ROUE DES HUMEURS : vraie roue tournante interactive
           ============================================================ */}
       {roueOuverte && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-espresso/70" onClick={fermerRoue}>
-          <div className="bg-white rounded-3xl w-full max-w-[320px] p-6 text-center anim-pop" onClick={(e) => e.stopPropagation()}>
-            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-3">Roue des humeurs</p>
-            <div className="rounded-2xl py-8 mb-4" style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, white)' }}>
-              <p className={`font-semibold text-espresso transition-opacity duration-150 ${roueEnRotation ? 'opacity-60' : 'opacity-100'}`} style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '24px' }}>
-                {roueAffichage || '?'}
-              </p>
+          <div className="bg-white rounded-3xl w-full max-w-[340px] p-6 text-center anim-pop" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-4">Roue des humeurs</p>
+
+            <div className="relative mx-auto mb-5" style={{ width: '220px', height: '220px' }}>
+              {/* Pointeur fixe, ne tourne jamais — c'est la roue qui bouge dessous */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 z-20"
+                style={{
+                  top: '-6px',
+                  width: 0, height: 0,
+                  borderLeft: '9px solid transparent',
+                  borderRight: '9px solid transparent',
+                  borderTop: '16px solid var(--color-espresso)',
+                  filter: 'drop-shadow(0 2px 3px rgba(62,39,35,0.3))',
+                }}
+              />
+
+              {/* La roue elle-même : segments colorés en conic-gradient */}
+              <div
+                className="w-full h-full rounded-full relative overflow-hidden"
+                style={{
+                  background: conicGradientRoue,
+                  border: '5px solid var(--color-cream)',
+                  boxShadow: '0 10px 26px rgba(62,39,35,0.28), inset 0 0 0 1px rgba(62,39,35,0.08)',
+                  transform: `rotate(${rotationRoue}deg)`,
+                  transition: 'transform 3.2s cubic-bezier(.15,.65,.15,1)',
+                }}
+              >
+                {moodsDisponibles.map((mood, i) => {
+                  const angle = segmentAngleRoue * i + segmentAngleRoue / 2
+                  return (
+                    <span
+                      key={mood}
+                      className="absolute left-1/2 top-1/2 text-[9.5px] font-semibold text-white whitespace-nowrap"
+                      style={{
+                        transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-82px) rotate(${-angle}deg)`,
+                        textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+                      }}
+                    >
+                      {mood}
+                    </span>
+                  )
+                })}
+              </div>
+
+              {/* Moyeu central — sert aussi de bouton de lancement */}
+              <button
+                onClick={lancerRoue}
+                disabled={roueEnRotation}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center text-[10px] font-bold uppercase tracking-wide text-peony transition-transform duration-150 hover:scale-105 active:scale-95 disabled:opacity-80 z-10"
+                style={{ width: '58px', height: '58px', background: 'var(--color-espresso)', boxShadow: '0 4px 12px rgba(62,39,35,0.35)' }}
+              >
+                {roueEnRotation ? '...' : 'Go'}
+              </button>
             </div>
+
             {roueResultat && !roueEnRotation ? (
               <div className="flex flex-col gap-2 anim-pop">
                 <p className="text-[11px] text-espresso/55">Et si tu regardais tes photos <strong>{roueResultat}</strong> ce soir ? ✨</p>
@@ -1578,9 +1658,9 @@ function GalleryScreen({ onOuvrirJournal } = {}) {
                 <button onClick={lancerRoue} className="text-[10.5px] text-espresso/45 underline underline-offset-2">Relancer</button>
               </div>
             ) : (
-              <button onClick={lancerRoue} disabled={roueEnRotation} className="rounded-full py-2.5 px-6 text-[11.5px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50">
-                {roueEnRotation ? 'Ça tourne...' : 'Lancer la roue'}
-              </button>
+              <p className="text-[11px] text-espresso/40 italic">
+                {roueEnRotation ? 'Ça tourne...' : 'Appuie sur la roue pour la faire tourner'}
+              </p>
             )}
             <button onClick={fermerRoue} className="block w-full text-center text-[10px] text-espresso/35 mt-3 underline underline-offset-2">Fermer</button>
           </div>

@@ -1,3 +1,5 @@
+import { retirerPhotoDeTousLesAlbums } from './albums'
+
 const CLE_IMAGES = 'yuna-galerie-images'
 
 // ============================================================
@@ -5,22 +7,53 @@ const CLE_IMAGES = 'yuna-galerie-images'
 // ============================================================
 export const REACTIONS_DISPONIBLES = ['❤️', '😍', '😂', '👍', '✨']
 
+// ============================================================
+// UTILITAIRE DE SAUVEGARDE SÉCURISÉE
+// Évite les plantages silencieux si le localStorage est plein (QuotaExceededError)
+// ============================================================
+function sauvegarderEnSecurite(cle, valeur) {
+  try {
+    localStorage.setItem(cle, JSON.stringify(valeur))
+    return true
+  } catch (erreur) {
+    console.error('Stockage local plein ou indisponible :', erreur)
+    return false
+  }
+}
+
 export function chargerImages() {
   const donnees = localStorage.getItem(CLE_IMAGES)
   if (!donnees) return []
-  return JSON.parse(donnees)
+  try {
+    return JSON.parse(donnees)
+  } catch (erreur) {
+    console.error('Erreur lors de la lecture des images :', erreur)
+    return []
+  }
 }
 
 export function sauvegarderImage(image) {
   const images = chargerImages()
   images.unshift(image)
-  localStorage.setItem(CLE_IMAGES, JSON.stringify(images))
+  const succes = sauvegarderEnSecurite(CLE_IMAGES, images)
+  if (!succes) {
+    throw new Error(
+      "Impossible d'enregistrer l'image — stockage local plein. Supprime quelques images pour libérer de la place."
+    )
+  }
 }
 
 export function supprimerImage(id) {
   const images = chargerImages()
   const imagesFiltrees = images.filter((img) => img.id !== id)
-  localStorage.setItem(CLE_IMAGES, JSON.stringify(imagesFiltrees))
+  const succes = sauvegarderEnSecurite(CLE_IMAGES, imagesFiltrees)
+  
+  if (!succes) {
+    throw new Error("Impossible de mettre à jour le stockage après suppression.")
+  }
+
+  // Évite les références fantômes dans les albums après la suppression de la photo
+  retirerPhotoDeTousLesAlbums(id)
 }
 
 export function toggleFavoriImage(id) {
@@ -28,7 +61,10 @@ export function toggleFavoriImage(id) {
   const maj = images.map((img) =>
     img.id === id ? { ...img, favori: !img.favori } : img
   )
-  localStorage.setItem(CLE_IMAGES, JSON.stringify(maj))
+  const succes = sauvegarderEnSecurite(CLE_IMAGES, maj)
+  if (!succes) {
+    throw new Error("Stockage local plein — impossible de modifier les favoris.")
+  }
   return maj
 }
 
@@ -51,7 +87,10 @@ export function ajouterCommentaireImage(id, commentaire) {
   const imagesMaj = images.map((img) =>
     img.id === id ? { ...img, commentairePerso: commentaire } : img
   )
-  localStorage.setItem(CLE_IMAGES, JSON.stringify(imagesMaj))
+  const succes = sauvegarderEnSecurite(CLE_IMAGES, imagesMaj)
+  if (!succes) {
+    throw new Error("Stockage local plein — impossible de sauvegarder le commentaire.")
+  }
   return imagesMaj
 }
 
@@ -66,7 +105,10 @@ export function mettreAJourImage(id, changements) {
   const imagesMaj = images.map((img) =>
     img.id === id ? { ...img, ...changements } : img
   )
-  localStorage.setItem(CLE_IMAGES, JSON.stringify(imagesMaj))
+  const succes = sauvegarderEnSecurite(CLE_IMAGES, imagesMaj)
+  if (!succes) {
+    throw new Error("Stockage local plein — impossible de mettre à jour l'image.")
+  }
   return imagesMaj
 }
 
@@ -89,6 +131,9 @@ export function toggleReactionImage(id, emoji) {
         : [...reactionsActuelles, emoji],
     }
   })
-  localStorage.setItem(CLE_IMAGES, JSON.stringify(imagesMaj))
+  const succes = sauvegarderEnSecurite(CLE_IMAGES, imagesMaj)
+  if (!succes) {
+    throw new Error("Stockage local plein — impossible d'enregistrer la réaction.")
+  }
   return imagesMaj
 }

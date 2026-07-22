@@ -33,9 +33,6 @@ const JournalScreen     = lazy(() => import('./screens/JournalScreen'))
 const LocalisationScreen = lazy(() => import('./screens/LocalisationScreen'))
 
 // Petit indicateur affiché brièvement pendant qu'un écran se charge
-// (généralement invisible tellement c'est rapide une fois qu'un
-// écran a déjà été visité une première fois — mis en cache par le
-// navigateur après ça)
 function ChargementEcran() {
   return (
     <div className="h-full w-full flex items-center justify-center bg-cream">
@@ -78,18 +75,30 @@ function App() {
     const desabonner = surveillerConnexion(async (user) => {
       clearTimeout(filetSecurite)
       setUtilisateur(user)
-      if (user) {
-        await garantirProfilPublic(user)
-        await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
-        await synchroniserAuDemarrage('yuna-parametres', 'parametres')
-        await synchroniserAuDemarrage('yuna-conversations', 'conversations')
-        await synchroniserAuDemarrage('yuna-personnages', 'personnages')
-        await synchroniserAuDemarrage('yuna-personnages-conversations', 'personnages_conversations')
-      }
       setVerificationAuthTerminee(true)
+
+      if (user) {
+        try {
+          await garantirProfilPublic(user)
+        } catch (erreur) {
+          // Une erreur ici (course, réseau) ne doit JAMAIS empêcher la
+          // synchro des vraies données de l'utilisateur juste après.
+          console.error('Erreur création profil public (non bloquante) :', erreur)
+        }
+        await Promise.all([
+          synchroniserAuDemarrage('yuna-profil-saki', 'profil'),
+          synchroniserAuDemarrage('yuna-parametres', 'parametres'),
+          synchroniserAuDemarrage('yuna-conversations', 'conversations'),
+          synchroniserAuDemarrage('yuna-personnages', 'personnages'),
+          synchroniserAuDemarrage('yuna-personnages-conversations', 'personnages_conversations'),
+        ])
+      }
     })
 
-    return () => { clearTimeout(filetSecurite); desabonner() }
+    return () => { 
+      clearTimeout(filetSecurite)
+      desabonner() 
+    }
   }, [])
 
   useEffect(() => {

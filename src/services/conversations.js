@@ -38,15 +38,10 @@ export function sauvegarderConversation(conversation) {
 // ===== SUPPRIMER UNE CONVERSATION =====
 // Supprime une conversation par son id
 export function supprimerConversation(id) {
-  // On charge toutes les conversations
   const conversations = chargerConversations()
-
-  // filter = garde seulement les conversations dont l'id est différent
-  // (donc supprime celle qui correspond à l'id passé en paramètre)
   const conversationsFiltrees = conversations.filter((c) => c.id !== id)
-
-  // On sauvegarde le tableau sans la conversation supprimée
   localStorage.setItem(CLE_CONVERSATIONS, JSON.stringify(conversationsFiltrees))
+  synchroniserVersFirestore('conversations', conversationsFiltrees) // ← sans ça, la suppression ne survit pas à la prochaine synchro
 }
 
 // ===== CRÉER UNE NOUVELLE CONVERSATION =====

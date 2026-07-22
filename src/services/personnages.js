@@ -745,6 +745,51 @@ export function mettreAJourRelation(personnageId, { relation, emotionActuelle, n
 }
 
 // ============================================================
+// MISE À JOUR COMBINÉE : relation + habitudes + promesses en UN
+// SEUL cycle localStorage/Firestore, au lieu de 3 séparés.
+// ============================================================
+export function mettreAJourRelationEtMemoire(personnageId, resultat) {
+  const personnages = chargerPersonnages()
+  const personnagesMaj = personnages.map((p) => {
+    if (p.id !== personnageId) return p
+
+    // --- partie relation (logique identique à mettreAJourRelation) ---
+    const relationProposee = resultat.relation
+      ? propagerInfluencesRelationnelles(p.relation, resultat.relation, p.traits)
+      : p.relation
+    const relationBornee = {}
+    for (const cle of Object.keys(RELATION_PAR_DEFAUT)) {
+      const valeur = relationProposee?.[cle] ?? p.relation[cle]
+      relationBornee[cle] = Math.max(0, Math.min(100, valeur))
+    }
+    const chapitre = calculerChapitreActuel(relationBornee)
+
+    // --- partie mémoire (habitudes / promesses) ---
+    let memoireNiveaux = p.memoireNiveaux
+    if (resultat.nouvellesHabitudes?.length > 0) {
+      memoireNiveaux = fusionnerNiveau(memoireNiveaux, 'habitudes', resultat.nouvellesHabitudes)
+    }
+    if (resultat.nouvellesPromesses?.length > 0) {
+      memoireNiveaux = fusionnerNiveau(memoireNiveaux, 'promesses', resultat.nouvellesPromesses)
+    }
+
+    return {
+      ...p,
+      relation: relationBornee,
+      emotionActuelle: resultat.emotionActuelle || p.emotionActuelle,
+      faitsSurUtilisateur: [...new Set([...(p.faitsSurUtilisateur || []), ...(resultat.nouveauxFaits || [])])].slice(-15),
+      souvenirsImportants: resultat.nouveauSouvenir ? [...(p.souvenirsImportants || []), resultat.nouveauSouvenir].slice(-20) : p.souvenirsImportants,
+      progression: { ...p.progression, chapitreActuel: chapitre.numero, objectifActuel: chapitre.objectif },
+      memoireNiveaux,
+    }
+  })
+
+  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
+  synchroniserVersFirestore('personnages', personnagesMaj)
+  return personnagesMaj
+}
+
+// ============================================================
 // AJOUTE UN SOUVENIR DANS UN NIVEAU PRÉCIS POUR UN PERSONNAGE
 // (habitudes, promesses, permanente, emotionnelle...)
 // ============================================================
