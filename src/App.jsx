@@ -1,19 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
-import SplashScreen     from './screens/SplashScreen'
-import HomeScreen       from './screens/HomeScreen'
-import ChatScreen       from './screens/ChatScreen'
-import HistoriqueScreen from './screens/HistoriqueScreen'
-import GalleryScreen    from './screens/GalleryScreen'
-import ProfileScreen    from './screens/ProfileScreen'
-import SettingsScreen   from './screens/SettingsScreen'
-import PersonnagesScreen from './screens/PersonnagesScreen'
-import JournalScreen    from './screens/JournalScreen'
-import LocalisationScreen from './screens/LocalisationScreen'
-import Sidebar          from './components/Sidebar'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import SplashScreen from './screens/SplashScreen'
+import Sidebar from './components/Sidebar'
 import NotificationHost from './components/NotificationHost'
-import { garantirProfilPublic, surveillerConnexion } from './services/authentification'
-import { synchroniserAuDemarrage } from './services/sync'
-import AccesProtege     from './components/AccesProtege'
+import AccesProtege from './components/AccesProtege'
 import ConnexionScreen from './screens/ConnexionScreen'
 import { creerNouvelleConversation } from './services/conversations'
 import { useHauteurEcran } from './hooks/useHauteurEcran'
@@ -21,45 +10,45 @@ import { chargerSuivi, enregistrerVisite, joursDepuis } from './services/suivi'
 import { genererMessageAccueil } from './services/gemini'
 import { notifierInfo } from './services/notifications'
 import { envoyerNotificationLocale } from './services/notificationsNatives'
+import { surveillerConnexion, garantirProfilPublic } from './services/authentification'
+import { synchroniserAuDemarrage } from './services/sync'
+
+// ============================================================
+// CHARGEMENT PARESSEUX ("lazy loading")
+// Chaque écran n'est téléchargé/exécuté QUE quand l'utilisateur y
+// accède réellement — pas tous en même temps au démarrage. C'est ce
+// qui va le plus réduire le temps d'ouverture initial sur mobile,
+// surtout pour les écrans "lourds" (Journal charge lucide-react,
+// Localisation charge Leaflet — deux librairies qu'on ne veut PAS
+// dans le premier chargement si l'utilisateur ouvre juste le Chat).
+// ============================================================
+const HomeScreen        = lazy(() => import('./screens/HomeScreen'))
+const ChatScreen        = lazy(() => import('./screens/ChatScreen'))
+const HistoriqueScreen  = lazy(() => import('./screens/HistoriqueScreen'))
+const GalleryScreen     = lazy(() => import('./screens/GalleryScreen'))
+const ProfileScreen     = lazy(() => import('./screens/ProfileScreen'))
+const SettingsScreen    = lazy(() => import('./screens/SettingsScreen'))
+const PersonnagesScreen = lazy(() => import('./screens/PersonnagesScreen'))
+const JournalScreen     = lazy(() => import('./screens/JournalScreen'))
+const LocalisationScreen = lazy(() => import('./screens/LocalisationScreen'))
+
+// Petit indicateur affiché brièvement pendant qu'un écran se charge
+// (généralement invisible tellement c'est rapide une fois qu'un
+// écran a déjà été visité une première fois — mis en cache par le
+// navigateur après ça)
+function ChargementEcran() {
+  return (
+    <div className="h-full w-full flex items-center justify-center bg-cream">
+      <div className="w-6 h-6 rounded-full border-2 border-espresso/20 border-t-espresso animate-spin" />
+    </div>
+  )
+}
 
 function App() {
-  const [ecranActuel, setEcranActuel]               = useState('splash')
+  const [ecranActuel, setEcranActuel] = useState('splash')
   const [conversationActive, setConversationActive] = useState(null)
   const [utilisateur, setUtilisateur] = useState(null)
   const [verificationAuthTerminee, setVerificationAuthTerminee] = useState(false)
-
-  // ============================================================
-  // AUTHENTIFICATION ET SYNCHRONISATION INITIALE
-  // Écoute les changements d'état de session Supabase. Intègre un 
-  // filet de sécurité de 6 secondes pour éviter de bloquer l'utilisateur 
-  // sur le Splash screen en cas de coupure réseau ou mauvaise configuration.
-  // ============================================================
-  useEffect(() => {
-    // ⬅️ Filet de sécurité — si Supabase ne répond jamais
-    // (mauvaise config, réseau), on force l'affichage de l'écran de
-    // connexion après 6 secondes maximum, au lieu de rester bloqué
-    // indéfiniment sur le Splash
-    const filetSecurite = setTimeout(() => {
-      setVerificationAuthTerminee((deja) => deja || true)
-    }, 6000)
-
-    const desabonner = surveillerConnexion(async (user) => {
-      clearTimeout(filetSecurite)
-      setUtilisateur(user)
-      if (user) {
-        await garantirProfilPublic(user)
-        await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
-        await synchroniserAuDemarrage('yuna-parametres', 'parametres')
-        // Synchronise aussi conversations Yuna + personnages
-        await synchroniserAuDemarrage('yuna-conversations', 'conversations')
-        await synchroniserAuDemarrage('yuna-personnages', 'personnages')
-        await synchroniserAuDemarrage('yuna-personnages-conversations', 'personnages_conversations')
-      }
-      setVerificationAuthTerminee(true)
-    })
-
-    return () => { clearTimeout(filetSecurite); desabonner() }
-  }, [])
 
   useHauteurEcran()
 
@@ -72,12 +61,6 @@ function App() {
     window.history.replaceState({ ecran: 'accueil' }, '')
   }, [])
 
-  // ============================================================
-  // GESTION DU BOUTON RETOUR NAVIGATEUR (POPSTATE)
-  // Le popstate se contente de lire l'état — il n'a JAMAIS besoin
-  // d'appeler pushState lui-même. Chaque clic normal enregistre 
-  // sa page. Simple et fiable.
-  // ============================================================
   useEffect(() => {
     const gererBoutonRetour = (evenement) => {
       const ecranPrecedent = evenement.state?.ecran || 'accueil'
@@ -87,18 +70,32 @@ function App() {
     return () => window.removeEventListener('popstate', gererBoutonRetour)
   }, [])
 
-  // ============================================================
-  // ACCUEIL INTELLIGENT DE YUNA
-  // Se déclenche UNE FOIS à l'ouverture de l'app. Compare la date de
-  // la dernière visite à maintenant pour générer un message personnalisé.
-  // Déclenche à la fois la notification In-App et la notification native.
-  // ============================================================
+  useEffect(() => {
+    const filetSecurite = setTimeout(() => {
+      setVerificationAuthTerminee((deja) => deja || true)
+    }, 6000)
+
+    const desabonner = surveillerConnexion(async (user) => {
+      clearTimeout(filetSecurite)
+      setUtilisateur(user)
+      if (user) {
+        await garantirProfilPublic(user)
+        await synchroniserAuDemarrage('yuna-profil-saki', 'profil')
+        await synchroniserAuDemarrage('yuna-parametres', 'parametres')
+        await synchroniserAuDemarrage('yuna-conversations', 'conversations')
+        await synchroniserAuDemarrage('yuna-personnages', 'personnages')
+        await synchroniserAuDemarrage('yuna-personnages-conversations', 'personnages_conversations')
+      }
+      setVerificationAuthTerminee(true)
+    })
+
+    return () => { clearTimeout(filetSecurite); desabonner() }
+  }, [])
+
   useEffect(() => {
     const verifierAccueil = async () => {
       const suivi = chargerSuivi()
       const joursAbsence = joursDepuis(suivi.app)
-
-      // On enregistre la visite MAINTENANT
       enregistrerVisite('app')
 
       if (joursAbsence >= 2) {
@@ -110,13 +107,12 @@ function App() {
           envoyerNotificationLocale('Yuna', message)
         } catch (erreur) {
           console.error('Erreur message accueil :', erreur)
-          const messageSecours = `Tu m'as manqué ! Ça fait ${joursAbsence} jours qu'on ne s'est pas parlé 💭`
-          notifierInfo(messageSecours)
-          envoyerNotificationLocale('Yuna', messageSecours)
+          const messageDefaut = `Tu m'as manqué ! Ça fait ${joursAbsence} jours qu'on ne s'est pas parlé 💭`
+          notifierInfo(messageDefaut)
+          envoyerNotificationLocale('Yuna', messageDefaut)
         }
       }
     }
-    
     const delai = setTimeout(verifierAccueil, 2800)
     return () => clearTimeout(delai)
   }, [])
@@ -125,7 +121,6 @@ function App() {
 
   const gererChangerEcran = (ecran) => {
     if (ecran === ecranActuel) return
-
     if (ecran === 'chat' && !conversationActive) {
       setConversationActive(creerNouvelleConversation())
     }
@@ -134,7 +129,6 @@ function App() {
   }
 
   const gererNouvelleConversation = (conv) => setConversationActive(conv)
-
   const mettreAJourConversationActive = (conv) => setConversationActive(conv)
 
   if (ecranActuel === 'splash') return <SplashScreen />
@@ -148,32 +142,34 @@ function App() {
         <Sidebar ecranActuel={ecranActuel} onChangerEcran={gererChangerEcran} />
 
         <div className="order-1 lg:order-2 flex-1 min-h-0 overflow-hidden">
-          {ecranActuel === 'accueil'      && <HomeScreen       onChangerEcran={gererChangerEcran} />}
-          {ecranActuel === 'chat'         && (
-            <ChatScreen
-              key={conversationActive?.id || 'nouvelle'}
-              conversationActive={conversationActive}
-              onChangerEcran={gererChangerEcran}
-              onNouvelleConversation={gererNouvelleConversation}
-              onConversationMiseAJour={mettreAJourConversationActive}
-            />
-          )}
-          {ecranActuel === 'historique'   && (
-            <HistoriqueScreen
-              onChangerEcran={gererChangerEcran}
-              onOuvrirConversation={ouvrirConversation}
-            />
-          )}
-          {ecranActuel === 'galerie'      && <GalleryScreen />}
-          {ecranActuel === 'profil'       && <ProfileScreen onChangerEcran={gererChangerEcran} />}
-          {ecranActuel === 'parametres'   && <SettingsScreen onChangerEcran={gererChangerEcran} />}
-          {ecranActuel === 'personnages'  && (
-            <AccesProtege>
-              <PersonnagesScreen />
-            </AccesProtege>
-          )}
-          {ecranActuel === 'journal'      && <JournalScreen />}
-          {ecranActuel === 'localisation' && <LocalisationScreen />}
+          {/* ⬅️ Suspense affiche ChargementEcran() pendant que le
+              morceau de code de l'écran demandé se télécharge — une
+              seule fois par écran, mis en cache ensuite */}
+          <Suspense fallback={<ChargementEcran />}>
+            {ecranActuel === 'accueil'      && <HomeScreen onChangerEcran={gererChangerEcran} />}
+            {ecranActuel === 'chat'         && (
+              <ChatScreen
+                key={conversationActive?.id || 'nouvelle'}
+                conversationActive={conversationActive}
+                onChangerEcran={gererChangerEcran}
+                onNouvelleConversation={gererNouvelleConversation}
+                onConversationMiseAJour={mettreAJourConversationActive}
+              />
+            )}
+            {ecranActuel === 'historique'   && (
+              <HistoriqueScreen onChangerEcran={gererChangerEcran} onOuvrirConversation={ouvrirConversation} />
+            )}
+            {ecranActuel === 'galerie'      && <GalleryScreen />}
+            {ecranActuel === 'profil'       && <ProfileScreen onChangerEcran={gererChangerEcran} />}
+            {ecranActuel === 'parametres'   && <SettingsScreen onChangerEcran={gererChangerEcran} />}
+            {ecranActuel === 'personnages'  && (
+              <AccesProtege>
+                <PersonnagesScreen />
+              </AccesProtege>
+            )}
+            {ecranActuel === 'journal'      && <JournalScreen />}
+            {ecranActuel === 'localisation' && <LocalisationScreen />}
+          </Suspense>
         </div>
       </div>
     </>

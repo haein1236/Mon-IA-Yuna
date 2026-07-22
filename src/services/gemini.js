@@ -228,7 +228,7 @@ function construirePersonnalite() {
 
   const blocMemoire =
     faitsMemorises.length > 0
-      ? `\nCE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :\n${faitsMemorises.map((f) => `- ${f}`).join("\n")}\nUtilise ces souvenirs naturellement quand c'est pertinent, comme une amie qui se souvient vraiment de toi — sans jamais les réciter comme une liste.\n`
+      ? `\nCE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :\n${faitsMemorises.map((f) => `- ${f}`).join("\n")}\nUtilise ces souvenirs naturally quand c'est pertinent, comme une amie qui se souvient vraiment de toi — sans jamais les réciter comme une liste.\n`
       : "";
 
   return `
@@ -526,7 +526,6 @@ function construirePersonnagePrompt(
   const profil = recupererProfilPourYuna();
   const p = personnage;
 
-  // Masquage du prénom tant qu'il n'est pas appris dans l'histoire
   const prenom =
     personnage.connaitNomUtilisateur && profil?.prenom
       ? profil.prenom
@@ -591,7 +590,7 @@ ${
 ━━━━━━━━━━━━━━━━━━
 RÈGLE CRITIQUE SUR LE PRÉNOM
 ━━━━━━━━━━━━━━━━━━
-Tu NE CONNAIS PAS encore le prénom de la personne en face de toi — vous venez à peine de vous rencontrer, ou vous ne vous êtes jamais présentés. Ne l'appelle JAMAIS par un prénom que tu ne connais pas. Tu peux lui demander comment elle s'appelle si le moment s'y prête naturally.
+Tu NE CONNAIS PAS encore le prénom de la personne en face de toi — vous venez à peine de vous rencontrer, ou vous ne vous êtes jamais présentés. Ne l'appelle JAMAIS par un prénom que tu ne connais pas. Tu peux lui demander comment elle s'appelle si le moment s'y prête naturellement.
 `
     : ""
 }
@@ -771,35 +770,30 @@ export async function envoyerMessageAPersonnage(
     historiqueUtilise = historique.slice(12);
   }
 
-  // 1. Calcul des interdictions et détection de personnages secondaires
   const interdictions = calculerInterdictions(personnage, historique.length);
-  const secondaireMentionne = detecterPersonnageSecondaireMentionne(
-    personnage,
-    nouveauMessage,
-  );
-
-  let promptSysteme = construirePersonnagePrompt(
+  const promptSysteme = construirePersonnagePrompt(
     personnage,
     resumeRelation,
     interdictions,
   );
 
-  // Instruction spécifique si un personnage secondaire intervient
-  if (secondaireMentionne) {
-    promptSysteme += `
+  // Détection du personnage secondaire mentionné
+  const secondaireMentionne = detecterPersonnageSecondaireMentionne(
+    personnage,
+    nouveauMessage,
+  );
 
-━━━━━━━━━━━━━━━━━━
-INSTRUCTION SPÉCIALE POUR CETTE RÉPONSE
-━━━━━━━━━━━━━━━━━━
-${secondaireMentionne.nom} (${secondaireMentionne.role}) intervient MAINTENANT dans la scène.
-Personnalité de ${secondaireMentionne.nom} : ${secondaireMentionne.personnalite}
-Son lien avec toi : ${secondaireMentionne.lienAvecPrincipal}
-Tu DOIS le/la faire parler réellement, avec de vraies répliques entre "guillemets", dans SA propre personnalité.`;
+  // Injection directe de l'instruction dans le message courant
+  let messageEnrichi = nouveauMessage;
+  if (secondaireMentionne) {
+    messageEnrichi = `${nouveauMessage}
+
+[INSTRUCTION IMPÉRATIVE POUR CETTE RÉPONSE UNIQUEMENT : ${secondaireMentionne.nom} (${secondaireMentionne.role}) doit réellement prendre la parole dans ta réponse, avec de vraies répliques entre "guillemets", dans SA PROPRE personnalité : ${secondaireMentionne.personnalite}. Son lien avec toi : ${secondaireMentionne.lienAvecPrincipal}. Ne te contente PAS de le mentionner — fais-le parler pour de vrai, comme un vrai dialogue entre vous deux devant le joueur.]`;
   }
 
   const genererUneFois = async (instructionSupplementaire = "") => {
     const modele = client.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       systemInstruction: promptSysteme + instructionSupplementaire,
       safetySettings: safetySettingsMatures,
     });
@@ -822,21 +816,19 @@ Tu DOIS le/la faire parler réellement, avec de vraies répliques entre "guillem
           { inlineData: { mimeType, data: donneesPures } },
           {
             text:
-              nouveauMessage ||
-              "[L'utilisateur envoie cette image sans texte. Réagis à ce que tu vois, selon ton personnage et ton degré d'intimité avec lui.]",
+              messageEnrichi ||
+              "[L'utilisateur envoie cette image sans texte. Réagis à ce que tu vois, dans le personnage.]",
           },
         ]),
       );
     } else {
-      resultat = await avecTimeout(sessionChat.sendMessage(nouveauMessage));
+      resultat = await avecTimeout(sessionChat.sendMessage(messageEnrichi));
     }
     return resultat.response.text();
   };
 
   try {
     let texte = await genererUneFois();
-
-    // 2. Validation de la réponse générée selon les règles du personnage
     const validation = validerReponse(personnage, texte, historique.length);
     if (!validation.valide) {
       console.warn(
@@ -845,10 +837,9 @@ Tu DOIS le/la faire parler réellement, avec de vraies répliques entre "guillem
         "— régénération...",
       );
       texte = await genererUneFois(
-        `\n\nATTENTION : ta précédente tentative a été rejetée automatiquement car : "${validation.raison}". Génère une nouvelle réponse qui respecte STRICTEMENT cette règle et n'accélère pas l'intimité.`,
+        `\n\nATTENTION : ta précédente tentative a été rejetée car : "${validation.raison}". Génère une nouvelle réponse qui respecte STRICTEMENT ce point.`,
       );
     }
-
     return texte;
   } catch (erreurGemini) {
     console.error("Erreur Gemini (personnage) :", erreurGemini.message);
@@ -860,7 +851,7 @@ Tu DOIS le/la faire parler réellement, avec de vraies répliques entre "guillem
     return await essayerChaineDeSecours(
       promptSysteme,
       historiqueUtilise,
-      nouveauMessage,
+      messageEnrichi,
     );
   }
 }

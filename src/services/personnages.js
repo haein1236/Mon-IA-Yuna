@@ -529,10 +529,29 @@ export function calculerChapitreActuel(relation) {
 }
 
 // ============================================================
-// DÉTECTE SI L'UTILISATEUR FAIT INTERVENIR UN PERSONNAGE SECONDAIRE
+// DÉTECTE SI UN PERSONNAGE SECONDAIRE EST MENTIONNÉ
+// Normalise le texte (accents retirés, minuscules) pour une
+// détection plus fiable, et cherche le nom comme un vrai "mot"
+// (pas juste une sous-chaîne qui pourrait matcher par accident).
 // ============================================================
+function normaliserTexte(texte) {
+  return texte
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // retire les accents
+}
+
 export function detecterPersonnageSecondaireMentionne(personnage, messageUtilisateur) {
   const secondaires = personnage.personnagesSecondaires || []
-  const texteMinuscule = messageUtilisateur.toLowerCase()
-  return secondaires.find((s) => s.nom && texteMinuscule.includes(s.nom.toLowerCase())) || null
+  if (secondaires.length === 0) return null
+
+  const texteNormalise = normaliserTexte(messageUtilisateur)
+
+  return secondaires.find((s) => {
+    if (!s.nom) return false
+    const nomNormalise = normaliserTexte(s.nom)
+    // Vérifie que le nom apparaît comme un mot entier (limites de mot \b)
+    const regex = new RegExp(`\\b${nomNormalise}\\b`)
+    return regex.test(texteNormalise)
+  }) || null
 }

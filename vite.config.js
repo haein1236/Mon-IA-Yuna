@@ -32,4 +32,18 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+  // ⬅️ NOUVEAU : sépare aussi les grosses librairies partagées
+  // (React, Supabase) dans leur propre fichier, mis en cache
+  // séparément du reste — évite de re-télécharger tout le "cœur"
+  // de l'app à chaque mise à jour de fonctionnalité
+  rollupOptions: {
+    output: {
+      manualChunks: {
+        vendor: ['react', 'react-dom'],
+        supabase: ['@supabase/supabase-js'],
+      },
+    },
+  },
+},
 })
