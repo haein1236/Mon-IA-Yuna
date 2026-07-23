@@ -130,21 +130,76 @@ export async function obtenirAdresseApprox(latitude, longitude) {
 export async function publierPositionPartagee(position, partageActif = true) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  await supabase.from('positions_partagees').upsert({
-    user_id: user.id, latitude: position.latitude, longitude: position.longitude,
-    precision_m: position.precision, partage_actif: partageActif, mis_a_jour_le: new Date().toISOString(),
+ const { error } = await supabase
+  .from('positions_partagees')
+  .upsert({
+    user_id: user.id,
+    latitude: position.latitude,
+    longitude: position.longitude,
+    precision_m: position.precision,
+    partage_actif: partageActif,
+    mis_a_jour_le: new Date().toISOString(),
   }, { onConflict: 'user_id' })
+
+if (error) {
+  console.error("Erreur publication position :", error)
+}
 }
 
 // ⬅️ NOUVEAU : récupère les positions de tes amis (RLS filtre déjà
 // automatiquement — tu ne reçois QUE celles des amis acceptés)
 export async function chargerPositionsAmis() {
-  const { data } = await supabase
-    .from('positions_partagees')
-    .select('user_id, latitude, longitude, mis_a_jour_le, profils_publics(pseudo)')
-    .eq('partage_actif', true)
   const { data: { user } } = await supabase.auth.getUser()
-  return (data || []).filter((p) => p.user_id !== user.id)
+
+  if (!user) return []
+
+  // Récupération des positions
+  const { data: positions, error: positionError } = await supabase
+    .from('positions_partagees')
+    .select(`
+      user_id,
+      latitude,
+      longitude,
+      mis_a_jour_le
+    `)
+    .eq('partage_actif', true)
+
+  if (positionError) {
+    console.error("Erreur positions :", positionError)
+    return []
+  }
+
+  // On enlève ta propre position
+  const autresPositions = positions.filter(
+    (p) => p.user_id !== user.id
+  )
+
+  if (autresPositions.length === 0) {
+    return []
+  }
+
+  // Récupération des pseudos
+  const ids = autresPositions.map(
+    (p) => p.user_id
+  )
+
+  const { data: profils, error: profilError } = await supabase
+    .from('profils_publics')
+    .select('id, pseudo')
+    .in('id', ids)
+
+  if (profilError) {
+    console.error("Erreur profils :", profilError)
+  }
+
+  // Fusion position + pseudo
+  return autresPositions.map((position) => ({
+    ...position,
+    pseudo:
+      profils?.find(
+        (profil) => profil.id === position.user_id
+      )?.pseudo || "Utilisateur"
+  }))
 }
 
 export async function definirPartageActif(actif) {
