@@ -477,30 +477,36 @@ function PersonnagesScreen() {
     }
   }
 
- const continuerHistoire = async () => {
-  if (envoiEnCours || !personnageActif || messages.length === 0) return
-  setEnvoiEnCours(true)
-  setEnTrainDecrire(true)
+  const continuerHistoire = async () => {
+    if (envoiEnCours || !personnageActif || messages.length === 0) return
+    setEnvoiEnCours(true)
+    setEnTrainDecrire(true)
 
-  const historiquePourGemini = messages.slice(1).map((m) => ({
-    ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
-  }))
+    const historiquePourGemini = messages.slice(1).map((m) => ({
+      ...m, auteur: m.auteur === 'personnage' ? 'model' : m.auteur,
+    }))
 
-  // Le message injecté dépend du profil d'initiative du personnage —
-  // un personnage froid/réservé ne doit JAMAIS "prendre les devants"
-  // juste parce qu'on a cliqué sur ce bouton.
-  const scoreInitiative = calculerScoreInitiative(personnageActif.traits)
-  const messageContinuer = scoreInitiative < 0
-    ? "*Un moment passe. Décris brièvement ce que tu fais ou penses de ton côté — une action, une observation, une pensée intérieure — SANS chercher à engager la conversation ni t'adresser directement au joueur. Reste fidèle à ton caractère réservé : tu n'inities pas.*"
-    : "*reste silencieux, continue la scène toi-même sans attendre de réponse*"
+    // Le message injecté dépend du profil d'initiative du personnage —
+    // un personnage froid/réservé ne doit JAMAIS "prendre les devants"
+    // juste parce qu'on a cliqué sur ce bouton.
+    const scoreInitiative = calculerScoreInitiative(personnageActif.traits)
+    const messageContinuer = scoreInitiative < 0
+      ? `*Un moment passe. Décris brièvement ce que tu fais ou ressens dans la scène actuelle.
+Réagis d'abord aux actions ou paroles récentes du joueur si nécessaire.
+Ne répète jamais les mêmes gestes, pensées ou descriptions déjà utilisés.
+Évite les boucles comme regarder son téléphone, regarder autour de soi, soupirer ou réfléchir sans fin.
+Si le joueur est présent, reste conscient de lui même sans forcément parler.
+Ne fais pas de long monologue intérieur. Maximum 2-3 phrases.
+Tu n'inities pas une nouvelle conversation, mais tu continues naturellement la scène.*`
+      : "*Continue la scène naturellement. Fais une action ou une réaction cohérente sans attendre la réponse du joueur. Ne répète aucune action déjà décrite.*"
 
-  try {
-    const reponseTexte = await envoyerMessageAPersonnage(
-      historiquePourGemini,
-      messageContinuer,
-      personnageActif
-    )
-    
+    try {
+      const reponseTexte = await envoyerMessageAPersonnage(
+        historiquePourGemini,
+        messageContinuer,
+        personnageActif
+      )
+
       setEnTrainDecrire(false)
       setEnvoiEnCours(false)
 
