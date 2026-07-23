@@ -127,13 +127,13 @@ export async function obtenirAdresseApprox(latitude, longitude) {
 // ... garde toutes les fonctions déjà existantes (chargerDernierePosition, obtenirPositionActuelle, obtenirAdresseApprox) ...
 
 // ⬅️ NOUVEAU : publie ta position sur Supabase (visible par tes amis acceptés)
-export async function publierPositionPartagee(position) {
+export async function publierPositionPartagee(position, partageActif = true) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
   await supabase.from('positions_partagees').upsert({
     user_id: user.id, latitude: position.latitude, longitude: position.longitude,
-    precision_m: position.precision, mis_a_jour_le: new Date().toISOString(),
-  })
+    precision_m: position.precision, partage_actif: partageActif, mis_a_jour_le: new Date().toISOString(),
+  }, { onConflict: 'user_id' })
 }
 
 // ⬅️ NOUVEAU : récupère les positions de tes amis (RLS filtre déjà

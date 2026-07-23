@@ -94,12 +94,35 @@ export function calculerInterdictionsSecondaires(personnagesPresents) {
   return interdictions
 }
 
-export function validerReponseScene(personnagesPresents, texteReponse) {
+// Compte les répliques réelles (segments entre guillemets, contenu
+// substantiel — pas juste des guillemets vides ou un seul mot)
+function compterRepliques(texte) {
+  const correspondances = texte.match(/"[^"]{3,}"/g)
+  return correspondances ? correspondances.length : 0
+}
+
+export function validerReponseScene(personnagesPresents, rolesImprovises, demandeParole, texteReponse) {
+  // Vérification des traits (trahison/mensonge) — inchangée
   for (const s of personnagesPresents || []) {
     const traits = s.traits || []
     if ((traits.includes('fidele') || traits.includes('loyal')) && contientUnDe(texteReponse, MOTS_TRAHISON)) {
       return { valide: false, raison: `${s.nom} (loyal/fidèle) semble trahir ou mentir, ce qui contredit directement son trait.` }
     }
   }
+
+  // NOUVEAU : si le joueur a explicitement demandé qu'un personnage
+  // secondaire (nommé ou improvisé) parle, on vérifie qu'il y a bien AU
+  // MOINS 2 répliques distinctes dans la réponse (celle du personnage
+  // principal + au moins une pour le secondaire) — sinon, le modèle a
+  // probablement juste résumé/narré au lieu de faire vraiment parler
+  // le personnage demandé.
+  const yAUnPersonnageSecondaireConcerne = (personnagesPresents?.length || 0) > 0 || (rolesImprovises?.length || 0) > 0
+  if (demandeParole && yAUnPersonnageSecondaireConcerne) {
+    const nombreRepliques = compterRepliques(texteReponse)
+    if (nombreRepliques < 2) {
+      return { valide: false, raison: "Le joueur a demandé explicitement qu'un personnage secondaire parle, mais la réponse ne contient pas de vraie réplique distincte pour lui — elle se contente probablement de le résumer/narrer." }
+    }
+  }
+
   return { valide: true }
 }

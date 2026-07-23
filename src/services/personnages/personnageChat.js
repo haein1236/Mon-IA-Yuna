@@ -8,7 +8,11 @@ import {
   calculerInterdictionsSecondaires, 
   validerReponseScene 
 } from "./regles";
-import { mettreAJourScene, construireInstructionScene } from "./moteurScene";
+import { 
+  mettreAJourScene, 
+  construireInstructionScene, 
+  demandeExplicitementDeParler 
+} from "./moteurScene";
 
 async function genererResumePersonnage(ancienResume, messagesACondenser) {
   try {
@@ -89,7 +93,7 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     let texte = await genererUneFois();
     const validationPrincipal = validerReponse(personnage, texte, historique.length);
     const validationScene = validationPrincipal.valide
-      ? validerReponseScene(detectionScene.nommes, texte)
+      ? validerReponseScene(detectionScene.nommes, detectionScene.improvises, demandeExplicitementDeParler(nouveauMessage), texte)
       : validationPrincipal;
 
     if (!validationScene.valide) {

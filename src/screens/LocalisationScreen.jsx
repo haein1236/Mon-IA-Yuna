@@ -23,6 +23,8 @@ import {
   chargerDemandesRecues,
   chargerMesAmis,
   obtenirMonProfil,
+  definirMonTelephone,
+  envoyerDemandeAmiParTelephone,
 } from '../services/amis'
 import { notifierErreur, notifierSucces } from '../services/notifications'
 
@@ -112,6 +114,19 @@ const IconClock = (props) => (
     <path d="M12 8v4.5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
   </svg>
 )
+const IconTelephone = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.2 1L6.6 10.8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+  </svg>
+)
+const IconUsers = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <circle cx="17.5" cy="8.5" r="2.3" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M14.7 14.2c2.9.3 5.3 2.8 5.3 5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
 
 // ============================================================
 // UTILITAIRES
@@ -137,6 +152,10 @@ function tempsEcoule(dateISO) {
 
 function formaterDistance(km) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`
+}
+
+function initiale(nom) {
+  return (nom || '?').charAt(0).toUpperCase()
 }
 
 // ============================================================
@@ -173,7 +192,7 @@ function StylesAnimations() {
 
 function CarteInfo({ icon: Icon, iconColor = '#6B5B4B', label, className = '', children }) {
   return (
-    <div className={`yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}>
+    <div className={`yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}>
       <div className="flex items-center gap-2 mb-1.5">
         {Icon && (
           <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: iconColor + '1A' }}>
@@ -196,8 +215,8 @@ function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
     if (!bouton) return
     const rect = bouton.getBoundingClientRect()
     const taille = Math.max(rect.width, rect.height) * 1.4
-    const x = e.clientX - rect.left - taille / 2
-    const y = e.clientY - rect.top - taille / 2
+    const x = (e.clientX ?? rect.left + rect.width / 2) - rect.left - taille / 2
+    const y = (e.clientY ?? rect.top + rect.height / 2) - rect.top - taille / 2
     const id = Date.now() + Math.random()
     setRipples((r) => [...r, { id, x, y, taille }])
     setTimeout(() => setRipples((r) => r.filter((rp) => rp.id !== id)), 550)
@@ -215,7 +234,7 @@ function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
       onClick={gerer}
       aria-label={ariaLabel || label}
       title={label}
-      className="relative overflow-hidden flex flex-col items-center gap-2 bg-white rounded-2xl border border-espresso/10 py-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+      className="relative overflow-hidden flex flex-col items-center gap-1.5 sm:gap-2 bg-white rounded-2xl border border-espresso/10 py-3 sm:py-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
     >
       {ripples.map((r) => (
         <span
@@ -224,11 +243,192 @@ function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
           style={{ left: r.x, top: r.y, width: r.taille, height: r.taille, animation: 'yunaRipple .55s ease-out forwards' }}
         />
       ))}
-      <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: accent + '1A' }}>
-        <Icon style={{ width: '16px', height: '16px', color: accent }} />
+      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center" style={{ background: accent + '1A' }}>
+        <Icon style={{ width: '15px', height: '15px', color: accent }} />
       </div>
-      <span className="text-[10px] font-medium text-espresso/60">{label}</span>
+      <span className="text-[9.5px] sm:text-[10px] font-medium text-espresso/60">{label}</span>
     </button>
+  )
+}
+
+function OngletModeAjout({ actif, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-[9.5px] uppercase tracking-wide font-semibold pb-1.5 px-0.5 transition-colors duration-150"
+      style={{
+        color: actif ? 'var(--color-espresso)' : 'rgba(62,39,35,0.35)',
+        borderBottom: actif ? '2px solid var(--color-espresso)' : '2px solid transparent',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function BlocAjoutAmi({ modeAjout, setModeAjout, codeAmiSaisi, setCodeAmiSaisi, gererAjoutAmi, telephoneSaisi, setTelephoneSaisi, gererAjoutAmiTelephone, messageAmi }) {
+  return (
+    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up shadow-sm">
+      <div className="flex items-center gap-4 mb-3 border-b border-espresso/8">
+        <OngletModeAjout actif={modeAjout === 'code'} onClick={() => setModeAjout('code')}>
+          Par code
+        </OngletModeAjout>
+        <OngletModeAjout actif={modeAjout === 'telephone'} onClick={() => setModeAjout('telephone')}>
+          Par téléphone
+        </OngletModeAjout>
+      </div>
+
+      {modeAjout === 'code' ? (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={codeAmiSaisi}
+            onChange={(e) => setCodeAmiSaisi(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && gererAjoutAmi()}
+            placeholder="Ex : SAKI-4821"
+            aria-label="Code ami"
+            className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 sm:py-2 text-[13px] sm:text-[12px] outline-none border border-espresso/15 focus:border-espresso transition-colors"
+          />
+          <button
+            onClick={gererAjoutAmi}
+            className="bg-espresso text-peony rounded-xl px-4 py-2.5 sm:py-0 text-[11.5px] sm:text-[11px] font-semibold hover:-translate-y-0.5 active:scale-95 transition-all duration-150 flex-shrink-0"
+          >
+            Ajouter
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={telephoneSaisi}
+            onChange={(e) => setTelephoneSaisi(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && gererAjoutAmiTelephone()}
+            placeholder="Ex : +225 07 00 00 00 00"
+            type="tel"
+            aria-label="Numéro de téléphone de l'ami"
+            className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 sm:py-2 text-[13px] sm:text-[12px] outline-none border border-espresso/15 focus:border-espresso transition-colors"
+          />
+          <button
+            onClick={gererAjoutAmiTelephone}
+            className="bg-espresso text-peony rounded-xl px-4 py-2.5 sm:py-0 text-[11.5px] sm:text-[11px] font-semibold hover:-translate-y-0.5 active:scale-95 transition-all duration-150 flex-shrink-0"
+          >
+            Ajouter
+          </button>
+        </div>
+      )}
+      {messageAmi && <p className="text-[10.5px] text-espresso/50 mt-2">{messageAmi}</p>}
+    </div>
+  )
+}
+
+function BlocMonProfil({ monProfil, monTelephone, setMonTelephone, gererDefinirTelephone }) {
+  if (!monProfil) return null
+  return (
+    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-5 yuna-slide-up shadow-sm">
+      <div className="flex items-center gap-2 mb-1">
+        <IconUsers style={{ width: '11px', height: '11px' }} className="text-espresso/40" />
+        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mon code ami — partage-le pour être ajouté</p>
+      </div>
+      <p className="text-[17px] sm:text-[16px] font-bold text-espresso tracking-wider mb-3.5">{monProfil.code_ami}</p>
+
+      <div className="pt-3 border-t border-espresso/8">
+        <div className="flex items-center gap-2 mb-1">
+          <IconTelephone style={{ width: '11px', height: '11px' }} className="text-espresso/40" />
+          <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mon numéro (pour qu'on t'ajoute par téléphone)</p>
+        </div>
+        {monProfil.telephone ? (
+          <p className="text-[13px] text-espresso font-medium">{monProfil.telephone}</p>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-2 mt-1.5">
+            <input
+              value={monTelephone}
+              onChange={(e) => setMonTelephone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && gererDefinirTelephone()}
+              placeholder="+225 07 00 00 00 00"
+              type="tel"
+              aria-label="Ton numéro de téléphone"
+              className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 sm:py-2 text-[13px] sm:text-[12px] outline-none border border-espresso/15 focus:border-espresso transition-colors"
+            />
+            <button
+              onClick={gererDefinirTelephone}
+              className="bg-espresso text-peony rounded-xl px-4 py-2.5 sm:py-2 text-[11.5px] sm:text-[11px] font-semibold hover:-translate-y-0.5 active:scale-95 transition-all duration-150 flex-shrink-0"
+            >
+              Enregistrer
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BlocDemandesRecues({ demandes, gererReponseDemande }) {
+  if (demandes.length === 0) return null
+  return (
+    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up shadow-sm">
+      <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2.5">Demandes reçues</p>
+      <div className="flex flex-col gap-0.5">
+        {demandes.map((d) => (
+          <div key={d.id} className="flex items-center justify-between gap-2 py-2 border-b border-espresso/5 last:border-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0" style={{ background: '#8B6FA8' }}>
+                {initiale(d.profils_publics?.pseudo)}
+              </div>
+              <span className="text-[12px] text-espresso font-medium truncate">{d.profils_publics?.pseudo}</span>
+            </div>
+            <div className="flex gap-1.5 flex-shrink-0">
+              <button onClick={() => gererReponseDemande(d.id, true)} className="text-[10px] bg-espresso text-peony rounded-full px-3 py-1.5 sm:py-1 font-medium hover:-translate-y-0.5 active:scale-95 transition-all duration-150">Accepter</button>
+              <button onClick={() => gererReponseDemande(d.id, false)} className="text-[10px] text-espresso/40 hover:text-espresso px-2 transition-colors duration-150">Refuser</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function BlocMesAmis({ amis, positionsAmis, partageActif, toggleMonPartage, centrerSur }) {
+  return (
+    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up shadow-sm">
+      <div className="flex items-center justify-between gap-2 mb-2.5">
+        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes amis ({amis.length})</p>
+        <button
+          onClick={toggleMonPartage}
+          className="text-[9px] font-semibold px-2.5 py-1 rounded-full transition-colors duration-150 flex-shrink-0"
+          style={{ background: partageActif ? '#4ade80' : '#F0EEEB', color: partageActif ? '#1a3a1a' : '#3E2723' }}
+        >
+          {partageActif ? 'Je partage ma position' : 'Partage désactivé'}
+        </button>
+      </div>
+      {amis.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun ami pour l'instant</p>}
+      <div className="flex flex-col">
+        {amis.map((ami, i) => {
+          const pos = positionsAmis.find((p) => p.user_id === ami.id)
+          const couleur = COULEURS_AMIS[i % COULEURS_AMIS.length]
+          return (
+            <div
+              key={ami.id}
+              role={pos ? 'button' : undefined}
+              tabIndex={pos ? 0 : undefined}
+              onClick={() => pos && centrerSur(pos)}
+              onKeyDown={(e) => { if (pos && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); centrerSur(pos) } }}
+              className={`flex items-center gap-2.5 py-2 px-1.5 -mx-1.5 rounded-lg border-b border-espresso/5 last:border-0 transition-colors duration-150 ${pos ? 'cursor-pointer hover:bg-[#F0EEEB]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40' : ''}`}
+            >
+              <div className="relative flex-shrink-0">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: couleur }}>
+                  {initiale(ami.pseudo)}
+                </div>
+                {pos && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#3E8E5A] border-2 border-white" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] text-espresso font-medium truncate">{ami.pseudo}</p>
+                <p className="text-[9.5px] text-espresso/40 truncate">
+                  {pos ? `Vu ${new Date(pos.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Aucune position partagée'}
+                </p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -263,6 +463,11 @@ function LocalisationScreen() {
   const [partageActif, setPartageActif] = useState(true)
   const [messageAmi, setMessageAmi] = useState('')
 
+  // Amis — ajout par téléphone
+  const [monTelephone, setMonTelephone] = useState('')
+  const [modeAjout, setModeAjout] = useState('code') // 'code' ou 'telephone'
+  const [telephoneSaisi, setTelephoneSaisi] = useState('')
+
   // Leaflet Map Refs
   const carteRef = useRef(null)
   const carteInstanceRef = useRef(null)
@@ -288,12 +493,23 @@ function LocalisationScreen() {
       attribution: '© OpenStreetMap',
     }).addTo(carteInstanceRef.current)
 
+    // Le conteneur peut changer de taille au montage (breakpoints), on recadre Leaflet
+    setTimeout(() => carteInstanceRef.current?.invalidateSize(), 200)
+
     return () => {
       if (carteInstanceRef.current) {
         carteInstanceRef.current.remove()
         carteInstanceRef.current = null
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Recadre la carte si la fenêtre change de taille (rotation tablette/téléphone, redimensionnement PC)
+  useEffect(() => {
+    const gererResize = () => carteInstanceRef.current?.invalidateSize()
+    window.addEventListener('resize', gererResize)
+    return () => window.removeEventListener('resize', gererResize)
   }, [])
 
   // Mise à jour des marqueurs Leaflet
@@ -359,7 +575,7 @@ function LocalisationScreen() {
       setPosition(pos)
       setCentreCarte(pos)
       sauvegarderPosition(pos)
-      await publierPositionPartagee(pos)
+      await publierPositionPartagee(pos, partageActif)
       setHistorique(chargerHistoriquePositions())
 
       const adresseTrouvee = await obtenirAdresseApprox(pos.latitude, pos.longitude)
@@ -403,6 +619,26 @@ function LocalisationScreen() {
       setCodeAmiSaisi('')
     } catch (e) {
       setMessageAmi(e.message)
+    }
+  }
+
+  const gererAjoutAmiTelephone = async () => {
+    try {
+      const pseudo = await envoyerDemandeAmiParTelephone(telephoneSaisi)
+      setMessageAmi(`Demande envoyée à ${pseudo} !`)
+      setTelephoneSaisi('')
+    } catch (e) {
+      setMessageAmi(e.message)
+    }
+  }
+
+  const gererDefinirTelephone = async () => {
+    try {
+      await definirMonTelephone(monTelephone)
+      notifierSucces('Numéro enregistré ✅')
+      obtenirMonProfil().then(setMonProfil)
+    } catch (e) {
+      notifierErreur(e.message)
     }
   }
 
@@ -549,15 +785,15 @@ function LocalisationScreen() {
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto scroll-suave bg-cream">
       <StylesAnimations />
-      <div className="px-4 sm:px-6 md:px-8 py-6 md:py-8 max-w-[1100px] mx-auto">
+      <div className="px-3.5 sm:px-6 md:px-8 py-5 sm:py-6 md:py-8 max-w-[1200px] mx-auto">
 
         {/* ===== EN-TÊTE ===== */}
-        <div className="flex items-center gap-3 mb-2 yuna-fade-in">
-          <div className="w-12 h-12 rounded-2xl bg-espresso/8 flex items-center justify-center flex-shrink-0 shadow-sm">
-            <IconPin style={{ width: '20px', height: '20px' }} className="text-espresso" />
+        <div className="flex items-center gap-3 mb-4 sm:mb-5 yuna-fade-in">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-espresso/8 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <IconPin style={{ width: '19px', height: '19px' }} className="text-espresso" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-espresso font-semibold flex items-center gap-1.5" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '24px' }}>
+            <h1 className="text-espresso font-semibold flex items-center gap-1.5" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px' }}>
               📍 Localisation
             </h1>
             <p className="text-[10.5px] text-espresso/45 truncate">{sousTitre}</p>
@@ -571,30 +807,30 @@ function LocalisationScreen() {
         )}
 
         {position ? (
-          <div className="lg:grid lg:grid-cols-[1.45fr_1fr] lg:gap-5 lg:items-start">
+          <div className="lg:grid lg:grid-cols-[1.4fr_1fr] xl:grid-cols-[1.55fr_1fr] lg:gap-5 lg:items-start">
             {/* ===== COLONNE GAUCHE : carte Leaflet + actions rapides ===== */}
-            <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-3 lg:mb-0">
+            <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-4 lg:mb-0">
               <div className="yuna-scale-in bg-white rounded-3xl border border-espresso/10 overflow-hidden relative shadow-md">
-                
+
                 {/* Conteneur de la Carte Leaflet */}
-                <div ref={carteRef} className="w-full h-[280px] sm:h-[340px] lg:h-[440px] z-0" />
+                <div ref={carteRef} className="w-full h-[240px] xs:h-[280px] sm:h-[360px] md:h-[420px] lg:h-[460px] xl:h-[520px] z-0" />
 
                 <div key={labelCarte + centreCarte?.latitude} className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full shadow-md yuna-badge-drop">
                   <IconPin style={{ width: '10px', height: '10px' }} className="text-espresso/70 flex-shrink-0" />
-                  <span className="text-[10.5px] font-semibold text-espresso truncate max-w-[140px]">{labelCarte}</span>
+                  <span className="text-[10.5px] font-semibold text-espresso truncate max-w-[120px] sm:max-w-[180px]">{labelCarte}</span>
                 </div>
 
                 {chargement && (
                   <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-full shadow-md yuna-fade-in">
                     <IconRefresh style={{ width: '11px', height: '11px' }} className="text-espresso/60 animate-spin" />
-                    <span className="text-[9.5px] text-espresso/55">Mise à jour…</span>
+                    <span className="hidden xs:inline text-[9.5px] text-espresso/55">Mise à jour…</span>
                   </div>
                 )}
 
                 {centreCarte && position && (centreCarte.latitude !== position.latitude || centreCarte.longitude !== position.longitude) && (
                   <button
                     onClick={() => centrerSur(position)}
-                    className="absolute bottom-3 right-3 z-[1000] text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow-md hover:bg-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
+                    className="absolute bottom-3 right-3 z-[1000] text-[10px] sm:text-[10.5px] font-semibold text-espresso bg-white/90 backdrop-blur rounded-full px-3 py-1.5 shadow-md hover:bg-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
                   >
                     Revenir à ma position
                   </button>
@@ -602,7 +838,7 @@ function LocalisationScreen() {
               </div>
 
               {/* Actions rapides */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
                 <BoutonAction icon={IconCopier} label="Copier" ariaLabel="Copier mes coordonnées" onClick={copierCoordonnees} accent="#6B5B4B" />
                 <BoutonAction icon={IconPartager} label="Partager" ariaLabel="Partager ma position" onClick={partagerPosition} accent="#3E6E8E" />
                 <BoutonAction icon={IconItineraire} label="Itinéraire" ariaLabel="Lancer un itinéraire vers ma position" onClick={() => ouvrirItineraire(position.latitude, position.longitude)} accent="#3E8E5A" />
@@ -618,7 +854,7 @@ function LocalisationScreen() {
                   <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
                   {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
                 </button>
-                <div className="flex items-center justify-center gap-2 mt-3">
+                <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -640,60 +876,34 @@ function LocalisationScreen() {
                 )}
 
                 {/* ===== BLOCS AMIS (DESKTOP) ===== */}
-                {monProfil && (
-                  <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-5 yuna-slide-up">
-                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Mon code ami — partage-le pour être ajouté</p>
-                    <p className="text-[16px] font-bold text-espresso tracking-wider">{monProfil.code_ami}</p>
-                  </div>
-                )}
+                <BlocMonProfil
+                  monProfil={monProfil}
+                  monTelephone={monTelephone}
+                  setMonTelephone={setMonTelephone}
+                  gererDefinirTelephone={gererDefinirTelephone}
+                />
 
-                <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up">
-                  <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Ajouter un ami par son code</p>
-                  <div className="flex gap-2">
-                    <input value={codeAmiSaisi} onChange={(e) => setCodeAmiSaisi(e.target.value)} placeholder="Ex : SAKI-4821"
-                      className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] outline-none border border-espresso/15" />
-                    <button onClick={gererAjoutAmi} className="bg-espresso text-peony rounded-xl px-4 text-[11px] font-semibold hover:-translate-y-0.5 transition-transform">Ajouter</button>
-                  </div>
-                  {messageAmi && <p className="text-[10.5px] text-espresso/50 mt-2">{messageAmi}</p>}
-                </div>
+                <BlocAjoutAmi
+                  modeAjout={modeAjout}
+                  setModeAjout={setModeAjout}
+                  codeAmiSaisi={codeAmiSaisi}
+                  setCodeAmiSaisi={setCodeAmiSaisi}
+                  gererAjoutAmi={gererAjoutAmi}
+                  telephoneSaisi={telephoneSaisi}
+                  setTelephoneSaisi={setTelephoneSaisi}
+                  gererAjoutAmiTelephone={gererAjoutAmiTelephone}
+                  messageAmi={messageAmi}
+                />
 
-                {demandes.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up">
-                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Demandes reçues</p>
-                    {demandes.map((d) => (
-                      <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-espresso/5 last:border-0">
-                        <span className="text-[12px] text-espresso font-medium">{d.profils_publics?.pseudo}</span>
-                        <div className="flex gap-1.5">
-                          <button onClick={() => gererReponseDemande(d.id, true)} className="text-[10px] bg-espresso text-peony rounded-full px-3 py-1 font-medium">Accepter</button>
-                          <button onClick={() => gererReponseDemande(d.id, false)} className="text-[10px] text-espresso/40 hover:text-espresso">Refuser</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <BlocDemandesRecues demandes={demandes} gererReponseDemande={gererReponseDemande} />
 
-                <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes amis ({amis.length})</p>
-                    <button onClick={toggleMonPartage} className="text-[9px] font-semibold px-2.5 py-1 rounded-full transition-colors" style={{ background: partageActif ? '#4ade80' : '#F0EEEB', color: partageActif ? '#1a3a1a' : '#3E2723' }}>
-                      {partageActif ? 'Je partage ma position' : 'Partage désactivé'}
-                    </button>
-                  </div>
-                  {amis.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun ami pour l'instant</p>}
-                  {amis.map((ami) => {
-                    const pos = positionsAmis.find((p) => p.user_id === ami.id)
-                    return (
-                      <div
-                        key={ami.id}
-                        onClick={() => pos && centrerSur(pos)}
-                        className={`flex items-center justify-between py-2 border-b border-espresso/5 last:border-0 ${pos ? 'cursor-pointer hover:bg-[#F0EEEB]/50 px-2 rounded-lg transition-colors' : ''}`}
-                      >
-                        <span className="text-[12px] text-espresso font-medium">{ami.pseudo}</span>
-                        <span className="text-[9.5px] text-espresso/40">{pos ? `Vu ${new Date(pos.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Aucune position partagée'}</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                <BlocMesAmis
+                  amis={amis}
+                  positionsAmis={positionsAmis}
+                  partageActif={partageActif}
+                  toggleMonPartage={toggleMonPartage}
+                  centrerSur={centrerSur}
+                />
               </div>
             </div>
 
@@ -750,7 +960,7 @@ function LocalisationScreen() {
               )}
 
               {/* ===== LIEUX FAVORIS ===== */}
-              <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm">
+              <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Lieux favoris</p>
                   <button
@@ -762,7 +972,7 @@ function LocalisationScreen() {
                 </div>
 
                 {afficherFormFavori && (
-                  <div className="flex gap-2 mb-3 yuna-scale-in">
+                  <div className="flex flex-col xs:flex-row gap-2 mb-3 yuna-scale-in">
                     <input
                       value={nomNouveauFavori}
                       onChange={(e) => setNomNouveauFavori(e.target.value)}
@@ -770,9 +980,9 @@ function LocalisationScreen() {
                       placeholder="Ex : Maison, Travail..."
                       aria-label="Nom du nouveau lieu favori"
                       autoFocus
-                      className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso transition-colors"
+                      className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 xs:py-2 text-[13px] xs:text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso transition-colors"
                     />
-                    <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 text-[11px] font-semibold text-peony bg-espresso hover:-translate-y-0.5 active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
+                    <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 py-2.5 xs:py-0 text-[11px] font-semibold text-peony bg-espresso hover:-translate-y-0.5 active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
                       Ajouter
                     </button>
                   </div>
@@ -854,7 +1064,7 @@ function LocalisationScreen() {
 
               {/* ===== HISTORIQUE ===== */}
               {historique.length > 1 && (
-                <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-4 shadow-sm">
+                <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <IconHistorique style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
                     <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Historique des positions</p>
@@ -893,7 +1103,7 @@ function LocalisationScreen() {
           /* ===== ÉCRAN DE CHARGEMENT ===== */
           chargement ? (
             <div className="flex flex-col gap-3 yuna-fade-in" aria-busy="true" aria-label="Recherche de ta position en cours">
-              <div className="yuna-shimmer rounded-3xl h-[280px] sm:h-[340px]" />
+              <div className="yuna-shimmer rounded-3xl h-[240px] sm:h-[340px]" />
               <div className="grid grid-cols-3 gap-2">
                 <div className="yuna-shimmer rounded-2xl h-20" />
                 <div className="yuna-shimmer rounded-2xl h-20" />
@@ -913,20 +1123,20 @@ function LocalisationScreen() {
           )
         )}
 
-        {/* CONTRÔLES MOBILES ET BLOCS AMIS SUR PETITS ÉCRANS */}
+        {/* CONTRÔLES MOBILES ET BLOCS AMIS SUR PETITS/MOYENS ÉCRANS */}
         <div className={position ? 'lg:hidden mt-5' : 'mt-5'}>
-          <div className="max-w-[420px] mx-auto lg:max-w-none">
+          <div className="max-w-[480px] mx-auto lg:max-w-none">
             <button
               onClick={() => { vibrer(10); localiser() }}
               disabled={chargement}
               aria-label="Actualiser ma position"
-              className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[12px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${chargement ? 'yuna-pulse-ring' : ''}`}
+              className={`w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[12.5px] font-semibold text-peony bg-espresso transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${chargement ? 'yuna-pulse-ring' : ''}`}
             >
               <IconRefresh style={{ width: '14px', height: '14px' }} className={chargement ? 'animate-spin' : ''} />
               {chargement ? 'Localisation en cours...' : 'Actualiser ma position'}
             </button>
 
-            <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+            <div className="flex items-center justify-center gap-2 mt-3 flex-wrap text-center">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -947,61 +1157,35 @@ function LocalisationScreen() {
               <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
             )}
 
-            {/* ===== BLOCS AMIS (MOBILE) ===== */}
-            {monProfil && (
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-5">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-1">Mon code ami — partage-le pour être ajouté</p>
-                <p className="text-[16px] font-bold text-espresso tracking-wider">{monProfil.code_ami}</p>
-              </div>
-            )}
+            {/* ===== BLOCS AMIS (MOBILE / TABLETTE) ===== */}
+            <BlocMonProfil
+              monProfil={monProfil}
+              monTelephone={monTelephone}
+              setMonTelephone={setMonTelephone}
+              gererDefinirTelephone={gererDefinirTelephone}
+            />
 
-            <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3">
-              <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Ajouter un ami par son code</p>
-              <div className="flex gap-2">
-                <input value={codeAmiSaisi} onChange={(e) => setCodeAmiSaisi(e.target.value)} placeholder="Ex : SAKI-4821"
-                  className="flex-1 bg-[#F0EEEB] rounded-xl px-3 py-2 text-[12px] outline-none border border-espresso/15" />
-                <button onClick={gererAjoutAmi} className="bg-espresso text-peony rounded-xl px-4 text-[11px] font-semibold">Ajouter</button>
-              </div>
-              {messageAmi && <p className="text-[10.5px] text-espresso/50 mt-2">{messageAmi}</p>}
-            </div>
+            <BlocAjoutAmi
+              modeAjout={modeAjout}
+              setModeAjout={setModeAjout}
+              codeAmiSaisi={codeAmiSaisi}
+              setCodeAmiSaisi={setCodeAmiSaisi}
+              gererAjoutAmi={gererAjoutAmi}
+              telephoneSaisi={telephoneSaisi}
+              setTelephoneSaisi={setTelephoneSaisi}
+              gererAjoutAmiTelephone={gererAjoutAmiTelephone}
+              messageAmi={messageAmi}
+            />
 
-            {demandes.length > 0 && (
-              <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2">Demandes reçues</p>
-                {demandes.map((d) => (
-                  <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-espresso/5 last:border-0">
-                    <span className="text-[12px] text-espresso font-medium">{d.profils_publics?.pseudo}</span>
-                    <div className="flex gap-1.5">
-                      <button onClick={() => gererReponseDemande(d.id, true)} className="text-[10px] bg-espresso text-peony rounded-full px-3 py-1 font-medium">Accepter</button>
-                      <button onClick={() => gererReponseDemande(d.id, false)} className="text-[10px] text-espresso/40">Refuser</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <BlocDemandesRecues demandes={demandes} gererReponseDemande={gererReponseDemande} />
 
-            <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes amis ({amis.length})</p>
-                <button onClick={toggleMonPartage} className="text-[9px] font-semibold px-2.5 py-1 rounded-full" style={{ background: partageActif ? '#4ade80' : '#F0EEEB', color: partageActif ? '#1a3a1a' : '#3E2723' }}>
-                  {partageActif ? 'Je partage ma position' : 'Partage désactivé'}
-                </button>
-              </div>
-              {amis.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun ami pour l'instant</p>}
-              {amis.map((ami) => {
-                const pos = positionsAmis.find((p) => p.user_id === ami.id)
-                return (
-                  <div
-                    key={ami.id}
-                    onClick={() => pos && centrerSur(pos)}
-                    className={`flex items-center justify-between py-2 border-b border-espresso/5 last:border-0 ${pos ? 'cursor-pointer hover:bg-[#F0EEEB]/50 px-2 rounded-lg' : ''}`}
-                  >
-                    <span className="text-[12px] text-espresso font-medium">{ami.pseudo}</span>
-                    <span className="text-[9.5px] text-espresso/40">{pos ? `Vu ${new Date(pos.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Aucune position partagée'}</span>
-                  </div>
-                )
-              })}
-            </div>
+            <BlocMesAmis
+              amis={amis}
+              positionsAmis={positionsAmis}
+              partageActif={partageActif}
+              toggleMonPartage={toggleMonPartage}
+              centrerSur={centrerSur}
+            />
           </div>
         </div>
       </div>

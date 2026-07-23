@@ -1,10 +1,11 @@
 // ============================================================
-// MOTEUR DE SCÈNE — v4
+// MOTEUR DE SCÈNE — v4 (avec patch instruction impérative)
 // v1 : présence des personnages secondaires nommés
 // v2 : lieu, objets, événements en attente, variété de prise de parole
 // v3 : stockage par personnage (perf)
 // v4 : rôles génériques improvisés ("mon frère", "ma sœur"...) sans
 //      besoin de les avoir créés à l'avance dans la fiche du personnage
+// PATCH : instruction impérative de dialogue direct si demande explicite
 // ============================================================
 
 import { calculerProfilComportemental } from '../personnages'
@@ -42,6 +43,20 @@ function detecterMentions(personnage, texte) {
 }
 
 // ============================================================
+// DEMANDE EXPLICITE DE PAROLE — si le joueur écrit "X parle",
+// "sa sœur répond", "il dit quelque chose"..., c'est une vraie
+// demande de dialogue, pas juste une mention. Dans ce cas,
+// l'instruction doit être IMPÉRATIVE, pas une suggestion.
+// ============================================================
+const VERBES_PAROLE = ['parle', 'parler', 'répond', 'repond', 'répondre', 'repondre', 'dit', 'prend la parole', 'prends la parole']
+
+export function demandeExplicitementDeParler(texte) {
+  if (!texte) return false
+  const texteNormalise = normaliserTexte(texte)
+  return VERBES_PAROLE.some((v) => new RegExp(`\\b${normaliserTexte(v)}\\b`).test(texteNormalise))
+}
+
+// ============================================================
 // RÔLES GÉNÉRIQUES — détectés même sans fiche personnage secondaire.
 // Si le rôle correspond à un personnage secondaire DÉJÀ nommé dans la
 // fiche (ex: le rôle "frère" existe déjà pour Sami), on ne l'improvise
@@ -72,7 +87,7 @@ function detecterRolesGeneriques(personnage, texte) {
 
 /**
  * Met à jour la scène : présence des personnages nommés ET des rôles
- * improvisés. Renvoie { nommes: [...objets complets], improvises: [...noms de rôles] }
+ * improvisés. Renvoie { nommes: [...objets complets], improvises: [...noms de rôles], dernierMessageUtilisateur: string }
  */
 export function mettreAJourScene(personnage, messageUtilisateur, dernierMessagePersonnage = '') {
   const scene = chargerScene(personnage.id)
@@ -108,7 +123,7 @@ export function mettreAJourScene(personnage, messageUtilisateur, dernierMessageP
   const nommes = Object.keys(scene.presents).map((id) => secondaires.find((s) => s.id === id)).filter(Boolean)
   const improvises = Object.keys(scene.rolesImprovises)
 
-  return { nommes, improvises }
+  return { nommes, improvises, dernierMessageUtilisateur: messageUtilisateur }
 }
 
 export function retirerDeLaScene(personnageId, secondaireId) {
@@ -144,6 +159,7 @@ export function construireObjetScene(personnage, sceneDetection) {
 export function construireInstructionScene(personnage, sceneDetection) {
   const scene = construireObjetScene(personnage, sceneDetection)
   const dernierAParle = chargerScene(personnage.id).dernierAParle
+  const demandeParole = demandeExplicitementDeParler(sceneDetection.dernierMessageUtilisateur || '')
 
   const rienASignaler = scene.presents.length === 0 && scene.improvises.length === 0
     && scene.objets.length === 0 && !scene.sceneActuelle && scene.evenementsEnAttente.length === 0
@@ -162,7 +178,12 @@ export function construireInstructionScene(personnage, sceneDetection) {
         return `- ${s.nom} (${s.role}) : personnalité = "${s.personnalite}" ; lien avec toi = "${s.lienAvecPrincipal}"${ligneProfil}`
       })
       .join('\n')
-    blocs.push(`PERSONNAGES PRÉSENTS DANS LA SCÈNE :\n${listePresents}\n\nATTENTION : chacun de ces personnages doit parler avec SA PROPRE voix — vocabulaire, ton, rythme, comportement différents des tiens et différents des autres personnages présents. Ne recopie pas ton propre style pour eux.`)
+    
+    let instructionPresents = `PERSONNAGES PRÉSENTS DANS LA SCÈNE :\n${listePresents}\n\nATTENTION : chacun de ces personnages doit parler avec SA PROPRE voix — vocabulaire, ton, rythme, comportement différents des tiens et différents des autres personnages présents. Ne recopie pas ton propre style pour eux.`
+    if (demandeParole) {
+      instructionPresents += `\n\nIMPÉRATIF : le joueur demande explicitement qu'un de ces personnages parle. Tu DOIS faire parler le personnage concerné avec de VRAIES répliques entre guillemets dans cette réponse — ne te contente PAS de résumer ou narrer ce qu'il dit ("il écoute", "elle répond que..."). Écris ses mots réels.`
+    }
+    blocs.push(instructionPresents)
 
     if (scene.presents.length > 1) {
       const nomDernier = scene.presents.find((s) => s.id === dernierAParle)?.nom
@@ -175,7 +196,11 @@ export function construireInstructionScene(personnage, sceneDetection) {
   }
 
   if (scene.improvises.length > 0) {
-    blocs.push(`RÔLES MENTIONNÉS SANS FICHE DÉFINIE (${scene.improvises.join(', ')}) : le joueur ou toi avez évoqué ce type de personnage sans qu'il existe formellement dans l'histoire. Tu peux l'improviser librement, de façon cohérente avec ton propre passé et ton histoire (ex: si on parle de "ton frère", invente-lui une personnalité crédible avec votre lien). Fais-le parler si le moment s'y prête, avec sa propre voix, différente de la tienne. C'est une improvisation ponctuelle — elle n'a pas de mémoire garantie d'une conversation à l'autre.`)
+    let instructionImprovises = `RÔLES MENTIONNÉS SANS FICHE DÉFINIE (${scene.improvises.join(', ')}) : le joueur ou toi avez évoqué ce type de personnage sans qu'il existe formellement dans l'histoire. Tu peux l'improviser librement, de façon cohérente avec ton propre passé et ton histoire (ex: si on parle de "ton frère", invente-lui une personnalité crédible avec votre lien), avec sa propre voix, différente de la tienne. C'est une improvisation ponctuelle — elle n'a pas de mémoire garantie d'une conversation à l'autre.`
+    if (demandeParole) {
+      instructionImprovises += `\n\nIMPÉRATIF : le joueur demande explicitement que ce personnage parle. Tu DOIS écrire de VRAIES répliques entre guillemets pour lui dans cette réponse — pas un résumé narré de ce qu'il dirait.`
+    }
+    blocs.push(instructionImprovises)
   }
 
   if (scene.absents.length > 0) {

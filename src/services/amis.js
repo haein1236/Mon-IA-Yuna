@@ -44,3 +44,27 @@ export async function chargerMesAmis() {
 
   return (data || []).map((a) => a.demandeur_id === user.id ? a.destinataire : a.demandeur)
 }
+
+export async function definirMonTelephone(numero) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Non connecté.')
+  const numeroNettoye = numero.trim().replace(/\s+/g, '')
+  const { error } = await supabase.from('profils_publics').update({ telephone: numeroNettoye }).eq('id', user.id)
+  if (error) {
+    if (error.message.includes('duplicate')) throw new Error('Ce numéro est déjà associé à un autre compte.')
+    throw error
+  }
+}
+
+export async function envoyerDemandeAmiParTelephone(numero) {
+  const { data: { user } } = await supabase.auth.getUser()
+  const numeroNettoye = numero.trim().replace(/\s+/g, '')
+  const { data: cible } = await supabase.from('profils_publics').select('id, pseudo').eq('telephone', numeroNettoye).maybeSingle()
+
+  if (!cible) throw new Error("Aucun utilisateur ne correspond à ce numéro (il doit avoir renseigné son numéro dans l'app).")
+  if (cible.id === user.id) throw new Error("Tu ne peux pas t'ajouter toi-même.")
+
+  const { error } = await supabase.from('amities').insert({ demandeur_id: user.id, destinataire_id: cible.id })
+  if (error) throw new Error(error.message.includes('duplicate') ? 'Demande déjà envoyée.' : error.message)
+  return cible.pseudo
+}
