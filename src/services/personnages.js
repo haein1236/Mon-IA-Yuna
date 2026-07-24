@@ -296,6 +296,10 @@ const SECRETS_PAR_DEFAUT = {
 const PROGRESSION_PAR_DEFAUT = {
   chapitreActuel: 1, sceneActuelle: '', objectifActuel: '', finPossible: '',
   evenementsDebloques: [], choixImportants: [],
+  // Registre d'événements RÉELLEMENT vécus dans cette histoire — utilisé
+  // par regles.js pour empêcher le personnage d'inventer un souvenir
+  // (ex: faire référence à "notre baiser" alors qu'il n'a jamais eu lieu).
+  evenementsVecus: { premierBaiser: false, declarationAmour: false },
 }
 
 export function migrerPersonnage(p) {
@@ -319,7 +323,11 @@ export function migrerPersonnage(p) {
     souvenirsImportants: p.souvenirsImportants || [],
     memoireNiveaux: completerStructure(p.memoireNiveaux),
     secrets: { ...SECRETS_PAR_DEFAUT, ...(p.secrets || {}) },
-    progression: { ...PROGRESSION_PAR_DEFAUT, ...(p.progression || {}) },
+    progression: {
+      ...PROGRESSION_PAR_DEFAUT,
+      ...(p.progression || {}),
+      evenementsVecus: { ...PROGRESSION_PAR_DEFAUT.evenementsVecus, ...(p.progression?.evenementsVecus || {}) },
+    },
     typeRomance: p.typeRomance || '',
     faitsSurUtilisateur: p.faitsSurUtilisateur || [],
     traits: p.traits || [],
@@ -343,7 +351,7 @@ export const personnagesParDefaut = [
     sceneOuverture: "En cherchant ta salle de cours, tu percutes un jeune homme qui laisse tomber ses livres.\n\nAiden : « On dirait que le destin aime provoquer les rencontres... Tu vas bien ? »",
     traits: ['timide', 'protecteur'],
     personnagesSecondaires: [
-  { id: 'aiden-sec-1', nom: 'Léa', role: 'Meilleure amie', personnalite: "Extravertie, protectrice envers Aiden, adore taquiner tout le monde avec humour.", lienAvecPrincipal: "Amis depuis le lycée, elle le connaît mieux que quiconque et n'hésite pas à intervenir dans ses conversations." },
+      { id: 'aiden-sec-1', nom: 'Léa', role: 'Meilleure amie', personnalite: "Extravertie, protectrice envers Aiden, adore taquiner tout le monde avec humour.", lienAvecPrincipal: "Amis depuis le lycée, elle le connaît mieux que quiconque et n'hésite pas à intervenir dans ses conversations." },
     ],
     origine: 'predefini', favori: false,
   },
@@ -361,8 +369,8 @@ export const personnagesParDefaut = [
     sceneOuverture: "Le mariage a été signé ce matin.\n\nKaïs : « À partir de maintenant, tu m'appartiens autant que je t'appartiens. »",
     traits: ['possessif', 'protecteur', 'dominant'],
     personnagesSecondaires: [
-  { id: 'kais-sec-1', nom: 'Karim', role: 'Frère cadet', personnalite: "Plus détendu et chaleureux que Kaïs, sert souvent de contraste — il désamorce les tensions avec humour.", lienAvecPrincipal: "Seul membre de la famille avec qui Kaïs baisse un peu sa garde." },
-],
+      { id: 'kais-sec-1', nom: 'Karim', role: 'Frère cadet', personnalite: "Plus détendu et chaleureux que Kaïs, sert souvent de contraste — il désamorce les tensions avec humour.", lienAvecPrincipal: "Seul membre de la famille avec qui Kaïs baisse un peu sa garde." },
+    ],
     origine: 'predefini', favori: false,
   },
   {
@@ -379,8 +387,8 @@ export const personnagesParDefaut = [
     sceneOuverture: "Professeur : « Va t'asseoir à côté de Kenji. »\n\nKenji : « Salut... J'espère que tu n'es pas aussi ennuyeux que les autres. »",
     traits: ['timide', 'reserve'],
     personnagesSecondaires: [
-  { id: 'kenji-sec-1', nom: 'Yuto', role: 'Meilleur ami', personnalite: "Bavard, sociable, essaie sans cesse de pousser Kenji à s'ouvrir davantage aux autres.", lienAvecPrincipal: "Amis d'enfance ; Yuto est un des seuls à voir le vrai visage de Kenji derrière sa froideur." },
-],
+      { id: 'kenji-sec-1', nom: 'Yuto', role: 'Meilleur ami', personnalite: "Bavard, sociable, essaie sans cesse de pousser Kenji à s'ouvrir davantage aux autres.", lienAvecPrincipal: "Amis d'enfance ; Yuto est un des seuls à voir le vrai visage de Kenji derrière sa froideur." },
+    ],
     origine: 'predefini', favori: false,
   },
   {
@@ -457,8 +465,8 @@ export const personnagesParDefaut = [
     sceneOuverture: "Aujourd'hui était votre mariage. Une fois la cérémonie terminée, vous vous retrouvez seuls dans votre nouvelle maison. Il ferme doucement la porte.\n\nYassine : « Je ne te forcerai jamais à m'aimer... mais laisse-moi au moins essayer d'être un bon mari. »",
     traits: ['possessif', 'protecteur', 'gentleman', 'romantique'],
     personnagesSecondaires: [
-  { id: 'yassine-sec-1', nom: 'Sofiane', role: "Associé d'affaires", personnalite: "Curieux et un peu moqueur, pose souvent des questions indiscrètes sur le mariage arrangé de Yassine.", lienAvecPrincipal: "Collègue de longue date, l'un des rares à qui Yassine se confie parfois malgré lui." },
-],
+      { id: 'yassine-sec-1', nom: 'Sofiane', role: "Associé d'affaires", personnalite: "Curieux et un peu moqueur, pose souvent des questions indiscrètes sur le mariage arrangé de Yassine.", lienAvecPrincipal: "Collègue de longue date, l'un des rares à qui Yassine se confie parfois malgré lui." },
+    ],
     typeRomance: 'Marriage Contract',
     origine: 'predefini', favori: false,
   },
@@ -493,8 +501,8 @@ export const personnagesParDefaut = [
     sceneOuverture: "Premier jour de travail. Tu pousses la porte du dernier étage de la tour Al-Hassan. Sans même se retourner, il dit d'une voix calme :\n\nKaïd : « Tu es en retard de trente-deux secondes. »\n\nLorsqu'il se retourne enfin, son regard se pose sur toi... et, pour la première fois depuis très longtemps, quelque chose vacille dans son cœur.",
     traits: ['froid', 'dominant', 'possessif', 'protecteur', 'calculateur', 'impitoyable'],
     personnagesSecondaires: [
-  { id: 'kaid-sec-1', nom: 'Rami', role: 'Bras droit', personnalite: "Loyal jusqu'au bout, calme et efficace, parle peu mais agit vite. Un des seuls en qui Kaïd a une confiance totale.", lienAvecPrincipal: "Travaille avec Kaïd depuis des années, connaît ses secrets mieux que quiconque." },
-],
+      { id: 'kaid-sec-1', nom: 'Rami', role: 'Bras droit', personnalite: "Loyal jusqu'au bout, calme et efficace, parle peu mais agit vite. Un des seuls en qui Kaïd a une confiance totale.", lienAvecPrincipal: "Travaille avec Kaïd depuis des années, connaît ses secrets mieux que quiconque." },
+    ],
     typeRomance: 'Mafia',
     origine: 'predefini', favori: false,
   },
@@ -810,6 +818,30 @@ export function mettreAJourRelationEtMemoire(personnageId, resultat) {
     }
   })
 
+  localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
+  synchroniserVersFirestore('personnages', personnagesMaj)
+  return personnagesMaj
+}
+
+// ============================================================
+// MARQUE UN OU PLUSIEURS ÉVÉNEMENTS COMME RÉELLEMENT VÉCUS
+// Une fois vrai, un événement ne redevient jamais faux (on ne "défait"
+// pas un baiser qui a eu lieu) — fusion en OR, jamais en écrasement.
+// ============================================================
+export function marquerEvenementsVecus(personnageId, evenementsDetectes) {
+  if (!evenementsDetectes || Object.keys(evenementsDetectes).length === 0) {
+    return chargerPersonnages()
+  }
+  const personnages = chargerPersonnages()
+  const personnagesMaj = personnages.map((p) => {
+    if (p.id !== personnageId) return p
+    const evenementsActuels = p.progression?.evenementsVecus || {}
+    const evenementsFusionnes = { ...evenementsActuels }
+    for (const cle of Object.keys(evenementsDetectes)) {
+      evenementsFusionnes[cle] = evenementsFusionnes[cle] || evenementsDetectes[cle]
+    }
+    return { ...p, progression: { ...p.progression, evenementsVecus: evenementsFusionnes } }
+  })
   localStorage.setItem(CLE_PERSONNAGES, JSON.stringify(personnagesMaj))
   synchroniserVersFirestore('personnages', personnagesMaj)
   return personnagesMaj

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -13,23 +13,19 @@ import {
   supprimerLieuFavori,
   modifierLieuFavori,
   calculerDistanceKm,
-  publierPositionPartagee,
-  chargerPositionsAmis,
-  definirPartageActif,
+  calculerDistanceAujourdHui,
+  detecterLieuProche,
+  genererTrajetsDuJour,
+  chargerSouvenirsLocaux,
+  synchroniserSouvenirsDepuisSupabase,
+  ajouterSouvenir,
+  supprimerSouvenir,
+  calculerStatistiques,
 } from '../services/localisation'
-import {
-  envoyerDemandeAmi,
-  repondreDemandeAmi,
-  chargerDemandesRecues,
-  chargerMesAmis,
-  obtenirMonProfil,
-  definirMonTelephone,
-  envoyerDemandeAmiParTelephone,
-} from '../services/amis'
 import { notifierErreur, notifierSucces } from '../services/notifications'
 
-// Palette de couleurs distinctes pour les amis
-const COULEURS_AMIS = ['#C4688A', '#4A6B94', '#6B8F5E', '#8B6FA8', '#D4A017', '#B46A72']
+const EMOJIS_LIEUX = ['🏠', '🎓', '💻', '☕', '🌳', '❤️', '✨', '📍']
+const EMOJIS_HUMEUR = ['😊', '🥰', '😌', '🤩', '😴', '😢', '😤', '🤔']
 
 // ============================================================
 // ICÔNES SVG
@@ -62,11 +58,6 @@ const IconPartager = (props) => (
 const IconItineraire = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
     <path d="M4 19l6-14 4 8 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-const IconEtoile = (props) => (
-  <svg viewBox="0 0 24 24" {...props}>
-    <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9L5.7 21l1.7-7L2 9.2l7.1-.6L12 2z" />
   </svg>
 )
 const IconHistorique = (props) => (
@@ -114,17 +105,27 @@ const IconClock = (props) => (
     <path d="M12 8v4.5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
   </svg>
 )
-const IconTelephone = (props) => (
+const IconFootsteps = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
-    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.2 1L6.6 10.8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M8 5c1.5 0 2.5 1.5 2.5 3.5S9.5 12 8 12s-2.5-1.5-2.5-3.5S6.5 5 8 5z" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M16 12c1.5 0 2.5 1.5 2.5 3.5S17.5 19 16 19s-2.5-1.5-2.5-3.5S14.5 12 16 12z" stroke="currentColor" strokeWidth="1.6" />
   </svg>
 )
-const IconUsers = (props) => (
+const IconCamera = (props) => (
   <svg viewBox="0 0 24 24" fill="none" {...props}>
-    <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.7" />
-    <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <circle cx="17.5" cy="8.5" r="2.3" stroke="currentColor" strokeWidth="1.6" />
-    <path d="M14.7 14.2c2.9.3 5.3 2.8 5.3 5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M4 8h3l2-2h6l2 2h3v11H4V8z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    <circle cx="12" cy="13" r="3.3" stroke="currentColor" strokeWidth="1.7" />
+  </svg>
+)
+const IconBook = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21V5.5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20" stroke="currentColor" strokeWidth="1.6" />
+  </svg>
+)
+const IconChart = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" {...props}>
+    <path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>
 )
 
@@ -151,11 +152,19 @@ function tempsEcoule(dateISO) {
 }
 
 function formaterDistance(km) {
+  if (km <= 0) return '0 m'
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`
 }
 
-function initiale(nom) {
-  return (nom || '?').charAt(0).toUpperCase()
+function formaterHeure(dateISO) {
+  return new Date(dateISO).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formaterDuree(min) {
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const reste = min % 60
+  return reste > 0 ? `${h} h ${reste} min` : `${h} h`
 }
 
 // ============================================================
@@ -251,132 +260,183 @@ function BoutonAction({ icon: Icon, label, onClick, accent, ariaLabel }) {
   )
 }
 
-function OngletModeAjout({ actif, onClick, children }) {
+function SelecteurEmoji({ valeur, onChange, emojis }) {
   return (
-    <button
-      onClick={onClick}
-      className="text-[9.5px] uppercase tracking-wide font-semibold pb-1.5 px-0.5 transition-colors duration-150"
-      style={{
-        color: actif ? 'var(--color-espresso)' : 'rgba(62,39,35,0.35)',
-        borderBottom: actif ? '2px solid var(--color-espresso)' : '2px solid transparent',
-      }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function BlocAjoutAmi({ modeAjout, setModeAjout, codeAmiSaisi, setCodeAmiSaisi, gererAjoutAmi, telephoneSaisi, setTelephoneSaisi, gererAjoutAmiTelephone, messageAmi }) {
-  return (
-    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up shadow-sm">
-      <div className="flex items-center gap-4 mb-3 border-b border-espresso/8">
-        <OngletModeAjout actif={modeAjout === 'code'} onClick={() => setModeAjout('code')}>
-          Par code
-        </OngletModeAjout>
-        <OngletModeAjout actif={modeAjout === 'telephone'} onClick={() => setModeAjout('telephone')}>
-          Par téléphone
-        </OngletModeAjout>
-      </div>
-
-      {modeAjout === 'code' ? (
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            value={codeAmiSaisi}
-            onChange={(e) => setCodeAmiSaisi(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && gererAjoutAmi()}
-            placeholder="Ex : SAKI-4821"
-            aria-label="Code ami"
-            className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 sm:py-2 text-[13px] sm:text-[12px] outline-none border border-espresso/15 focus:border-espresso transition-colors"
-          />
-          <button
-            onClick={gererAjoutAmi}
-            className="bg-espresso text-peony rounded-xl px-4 py-2.5 sm:py-0 text-[11.5px] sm:text-[11px] font-semibold hover:-translate-y-0.5 active:scale-95 transition-all duration-150 flex-shrink-0"
-          >
-            Ajouter
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            value={telephoneSaisi}
-            onChange={(e) => setTelephoneSaisi(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && gererAjoutAmiTelephone()}
-            placeholder="Ex : +225 07 00 00 00 00"
-            type="tel"
-            aria-label="Numéro de téléphone de l'ami"
-            className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 sm:py-2 text-[13px] sm:text-[12px] outline-none border border-espresso/15 focus:border-espresso transition-colors"
-          />
-          <button
-            onClick={gererAjoutAmiTelephone}
-            className="bg-espresso text-peony rounded-xl px-4 py-2.5 sm:py-0 text-[11.5px] sm:text-[11px] font-semibold hover:-translate-y-0.5 active:scale-95 transition-all duration-150 flex-shrink-0"
-          >
-            Ajouter
-          </button>
-        </div>
-      )}
-      {messageAmi && <p className="text-[10.5px] text-espresso/50 mt-2">{messageAmi}</p>}
+    <div className="flex flex-wrap gap-1.5">
+      {emojis.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          onClick={() => onChange(emoji)}
+          className={`w-8 h-8 rounded-xl flex items-center justify-center text-[15px] transition-all duration-150 ${
+            valeur === emoji ? 'bg-espresso scale-110 shadow-sm' : 'bg-[#F0EEEB] hover:bg-[#e8e4dc]'
+          }`}
+        >
+          {emoji}
+        </button>
+      ))}
     </div>
   )
 }
 
-function BlocMonProfil({ monProfil, monTelephone, setMonTelephone, gererDefinirTelephone }) {
-  if (!monProfil) return null
+// ============================================================
+// SECTION : LIEUX FAVORIS
+// ============================================================
+function SectionLieuxFavoris({
+  lieuxFavoris, position, afficherForm, setAfficherForm,
+  nomNouveauFavori, setNomNouveauFavori, emojiNouveauFavori, setEmojiNouveauFavori,
+  enregistrerFavori, favoriEnEdition, setFavoriEnEdition, confirmerEdition, annulerEdition,
+  favoriEnSuppression, retirerFavori, centrerSur, ouvrirItineraire, compteurVisites,
+}) {
   return (
-    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-5 yuna-slide-up shadow-sm">
-      <div className="flex items-center gap-2 mb-1">
-        <IconUsers style={{ width: '11px', height: '11px' }} className="text-espresso/40" />
-        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mon code ami — partage-le pour être ajouté</p>
+    <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Lieux favoris</p>
+        <button
+          onClick={() => setAfficherForm((a) => !a)}
+          disabled={!position}
+          className="text-[10.5px] font-semibold text-espresso underline underline-offset-2 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 rounded"
+        >
+          {afficherForm ? 'Annuler' : '+ Enregistrer ici'}
+        </button>
       </div>
-      <p className="text-[17px] sm:text-[16px] font-bold text-espresso tracking-wider mb-3.5">{monProfil.code_ami}</p>
 
-      <div className="pt-3 border-t border-espresso/8">
-        <div className="flex items-center gap-2 mb-1">
-          <IconTelephone style={{ width: '11px', height: '11px' }} className="text-espresso/40" />
-          <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mon numéro (pour qu'on t'ajoute par téléphone)</p>
-        </div>
-        {monProfil.telephone ? (
-          <p className="text-[13px] text-espresso font-medium">{monProfil.telephone}</p>
-        ) : (
-          <div className="flex flex-col sm:flex-row gap-2 mt-1.5">
+      {afficherForm && (
+        <div className="flex flex-col gap-2.5 mb-3 yuna-scale-in bg-[#F0EEEB]/60 rounded-xl p-3">
+          <SelecteurEmoji valeur={emojiNouveauFavori} onChange={setEmojiNouveauFavori} emojis={EMOJIS_LIEUX} />
+          <div className="flex flex-col xs:flex-row gap-2">
             <input
-              value={monTelephone}
-              onChange={(e) => setMonTelephone(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && gererDefinirTelephone()}
-              placeholder="+225 07 00 00 00 00"
-              type="tel"
-              aria-label="Ton numéro de téléphone"
-              className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 sm:py-2 text-[13px] sm:text-[12px] outline-none border border-espresso/15 focus:border-espresso transition-colors"
+              value={nomNouveauFavori}
+              onChange={(e) => setNomNouveauFavori(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && enregistrerFavori()}
+              placeholder="Ex : Maison, Université, Café préféré..."
+              aria-label="Nom du nouveau lieu favori"
+              autoFocus
+              className="flex-1 min-w-0 bg-white rounded-xl px-3 py-2.5 xs:py-2 text-[13px] xs:text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso transition-colors"
             />
-            <button
-              onClick={gererDefinirTelephone}
-              className="bg-espresso text-peony rounded-xl px-4 py-2.5 sm:py-2 text-[11.5px] sm:text-[11px] font-semibold hover:-translate-y-0.5 active:scale-95 transition-all duration-150 flex-shrink-0"
-            >
-              Enregistrer
+            <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 py-2.5 xs:py-0 text-[11px] font-semibold text-peony bg-espresso hover:-translate-y-0.5 active:scale-95 transition-all duration-150">
+              Ajouter
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {lieuxFavoris.length === 0 ? (
+        <p className="text-[10.5px] text-espresso/35 italic">Aucun lieu favori enregistré pour l'instant</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {lieuxFavoris.map((lieu) => {
+            const distance = position ? calculerDistanceKm(position.latitude, position.longitude, lieu.latitude, lieu.longitude) : null
+            const enEdition = favoriEnEdition?.id === lieu.id
+            const enSuppression = favoriEnSuppression === lieu.id
+            const nbVisites = compteurVisites[lieu.id] || 0
+            return (
+              <div
+                key={lieu.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => !enEdition && centrerSur(lieu)}
+                onKeyDown={(e) => { if (!enEdition && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); centrerSur(lieu) } }}
+                className={`flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 ${enSuppression ? 'opacity-0 scale-95 -translate-x-2' : 'opacity-100 scale-100'} ${enEdition ? 'bg-[#F0EEEB]' : 'hover:bg-[#F0EEEB]'}`}
+              >
+                <div className="w-8 h-8 rounded-full bg-[#F4EBC8] flex items-center justify-center flex-shrink-0 text-[15px]">
+                  {lieu.emoji || '📍'}
+                </div>
+
+                {enEdition ? (
+                  <div className="flex-1 min-w-0 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <SelecteurEmoji valeur={favoriEnEdition.emoji} onChange={(emoji) => setFavoriEnEdition((f) => ({ ...f, emoji }))} emojis={EMOJIS_LIEUX} />
+                    <input
+                      autoFocus
+                      value={favoriEnEdition.nom}
+                      onChange={(e) => setFavoriEnEdition((f) => ({ ...f, nom: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') confirmerEdition(e); if (e.key === 'Escape') annulerEdition(e) }}
+                      aria-label="Renommer ce lieu favori"
+                      className="w-full bg-white rounded-lg px-2 py-1 text-[11.5px] text-espresso outline-none border border-espresso/20 focus:border-espresso"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11.5px] font-medium text-espresso truncate">{lieu.nom}</p>
+                    <p className="text-[9.5px] text-espresso/45">
+                      {distance != null ? `${formaterDistance(distance)} de toi` : ''}
+                      {nbVisites >= 5 ? ` · tu y vas souvent 🌸` : ''}
+                    </p>
+                  </div>
+                )}
+
+                {enEdition ? (
+                  <>
+                    <button onClick={confirmerEdition} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0" title="Valider" aria-label="Valider le renommage">
+                      <IconCheck style={{ width: '13px', height: '13px' }} className="text-[#3E8E5A]" />
+                    </button>
+                    <button onClick={annulerEdition} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0" title="Annuler" aria-label="Annuler le renommage">
+                      <IconX style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); vibrer(); ouvrirItineraire(lieu.latitude, lieu.longitude) }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0"
+                      title="Itinéraire" aria-label={`Itinéraire vers ${lieu.nom}`}
+                    >
+                      <IconItineraire style={{ width: '12px', height: '12px' }} className="text-espresso/50" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFavoriEnEdition({ id: lieu.id, nom: lieu.nom, emoji: lieu.emoji || '📍' }) }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0"
+                      title="Modifier" aria-label={`Modifier ${lieu.nom}`}
+                    >
+                      <IconEdit style={{ width: '12px', height: '12px' }} className="text-espresso/45" />
+                    </button>
+                    <button
+                      onClick={(e) => retirerFavori(e, lieu.id)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0"
+                      title="Supprimer" aria-label={`Supprimer ${lieu.nom}`}
+                    >
+                      <IconTrash style={{ width: '12px', height: '12px' }} className="text-espresso/40" />
+                    </button>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-function BlocDemandesRecues({ demandes, gererReponseDemande }) {
-  if (demandes.length === 0) return null
+// ============================================================
+// SECTION : TRAJETS DU JOUR
+// ============================================================
+function SectionTrajetsDuJour({ trajets }) {
+  if (trajets.length === 0) return null
   return (
-    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up shadow-sm">
-      <p className="text-[9px] text-espresso/40 uppercase tracking-wide mb-2.5">Demandes reçues</p>
-      <div className="flex flex-col gap-0.5">
-        {demandes.map((d) => (
-          <div key={d.id} className="flex items-center justify-between gap-2 py-2 border-b border-espresso/5 last:border-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0" style={{ background: '#8B6FA8' }}>
-                {initiale(d.profils_publics?.pseudo)}
-              </div>
-              <span className="text-[12px] text-espresso font-medium truncate">{d.profils_publics?.pseudo}</span>
+    <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <IconFootsteps style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
+        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Aujourd'hui 🌸 · Ton parcours</p>
+      </div>
+      <div className="flex flex-col">
+        {trajets.map((trajet, i) => (
+          <div key={trajet.id} className="flex gap-3">
+            <div className="flex flex-col items-center flex-shrink-0">
+              <span className="text-[15px]">{trajet.emojiDepart}</span>
+              <span className="w-px flex-1 bg-espresso/15 my-1" style={{ minHeight: '18px' }} />
+              {i === trajets.length - 1 && <span className="text-[15px]">{trajet.emojiArrivee}</span>}
             </div>
-            <div className="flex gap-1.5 flex-shrink-0">
-              <button onClick={() => gererReponseDemande(d.id, true)} className="text-[10px] bg-espresso text-peony rounded-full px-3 py-1.5 sm:py-1 font-medium hover:-translate-y-0.5 active:scale-95 transition-all duration-150">Accepter</button>
-              <button onClick={() => gererReponseDemande(d.id, false)} className="text-[10px] text-espresso/40 hover:text-espresso px-2 transition-colors duration-150">Refuser</button>
+            <div className="flex-1 min-w-0 pb-3">
+              <p className="text-[11.5px] font-medium text-espresso">
+                {trajet.lieuDepart || 'Position'} <span className="text-espresso/30">→</span> {trajet.lieuArrivee || 'Position'}
+              </p>
+              <p className="text-[9.5px] text-espresso/45 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>{trajet.emojiMode} {trajet.mode}</span>
+                <span>· {formaterDistance(trajet.distanceKm)}</span>
+                <span>· {formaterDuree(trajet.dureeMin)}</span>
+                <span>· {formaterHeure(trajet.heureDepart)} → {formaterHeure(trajet.heureArrivee)}</span>
+              </p>
             </div>
           </div>
         ))}
@@ -385,49 +445,164 @@ function BlocDemandesRecues({ demandes, gererReponseDemande }) {
   )
 }
 
-function BlocMesAmis({ amis, positionsAmis, partageActif, toggleMonPartage, centrerSur }) {
+// ============================================================
+// SECTION : SOUVENIRS DE LIEUX
+// ============================================================
+function SectionSouvenirs({
+  lieuxFavoris, souvenirs, afficherForm, setAfficherForm,
+  lieuSelectionne, setLieuSelectionne, texteSouvenir, setTexteSouvenir,
+  humeurSouvenir, setHumeurSouvenir, photoSouvenir, setPhotoSouvenir,
+  gererAjoutSouvenir, gererSuppressionSouvenir,
+}) {
+  const nomLieu = (lieuId) => lieuxFavoris.find((l) => String(l.id) === String(lieuId))
+  const gererFichier = (e) => {
+    const fichier = e.target.files?.[0]
+    if (!fichier) return
+    const lecteur = new FileReader()
+    lecteur.onload = () => setPhotoSouvenir(lecteur.result)
+    lecteur.readAsDataURL(fichier)
+  }
+
   return (
-    <div className="bg-white rounded-2xl border border-espresso/10 p-4 mt-3 yuna-slide-up shadow-sm">
-      <div className="flex items-center justify-between gap-2 mb-2.5">
-        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes amis ({amis.length})</p>
+    <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <IconBook style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
+          <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Mes souvenirs de lieux</p>
+        </div>
         <button
-          onClick={toggleMonPartage}
-          className="text-[9px] font-semibold px-2.5 py-1 rounded-full transition-colors duration-150 flex-shrink-0"
-          style={{ background: partageActif ? '#4ade80' : '#F0EEEB', color: partageActif ? '#1a3a1a' : '#3E2723' }}
+          onClick={() => setAfficherForm((a) => !a)}
+          disabled={lieuxFavoris.length === 0}
+          className="text-[10.5px] font-semibold text-espresso underline underline-offset-2 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 rounded"
         >
-          {partageActif ? 'Je partage ma position' : 'Partage désactivé'}
+          {afficherForm ? 'Annuler' : '+ Nouveau souvenir'}
         </button>
       </div>
-      {amis.length === 0 && <p className="text-[10.5px] text-espresso/35 italic">Aucun ami pour l'instant</p>}
-      <div className="flex flex-col">
-        {amis.map((ami, i) => {
-          const pos = positionsAmis.find((p) => p.user_id === ami.id)
-          const couleur = COULEURS_AMIS[i % COULEURS_AMIS.length]
-          return (
-            <div
-              key={ami.id}
-              role={pos ? 'button' : undefined}
-              tabIndex={pos ? 0 : undefined}
-              onClick={() => pos && centrerSur(pos)}
-              onKeyDown={(e) => { if (pos && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); centrerSur(pos) } }}
-              className={`flex items-center gap-2.5 py-2 px-1.5 -mx-1.5 rounded-lg border-b border-espresso/5 last:border-0 transition-colors duration-150 ${pos ? 'cursor-pointer hover:bg-[#F0EEEB]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40' : ''}`}
-            >
-              <div className="relative flex-shrink-0">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: couleur }}>
-                  {initiale(ami.pseudo)}
+
+      {lieuxFavoris.length === 0 && (
+        <p className="text-[10.5px] text-espresso/35 italic mb-1">Ajoute d'abord un lieu favori pour pouvoir y associer des souvenirs ✨</p>
+      )}
+
+      {afficherForm && (
+        <div className="flex flex-col gap-2.5 mb-4 yuna-scale-in bg-[#F0EEEB]/60 rounded-xl p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {lieuxFavoris.map((lieu) => (
+              <button
+                key={lieu.id}
+                type="button"
+                onClick={() => setLieuSelectionne(lieu.id)}
+                className={`text-[11px] font-medium rounded-full px-3 py-1.5 transition-all duration-150 ${
+                  String(lieuSelectionne) === String(lieu.id) ? 'bg-espresso text-peony' : 'bg-white text-espresso/60 border border-espresso/15'
+                }`}
+              >
+                {lieu.emoji} {lieu.nom}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            value={texteSouvenir}
+            onChange={(e) => setTexteSouvenir(e.target.value)}
+            placeholder="Raconte ce moment... 📝"
+            rows={2}
+            className="w-full bg-white rounded-xl px-3 py-2 text-[12.5px] text-espresso outline-none border border-espresso/15 focus:border-espresso transition-colors resize-none"
+          />
+
+          <div className="flex items-center gap-2">
+            <p className="text-[9.5px] text-espresso/40 uppercase tracking-wide flex-shrink-0">Humeur</p>
+            <SelecteurEmoji valeur={humeurSouvenir} onChange={setHumeurSouvenir} emojis={EMOJIS_HUMEUR} />
+          </div>
+
+          <label className="flex items-center gap-2 text-[10.5px] font-medium text-espresso/60 cursor-pointer w-fit">
+            <span className="w-8 h-8 rounded-xl bg-white border border-espresso/15 flex items-center justify-center">
+              <IconCamera style={{ width: '13px', height: '13px' }} className="text-espresso/50" />
+            </span>
+            {photoSouvenir ? 'Photo ajoutée ✅' : 'Ajouter une photo'}
+            <input type="file" accept="image/*" onChange={gererFichier} className="hidden" />
+          </label>
+          {photoSouvenir && (
+            <img src={photoSouvenir} alt="Aperçu du souvenir" className="w-20 h-20 object-cover rounded-xl border border-espresso/15" />
+          )}
+
+          <button
+            onClick={gererAjoutSouvenir}
+            disabled={!lieuSelectionne}
+            className="self-start rounded-xl px-4 py-2 text-[11px] font-semibold text-peony bg-espresso disabled:opacity-40 hover:-translate-y-0.5 active:scale-95 transition-all duration-150"
+          >
+            Enregistrer le souvenir
+          </button>
+        </div>
+      )}
+
+      {souvenirs.length === 0 ? (
+        <p className="text-[10.5px] text-espresso/35 italic">Aucun souvenir enregistré pour l'instant</p>
+      ) : (
+        <div className="flex flex-col gap-2.5 max-h-72 overflow-y-auto scroll-suave pr-1">
+          {souvenirs.map((souvenir) => {
+            const lieu = nomLieu(souvenir.lieu_id)
+            return (
+              <div key={souvenir.id} className="flex gap-2.5 bg-[#F0EEEB]/50 rounded-xl p-2.5">
+                {souvenir.photo && (
+                  <img src={souvenir.photo} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold text-espresso truncate">
+                      {lieu ? `${lieu.emoji} ${lieu.nom}` : 'Lieu supprimé'} {souvenir.humeur && <span>{souvenir.humeur}</span>}
+                    </p>
+                    <button onClick={() => gererSuppressionSouvenir(souvenir.id)} className="flex-shrink-0 text-espresso/30 hover:text-espresso/60" aria-label="Supprimer ce souvenir">
+                      <IconTrash style={{ width: '11px', height: '11px' }} />
+                    </button>
+                  </div>
+                  {souvenir.texte && <p className="text-[11px] text-espresso/65 mt-1 leading-relaxed">{souvenir.texte}</p>}
+                  <p className="text-[9px] text-espresso/35 mt-1">{tempsEcoule(souvenir.created_at)}</p>
                 </div>
-                {pos && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#3E8E5A] border-2 border-white" />}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] text-espresso font-medium truncate">{ami.pseudo}</p>
-                <p className="text-[9.5px] text-espresso/40 truncate">
-                  {pos ? `Vu ${new Date(pos.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Aucune position partagée'}
-                </p>
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// SECTION : STATISTIQUES
+// ============================================================
+function SectionStatistiques({ stats }) {
+  return (
+    <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <IconChart style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
+        <p className="text-[9px] text-espresso/40 uppercase tracking-wide">🌍 Mes statistiques</p>
       </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="bg-[#F0EEEB]/60 rounded-xl p-3">
+          <p className="text-[16px] font-semibold text-espresso">{formaterDistance(stats.distanceTotaleKm)}</p>
+          <p className="text-[9.5px] text-espresso/45 mt-0.5">Distance totale parcourue</p>
+        </div>
+        <div className="bg-[#F0EEEB]/60 rounded-xl p-3">
+          <p className="text-[16px] font-semibold text-espresso">{stats.nombreLieuxVisites}</p>
+          <p className="text-[9.5px] text-espresso/45 mt-0.5">Lieux favoris visités</p>
+        </div>
+        <div className="bg-[#F0EEEB]/60 rounded-xl p-3">
+          <p className="text-[16px] font-semibold text-espresso">{stats.nombreJoursActifs}</p>
+          <p className="text-[9.5px] text-espresso/45 mt-0.5">Jours actifs</p>
+        </div>
+        <div className="bg-[#F0EEEB]/60 rounded-xl p-3">
+          <p className="text-[16px] font-semibold text-espresso">{stats.nombreSouvenirs}</p>
+          <p className="text-[9.5px] text-espresso/45 mt-0.5">Souvenirs enregistrés</p>
+        </div>
+      </div>
+      {stats.lieuLePlusFrequente && (
+        <div className="flex items-center gap-2.5 bg-[#F4EBC8]/50 rounded-xl p-3 mt-2.5">
+          <span className="text-[18px]">{stats.lieuLePlusFrequente.emoji}</span>
+          <div className="min-w-0">
+            <p className="text-[11.5px] font-medium text-espresso">Lieu le plus fréquenté : {stats.lieuLePlusFrequente.nom}</p>
+            <p className="text-[9.5px] text-espresso/45">{stats.visitesLieuPlusFrequente} passages détectés</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -446,6 +621,7 @@ function LocalisationScreen() {
   const [historique, setHistorique] = useState([])
   const [lieuxFavoris, setLieuxFavoris] = useState([])
   const [nomNouveauFavori, setNomNouveauFavori] = useState('')
+  const [emojiNouveauFavori, setEmojiNouveauFavori] = useState('📍')
   const [afficherFormFavori, setAfficherFormFavori] = useState(false)
 
   const [favoriEnEdition, setFavoriEnEdition] = useState(null)
@@ -454,21 +630,15 @@ function LocalisationScreen() {
   const [actualisationAuto, setActualisationAuto] = useState(false)
   const intervalleRef = useRef(null)
 
-  // Amis
-  const [monProfil, setMonProfil] = useState(null)
-  const [codeAmiSaisi, setCodeAmiSaisi] = useState('')
-  const [demandes, setDemandes] = useState([])
-  const [amis, setAmis] = useState([])
-  const [positionsAmis, setPositionsAmis] = useState([])
-  const [partageActif, setPartageActif] = useState(true)
-  const [messageAmi, setMessageAmi] = useState('')
+  // Souvenirs
+  const [souvenirs, setSouvenirs] = useState([])
+  const [afficherFormSouvenir, setAfficherFormSouvenir] = useState(false)
+  const [lieuSelectionne, setLieuSelectionne] = useState(null)
+  const [texteSouvenir, setTexteSouvenir] = useState('')
+  const [humeurSouvenir, setHumeurSouvenir] = useState('😊')
+  const [photoSouvenir, setPhotoSouvenir] = useState(null)
 
-  // Amis — ajout par téléphone
-  const [monTelephone, setMonTelephone] = useState('')
-  const [modeAjout, setModeAjout] = useState('code') // 'code' ou 'telephone'
-  const [telephoneSaisi, setTelephoneSaisi] = useState('')
-
-  // Leaflet Map Refs
+  // Leaflet
   const carteRef = useRef(null)
   const carteInstanceRef = useRef(null)
   const marqueursRef = useRef([])
@@ -493,7 +663,6 @@ function LocalisationScreen() {
       attribution: '© OpenStreetMap',
     }).addTo(carteInstanceRef.current)
 
-    // Le conteneur peut changer de taille au montage (breakpoints), on recadre Leaflet
     setTimeout(() => carteInstanceRef.current?.invalidateSize(), 200)
 
     return () => {
@@ -505,14 +674,13 @@ function LocalisationScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Recadre la carte si la fenêtre change de taille (rotation tablette/téléphone, redimensionnement PC)
   useEffect(() => {
     const gererResize = () => carteInstanceRef.current?.invalidateSize()
     window.addEventListener('resize', gererResize)
     return () => window.removeEventListener('resize', gererResize)
   }, [])
 
-  // Mise à jour des marqueurs Leaflet
+  // Mise à jour des marqueurs Leaflet : uniquement "moi" + mes lieux favoris
   useEffect(() => {
     const carte = carteInstanceRef.current
     if (!carte) return
@@ -523,48 +691,40 @@ function LocalisationScreen() {
     const tousLesPoints = []
 
     if (position) {
-      const marqueurMoi = L.marker([position.latitude, position.longitude])
-        .addTo(carte)
-        .bindPopup('<b>Toi</b>')
+      const marqueurMoi = L.marker([position.latitude, position.longitude]).addTo(carte).bindPopup('<b>Toi</b>')
       marqueursRef.current.push(marqueurMoi)
       tousLesPoints.push([position.latitude, position.longitude])
     }
 
-    positionsAmis.forEach((p, i) => {
-      const couleur = COULEURS_AMIS[i % COULEURS_AMIS.length]
-      const nomAmi = p.profils_publics?.pseudo || 'Ami'
-      const marqueurAmi = L.circleMarker([p.latitude, p.longitude], {
-        radius: 10,
-        fillColor: couleur,
-        color: '#ffffff',
-        weight: 2,
-        fillOpacity: 0.9,
+    lieuxFavoris.forEach((lieu) => {
+      const icone = L.divIcon({
+        html: `<div style="font-size:20px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))">${lieu.emoji || '📍'}</div>`,
+        className: '',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
       })
+      const marqueur = L.marker([lieu.latitude, lieu.longitude], { icon: icone })
         .addTo(carte)
-        .bindPopup(`<b>${nomAmi}</b><br/>Vu à ${new Date(p.mis_a_jour_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`)
-
-      marqueursRef.current.push(marqueurAmi)
-      tousLesPoints.push([p.latitude, p.longitude])
+        .bindPopup(`<b>${lieu.emoji || '📍'} ${lieu.nom}</b>`)
+      marqueursRef.current.push(marqueur)
+      tousLesPoints.push([lieu.latitude, lieu.longitude])
     })
 
     if (tousLesPoints.length > 0) {
       carte.fitBounds(tousLesPoints, { padding: [40, 40], maxZoom: 14 })
     }
-  }, [position, positionsAmis])
+  }, [position, lieuxFavoris])
 
-  // Centrer dynamiquement si centreCarte change manuellement (ex: clic sur ami ou favori)
   useEffect(() => {
     if (centreCarte && carteInstanceRef.current) {
       carteInstanceRef.current.setView([centreCarte.latitude, centreCarte.longitude], 14)
     }
   }, [centreCarte])
 
-  // Charger profil et données au montage
+  // Chargement initial des souvenirs (local puis hydratation Supabase en arrière-plan)
   useEffect(() => {
-    obtenirMonProfil().then(setMonProfil)
-    chargerDemandesRecues().then(setDemandes)
-    chargerMesAmis().then(setAmis)
-    chargerPositionsAmis().then(setPositionsAmis)
+    setSouvenirs(chargerSouvenirsLocaux())
+    synchroniserSouvenirsDepuisSupabase().then(setSouvenirs)
   }, [])
 
   const localiser = async (silencieux = false) => {
@@ -575,14 +735,10 @@ function LocalisationScreen() {
       setPosition(pos)
       setCentreCarte(pos)
       sauvegarderPosition(pos)
-      await publierPositionPartagee(pos, partageActif)
       setHistorique(chargerHistoriquePositions())
 
       const adresseTrouvee = await obtenirAdresseApprox(pos.latitude, pos.longitude)
       setAdresse(adresseTrouvee)
-
-      const amisPositions = await chargerPositionsAmis()
-      setPositionsAmis(amisPositions)
     } catch (e) {
       if (!silencieux) setErreur(e.message)
     } finally {
@@ -611,48 +767,6 @@ function LocalisationScreen() {
     return () => clearInterval(intervalleRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualisationAuto])
-
-  const gererAjoutAmi = async () => {
-    try {
-      const pseudo = await envoyerDemandeAmi(codeAmiSaisi)
-      setMessageAmi(`Demande envoyée à ${pseudo} !`)
-      setCodeAmiSaisi('')
-    } catch (e) {
-      setMessageAmi(e.message)
-    }
-  }
-
-  const gererAjoutAmiTelephone = async () => {
-    try {
-      const pseudo = await envoyerDemandeAmiParTelephone(telephoneSaisi)
-      setMessageAmi(`Demande envoyée à ${pseudo} !`)
-      setTelephoneSaisi('')
-    } catch (e) {
-      setMessageAmi(e.message)
-    }
-  }
-
-  const gererDefinirTelephone = async () => {
-    try {
-      await definirMonTelephone(monTelephone)
-      notifierSucces('Numéro enregistré ✅')
-      obtenirMonProfil().then(setMonProfil)
-    } catch (e) {
-      notifierErreur(e.message)
-    }
-  }
-
-  const gererReponseDemande = async (id, accepter) => {
-    await repondreDemandeAmi(id, accepter)
-    setDemandes(await chargerDemandesRecues())
-    setAmis(await chargerMesAmis())
-  }
-
-  const toggleMonPartage = async () => {
-    const nouveauStatut = !partageActif
-    setPartageActif(nouveauStatut)
-    await definirPartageActif(nouveauStatut)
-  }
 
   const centrerSur = (point) => {
     vibrer()
@@ -718,11 +832,13 @@ function LocalisationScreen() {
     if (!nomNouveauFavori.trim() || !position) return
     const lieux = sauvegarderLieuFavori({
       nom: nomNouveauFavori.trim(),
+      emoji: emojiNouveauFavori,
       latitude: position.latitude,
       longitude: position.longitude,
     })
     setLieuxFavoris(lieux)
     setNomNouveauFavori('')
+    setEmojiNouveauFavori('📍')
     setAfficherFormFavori(false)
     vibrer(12)
     notifierSucces(`"${nomNouveauFavori.trim()}" ajouté à tes lieux favoris ⭐`)
@@ -739,11 +855,6 @@ function LocalisationScreen() {
     }, 220)
   }
 
-  const commencerEdition = (e, lieu) => {
-    e.stopPropagation()
-    setFavoriEnEdition({ id: lieu.id, nom: lieu.nom })
-  }
-
   const annulerEdition = (e) => {
     e?.stopPropagation()
     setFavoriEnEdition(null)
@@ -752,12 +863,46 @@ function LocalisationScreen() {
   const confirmerEdition = (e) => {
     e.stopPropagation()
     if (!favoriEnEdition?.nom.trim()) return
-    setLieuxFavoris(modifierLieuFavori(favoriEnEdition.id, favoriEnEdition.nom.trim()))
+    setLieuxFavoris(modifierLieuFavori(favoriEnEdition.id, { nom: favoriEnEdition.nom.trim(), emoji: favoriEnEdition.emoji }))
     setFavoriEnEdition(null)
-    notifierSucces('Lieu favori renommé')
+    notifierSucces('Lieu favori modifié')
+  }
+
+  const gererAjoutSouvenir = () => {
+    if (!lieuSelectionne) return
+    const liste = ajouterSouvenir({
+      lieuId: lieuSelectionne,
+      texte: texteSouvenir.trim(),
+      photo: photoSouvenir,
+      humeur: humeurSouvenir,
+    })
+    setSouvenirs(liste)
+    setTexteSouvenir('')
+    setPhotoSouvenir(null)
+    setAfficherFormSouvenir(false)
+    vibrer(12)
+    notifierSucces('Souvenir enregistré 📸')
+  }
+
+  const gererSuppressionSouvenir = (id) => {
+    setSouvenirs(supprimerSouvenir(id))
+    notifierSucces('Souvenir supprimé')
   }
 
   const precisionInfo = position ? evaluerPrecision(position.precision) : null
+  const lieuDetecte = position ? detecterLieuProche(position, lieuxFavoris, 150) : null
+  const distanceAujourdHui = useMemo(() => calculerDistanceAujourdHui(historique), [historique])
+  const trajetsDuJour = useMemo(() => genererTrajetsDuJour(historique, lieuxFavoris), [historique, lieuxFavoris])
+  const stats = useMemo(() => calculerStatistiques(historique, lieuxFavoris, souvenirs), [historique, lieuxFavoris, souvenirs])
+
+  const compteurVisites = useMemo(() => {
+    const compteur = {}
+    historique.forEach((p) => {
+      const lieu = detecterLieuProche(p, lieuxFavoris, 150)
+      if (lieu) compteur[lieu.id] = (compteur[lieu.id] || 0) + 1
+    })
+    return compteur
+  }, [historique, lieuxFavoris])
 
   const labelCarte = (() => {
     if (!centreCarte || !position) return 'Position actuelle'
@@ -765,21 +910,14 @@ function LocalisationScreen() {
     const favoriCorrespondant = lieuxFavoris.find(
       (l) => l.latitude === centreCarte.latitude && l.longitude === centreCarte.longitude
     )
-    if (favoriCorrespondant) return favoriCorrespondant.nom
-    const amiCorrespondant = positionsAmis.find(
-      (p) => p.latitude === centreCarte.latitude && p.longitude === centreCarte.longitude
-    )
-    if (amiCorrespondant) {
-      const amiInfo = amis.find((a) => a.id === amiCorrespondant.user_id)
-      return amiInfo ? `Position de ${amiInfo.pseudo}` : 'Position ami'
-    }
+    if (favoriCorrespondant) return `${favoriCorrespondant.emoji} ${favoriCorrespondant.nom}`
     return "Point de l'historique"
   })()
 
   const sousTitre = (() => {
     if (chargement && !position) return 'Recherche de ta position en cours…'
     if (adresse) return `Actuellement près de ${adresse.split(',').slice(0, 2).join(',')}`
-    return 'Retrouve facilement tes positions et tes lieux favoris.'
+    return 'Suis tes déplacements, tes lieux favoris et tes souvenirs.'
   })()
 
   return (
@@ -794,7 +932,7 @@ function LocalisationScreen() {
           </div>
           <div className="min-w-0">
             <h1 className="text-espresso font-semibold flex items-center gap-1.5" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '22px' }}>
-              📍 Localisation
+              🌸 Ma carte de vie
             </h1>
             <p className="text-[10.5px] text-espresso/45 truncate">{sousTitre}</p>
           </div>
@@ -811,8 +949,6 @@ function LocalisationScreen() {
             {/* ===== COLONNE GAUCHE : carte Leaflet + actions rapides ===== */}
             <div className="lg:sticky lg:top-6 flex flex-col gap-3 mb-4 lg:mb-0">
               <div className="yuna-scale-in bg-white rounded-3xl border border-espresso/10 overflow-hidden relative shadow-md">
-
-                {/* Conteneur de la Carte Leaflet */}
                 <div ref={carteRef} className="w-full h-[240px] xs:h-[280px] sm:h-[360px] md:h-[420px] lg:h-[460px] xl:h-[520px] z-0" />
 
                 <div key={labelCarte + centreCarte?.latitude} className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full shadow-md yuna-badge-drop">
@@ -875,41 +1011,15 @@ function LocalisationScreen() {
                   <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
                 )}
 
-                {/* ===== BLOCS AMIS (DESKTOP) ===== */}
-                <BlocMonProfil
-                  monProfil={monProfil}
-                  monTelephone={monTelephone}
-                  setMonTelephone={setMonTelephone}
-                  gererDefinirTelephone={gererDefinirTelephone}
-                />
-
-                <BlocAjoutAmi
-                  modeAjout={modeAjout}
-                  setModeAjout={setModeAjout}
-                  codeAmiSaisi={codeAmiSaisi}
-                  setCodeAmiSaisi={setCodeAmiSaisi}
-                  gererAjoutAmi={gererAjoutAmi}
-                  telephoneSaisi={telephoneSaisi}
-                  setTelephoneSaisi={setTelephoneSaisi}
-                  gererAjoutAmiTelephone={gererAjoutAmiTelephone}
-                  messageAmi={messageAmi}
-                />
-
-                <BlocDemandesRecues demandes={demandes} gererReponseDemande={gererReponseDemande} />
-
-                <BlocMesAmis
-                  amis={amis}
-                  positionsAmis={positionsAmis}
-                  partageActif={partageActif}
-                  toggleMonPartage={toggleMonPartage}
-                  centrerSur={centrerSur}
-                />
+                <div className="mt-4">
+                  <SectionStatistiques stats={stats} />
+                </div>
               </div>
             </div>
 
             {/* ===== COLONNE DROITE : informations détaillées ===== */}
             <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <CarteInfo icon={IconPin} iconColor="#6B5B4B" label="Coordonnées">
                   <p className="text-[13px] text-espresso font-medium tabular-nums">
                     {position.latitude.toFixed(5)}, {position.longitude.toFixed(5)}
@@ -927,6 +1037,16 @@ function LocalisationScreen() {
                     {new Date(position.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                   <p className="text-[10px] text-espresso/45 mt-1.5">{tempsEcoule(position.date)}</p>
+                </CarteInfo>
+                <CarteInfo icon={IconPin} iconColor="#C99A2E" label="Lieu détecté">
+                  {lieuDetecte ? (
+                    <p className="text-[13px] text-espresso font-medium">{lieuDetecte.emoji} {lieuDetecte.nom}</p>
+                  ) : (
+                    <p className="text-[12px] text-espresso/40 italic">Aucun lieu favori à proximité</p>
+                  )}
+                </CarteInfo>
+                <CarteInfo icon={IconFootsteps} iconColor="#3E8E5A" label="Distance parcourue aujourd'hui">
+                  <p className="text-[13px] text-espresso font-medium">{formaterDistance(distanceAujourdHui)}</p>
                 </CarteInfo>
               </div>
 
@@ -959,110 +1079,47 @@ function LocalisationScreen() {
                 </CarteInfo>
               )}
 
-              {/* ===== LIEUX FAVORIS ===== */}
-              <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[9px] text-espresso/40 uppercase tracking-wide">Lieux favoris</p>
-                  <button
-                    onClick={() => setAfficherFormFavori((a) => !a)}
-                    className="text-[10.5px] font-semibold text-espresso underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 rounded"
-                  >
-                    {afficherFormFavori ? 'Annuler' : '+ Enregistrer ici'}
-                  </button>
-                </div>
+              <SectionLieuxFavoris
+                lieuxFavoris={lieuxFavoris}
+                position={position}
+                afficherForm={afficherFormFavori}
+                setAfficherForm={setAfficherFormFavori}
+                nomNouveauFavori={nomNouveauFavori}
+                setNomNouveauFavori={setNomNouveauFavori}
+                emojiNouveauFavori={emojiNouveauFavori}
+                setEmojiNouveauFavori={setEmojiNouveauFavori}
+                enregistrerFavori={enregistrerFavori}
+                favoriEnEdition={favoriEnEdition}
+                setFavoriEnEdition={setFavoriEnEdition}
+                confirmerEdition={confirmerEdition}
+                annulerEdition={annulerEdition}
+                favoriEnSuppression={favoriEnSuppression}
+                retirerFavori={retirerFavori}
+                centrerSur={centrerSur}
+                ouvrirItineraire={ouvrirItineraire}
+                compteurVisites={compteurVisites}
+              />
 
-                {afficherFormFavori && (
-                  <div className="flex flex-col xs:flex-row gap-2 mb-3 yuna-scale-in">
-                    <input
-                      value={nomNouveauFavori}
-                      onChange={(e) => setNomNouveauFavori(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && enregistrerFavori()}
-                      placeholder="Ex : Maison, Travail..."
-                      aria-label="Nom du nouveau lieu favori"
-                      autoFocus
-                      className="flex-1 min-w-0 bg-[#F0EEEB] rounded-xl px-3 py-2.5 xs:py-2 text-[13px] xs:text-[12px] text-espresso outline-none border border-espresso/15 focus:border-espresso transition-colors"
-                    />
-                    <button onClick={enregistrerFavori} className="flex-shrink-0 rounded-xl px-3.5 py-2.5 xs:py-0 text-[11px] font-semibold text-peony bg-espresso hover:-translate-y-0.5 active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
-                      Ajouter
-                    </button>
-                  </div>
-                )}
+              <SectionTrajetsDuJour trajets={trajetsDuJour} />
 
-                {lieuxFavoris.length === 0 ? (
-                  <p className="text-[10.5px] text-espresso/35 italic">Aucun lieu favori enregistré</p>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {lieuxFavoris.map((lieu) => {
-                      const distance = calculerDistanceKm(position.latitude, position.longitude, lieu.latitude, lieu.longitude)
-                      const enEdition = favoriEnEdition?.id === lieu.id
-                      const enSuppression = favoriEnSuppression === lieu.id
-                      return (
-                        <div
-                          key={lieu.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => !enEdition && centrerSur(lieu)}
-                          onKeyDown={(e) => { if (!enEdition && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); centrerSur(lieu) } }}
-                          className={`flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40 ${enSuppression ? 'opacity-0 scale-95 -translate-x-2' : 'opacity-100 scale-100'} ${enEdition ? 'bg-[#F0EEEB]' : 'hover:bg-[#F0EEEB]'}`}
-                        >
-                          <div className="w-7 h-7 rounded-full bg-[#F4EBC8] flex items-center justify-center flex-shrink-0">
-                            <IconEtoile style={{ width: '12px', height: '12px' }} className="text-[#C99A2E]" fill="currentColor" />
-                          </div>
+              <SectionSouvenirs
+                lieuxFavoris={lieuxFavoris}
+                souvenirs={souvenirs}
+                afficherForm={afficherFormSouvenir}
+                setAfficherForm={setAfficherFormSouvenir}
+                lieuSelectionne={lieuSelectionne}
+                setLieuSelectionne={setLieuSelectionne}
+                texteSouvenir={texteSouvenir}
+                setTexteSouvenir={setTexteSouvenir}
+                humeurSouvenir={humeurSouvenir}
+                setHumeurSouvenir={setHumeurSouvenir}
+                photoSouvenir={photoSouvenir}
+                setPhotoSouvenir={setPhotoSouvenir}
+                gererAjoutSouvenir={gererAjoutSouvenir}
+                gererSuppressionSouvenir={gererSuppressionSouvenir}
+              />
 
-                          {enEdition ? (
-                            <input
-                              autoFocus
-                              value={favoriEnEdition.nom}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => setFavoriEnEdition((f) => ({ ...f, nom: e.target.value }))}
-                              onKeyDown={(e) => { if (e.key === 'Enter') confirmerEdition(e); if (e.key === 'Escape') annulerEdition(e) }}
-                              aria-label="Renommer ce lieu favori"
-                              className="flex-1 min-w-0 bg-white rounded-lg px-2 py-1 text-[11.5px] text-espresso outline-none border border-espresso/20 focus:border-espresso"
-                            />
-                          ) : (
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[11.5px] font-medium text-espresso truncate">{lieu.nom}</p>
-                              <p className="text-[9.5px] text-espresso/45">
-                                {formaterDistance(distance)} de toi · ajouté {tempsEcoule(new Date(lieu.id).toISOString())}
-                              </p>
-                            </div>
-                          )}
-
-                          {enEdition ? (
-                            <>
-                              <button onClick={confirmerEdition} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Valider" aria-label="Valider le renommage">
-                                <IconCheck style={{ width: '13px', height: '13px' }} className="text-[#3E8E5A]" />
-                              </button>
-                              <button onClick={annulerEdition} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Annuler" aria-label="Annuler le renommage">
-                                <IconX style={{ width: '13px', height: '13px' }} className="text-espresso/40" />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); vibrer(); ouvrirItineraire(lieu.latitude, lieu.longitude) }}
-                                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40"
-                                title="Itinéraire"
-                                aria-label={`Itinéraire vers ${lieu.nom}`}
-                              >
-                                <IconItineraire style={{ width: '12px', height: '12px' }} className="text-espresso/50" />
-                              </button>
-                              <button onClick={(e) => commencerEdition(e, lieu)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Modifier" aria-label={`Renommer ${lieu.nom}`}>
-                                <IconEdit style={{ width: '12px', height: '12px' }} className="text-espresso/45" />
-                              </button>
-                              <button onClick={(e) => retirerFavori(e, lieu.id)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-espresso/40" title="Supprimer" aria-label={`Supprimer ${lieu.nom}`}>
-                                <IconTrash style={{ width: '12px', height: '12px' }} className="text-espresso/40" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* ===== HISTORIQUE ===== */}
+              {/* ===== HISTORIQUE DES POSITIONS (brut) ===== */}
               {historique.length > 1 && (
                 <div className="yuna-slide-up bg-white rounded-2xl border border-espresso/10 p-3.5 sm:p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
@@ -1083,7 +1140,7 @@ function LocalisationScreen() {
                           <div className="flex-1 min-w-0 ml-3 rounded-lg px-2 py-1 group-hover:bg-[#F0EEEB] transition-colors duration-150 group-focus-visible:ring-2 group-focus-visible:ring-espresso/40">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[10.5px] font-medium text-espresso/70 flex items-center gap-1">
-                                📍 {new Date(pos.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                📍 {formaterHeure(pos.date)}
                               </span>
                               <span className="text-[9.5px] text-espresso/35 flex-shrink-0">{tempsEcoule(pos.date)}</span>
                             </div>
@@ -1097,6 +1154,11 @@ function LocalisationScreen() {
                   </div>
                 </div>
               )}
+
+              {/* Stats visibles aussi sur mobile/tablette (colonne unique) */}
+              <div className="lg:hidden">
+                <SectionStatistiques stats={stats} />
+              </div>
             </div>
           </div>
         ) : (
@@ -1123,7 +1185,7 @@ function LocalisationScreen() {
           )
         )}
 
-        {/* CONTRÔLES MOBILES ET BLOCS AMIS SUR PETITS/MOYENS ÉCRANS */}
+        {/* CONTRÔLES MOBILES */}
         <div className={position ? 'lg:hidden mt-5' : 'mt-5'}>
           <div className="max-w-[480px] mx-auto lg:max-w-none">
             <button
@@ -1156,36 +1218,6 @@ function LocalisationScreen() {
             {position && !chargement && (
               <p className="text-center text-[9.5px] text-espresso/35 mt-2">Actualisée {tempsEcoule(position.date)}</p>
             )}
-
-            {/* ===== BLOCS AMIS (MOBILE / TABLETTE) ===== */}
-            <BlocMonProfil
-              monProfil={monProfil}
-              monTelephone={monTelephone}
-              setMonTelephone={setMonTelephone}
-              gererDefinirTelephone={gererDefinirTelephone}
-            />
-
-            <BlocAjoutAmi
-              modeAjout={modeAjout}
-              setModeAjout={setModeAjout}
-              codeAmiSaisi={codeAmiSaisi}
-              setCodeAmiSaisi={setCodeAmiSaisi}
-              gererAjoutAmi={gererAjoutAmi}
-              telephoneSaisi={telephoneSaisi}
-              setTelephoneSaisi={setTelephoneSaisi}
-              gererAjoutAmiTelephone={gererAjoutAmiTelephone}
-              messageAmi={messageAmi}
-            />
-
-            <BlocDemandesRecues demandes={demandes} gererReponseDemande={gererReponseDemande} />
-
-            <BlocMesAmis
-              amis={amis}
-              positionsAmis={positionsAmis}
-              partageActif={partageActif}
-              toggleMonPartage={toggleMonPartage}
-              centrerSur={centrerSur}
-            />
           </div>
         </div>
       </div>

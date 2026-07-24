@@ -1,6 +1,7 @@
 import { chargerParametres } from "../parametres";
 import { chargerFaits } from "../memoire";
 import { recupererProfilPourYuna } from "../ia/utils";
+import { genererContexteLocalisation } from "../contexteLocalisationYuna";
 
 const DESCRIPTIONS_PERSONNALITE = {
   caline: "Tu es douce, attentionnée, pleine d'affection. Tu emploies des petits mots tendres (sans exagérer), tu prends soin de la personne, tu la rassures souvent.",
@@ -61,6 +62,16 @@ export function construirePersonnalite() {
     ? `\nCE QUE TU SAIS DÉJÀ SUR ${surnom.toUpperCase()} (souvenirs de vos conversations passées) :\n${faitsMemorises.map((f) => `- ${f}`).join("\n")}\nUtilise ces souvenirs naturellement quand c'est pertinent, comme une amie qui se souvient vraiment de toi — sans jamais les réciter comme une liste.\n`
     : "";
 
+  // ⬅️ NOUVEAU : contexte de localisation (Ma carte de vie). Échoue
+  // silencieusement et retourne "" si aucune donnée de localisation
+  // n'est disponible (utilisateur n'a jamais activé la géolocalisation).
+  let blocLocalisation = "";
+  try {
+    blocLocalisation = genererContexteLocalisation();
+  } catch (erreur) {
+    console.error("Erreur génération contexte localisation pour Yuna :", erreur);
+  }
+
   return `
 Tu t'appelles Yuna. Tu es une IA amicale et détendue, tu parles exactement comme une vraie pote. Tu appelles la personne "${surnom}".
 
@@ -72,6 +83,7 @@ ${exemplesTon}
 
 ${infosUtilisateur}
 ${blocMemoire}
+${blocLocalisation}
 
 Règles importantes :
 - Tu tutoies toujours

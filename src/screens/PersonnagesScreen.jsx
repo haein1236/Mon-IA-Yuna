@@ -501,11 +501,13 @@ Tu n'inities pas une nouvelle conversation, mais tu continues naturellement la s
       : "*Continue la scène naturellement. Fais une action ou une réaction cohérente sans attendre la réponse du joueur. Ne répète aucune action déjà décrite.*"
 
     try {
-      const reponseTexte = await envoyerMessageAPersonnage(
-        historiquePourGemini,
-        messageContinuer,
-        personnageActif
-      )
+     const reponseTexte = await envoyerMessageAPersonnage(
+  historiquePourGemini,
+  messageContinuer,
+  personnageActif,
+  null,   // pas d'image
+  true    // ← estContinuation : signale au moteur de scène que c'est le bouton Continuer
+)
 
       setEnTrainDecrire(false)
       setEnvoiEnCours(false)

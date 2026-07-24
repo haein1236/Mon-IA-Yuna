@@ -1,18 +1,16 @@
 import { client, safetySettingsMatures, avecTimeout } from "../ia/client";
-import { alignerHistoriquePourGemini } from "../ia/utils";
+import { alignerHistoriquePourGemini, calculerJoursDepuisDebut } from "../ia/utils";
 import { essayerChaineDeSecours } from "../ia/providersSecours";
 import { construirePersonnagePrompt } from "./promptPersonnage";
-import { 
-  calculerInterdictions, 
-  validerReponse, 
-  calculerInterdictionsSecondaires, 
-  validerReponseScene 
+import {
+  calculerInterdictions,
+  validerReponse,
+  calculerInterdictionsSecondaires,
+  validerReponseScene,
+  detecterEvenementsVecus,
 } from "./regles";
-import { 
-  mettreAJourScene, 
-  construireInstructionScene, 
-  demandeExplicitementDeParler 
-} from "./moteurScene";
+import { mettreAJourScene, construireInstructionScene } from "./moteurScene";
+import { marquerEvenementsVecus } from "../personnages";
 
 async function genererResumePersonnage(ancienResume, messagesACondenser) {
   try {
@@ -32,7 +30,28 @@ async function genererResumePersonnage(ancienResume, messagesACondenser) {
   }
 }
 
-export async function envoyerMessageAPersonnage(historique, nouveauMessage, personnage, imageBase64 = null) {
+// NOUVEAU — construit une liste noire des 2 dernières actions/répliques du
+// personnage, pour que le modèle voie concrètement ce qu'il doit éviter
+// de répéter cette fois-ci (plus efficace qu'une règle générique dans le prompt)
+function construireAntiRepetition(historique) {
+  const dernieresReponses = [...historique]
+    .reverse()
+    .filter((m) => m.auteur !== "user")
+    .slice(0, 2)
+    .map((m) => m.texte);
+
+  if (dernieresReponses.length === 0) return "";
+
+  return `\n\n[NE RÉPÈTE PAS ce que tu as déjà dit/fait dans tes 2 derniers messages :\n${dernieresReponses.map((t) => `- "${t.slice(0, 150)}${t.length > 150 ? "..." : ""}"`).join("\n")}\nVarie ton action, ta formulation, ou ton angle.]`;
+}
+
+export async function envoyerMessageAPersonnage(
+  historique,
+  nouveauMessage,
+  personnage,
+  imageBase64 = null,
+  estContinuation = false,
+) {
   const cleResume = `yuna-resume-${personnage.id}`;
   let resumeRelation = localStorage.getItem(cleResume) || "";
   let historiqueUtilise = [...historique];
@@ -44,13 +63,16 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
     historiqueUtilise = historique.slice(12);
   }
 
+  const joursDepuisDebut = calculerJoursDepuisDebut(personnage);
+
   const dernierMessagePersonnage = [...historique].reverse().find((m) => m.auteur !== "user")?.texte || "";
 
-  const detectionScene = mettreAJourScene(personnage, nouveauMessage, dernierMessagePersonnage);
+  const detectionScene = mettreAJourScene(personnage, nouveauMessage, dernierMessagePersonnage, { estContinuation });
   const instructionScene = construireInstructionScene(personnage, detectionScene);
+  const instructionAntiRepetition = construireAntiRepetition(historique);
 
   const interdictions = [
-    ...calculerInterdictions(personnage, historique.length),
+    ...calculerInterdictions(personnage, historique.length, joursDepuisDebut),
     ...calculerInterdictionsSecondaires(detectionScene.nommes),
   ];
   const promptSysteme = construirePersonnagePrompt(personnage, resumeRelation, interdictions);
@@ -60,7 +82,7 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
   const genererUneFois = async (instructionSupplementaire = "") => {
     const modele = client.getGenerativeModel({
       model: "gemini-2.5-flash",
-      systemInstruction: promptSysteme + instructionScene + instructionSupplementaire,
+      systemInstruction: promptSysteme + instructionScene + instructionAntiRepetition + instructionSupplementaire,
       safetySettings: safetySettingsMatures,
     });
 
@@ -91,9 +113,10 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
 
   try {
     let texte = await genererUneFois();
-    const validationPrincipal = validerReponse(personnage, texte, historique.length);
+
+    const validationPrincipal = validerReponse(personnage, texte, historique.length, joursDepuisDebut);
     const validationScene = validationPrincipal.valide
-      ? validerReponseScene(detectionScene.nommes, detectionScene.improvises, demandeExplicitementDeParler(nouveauMessage), texte)
+      ? validerReponseScene(detectionScene.nommes, detectionScene.improvises, detectionScene.demandeParole, texte)
       : validationPrincipal;
 
     if (!validationScene.valide) {
@@ -102,6 +125,15 @@ export async function envoyerMessageAPersonnage(historique, nouveauMessage, pers
         `\n\nATTENTION : ta précédente tentative a été rejetée car : "${validationScene.raison}". Génère une nouvelle réponse qui respecte STRICTEMENT ce point.`,
       );
     }
+
+    // NOUVEAU — enregistre les événements réellement vécus (baiser,
+    // déclaration) une fois la réponse validée, pour que les futures
+    // références à cet événement soient légitimes.
+    const evenementsDetectes = detecterEvenementsVecus(texte);
+    if (Object.keys(evenementsDetectes).length > 0) {
+      marquerEvenementsVecus(personnage.id, evenementsDetectes);
+    }
+
     return texte;
   } catch (erreurGemini) {
     console.error("Erreur Gemini (personnage) :", erreurGemini.message);
