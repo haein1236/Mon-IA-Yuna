@@ -225,9 +225,9 @@ export function construireInstructionScene(personnage, sceneDetection) {
   }
 
   if (scene.improvises.length > 0) {
-    let instructionImprovises = `RÔLES MENTIONNÉS SANS FICHE DÉFINIE (${scene.improvises.join(', ')}) : improvise-les librement, de façon cohérente avec ton histoire, avec leur propre voix. Improvisation ponctuelle, sans mémoire garantie d'une fois à l'autre.`
+    let instructionImprovises = `RÔLES/PERSONNAGES MENTIONNÉS SANS FICHE DÉFINIE (${scene.improvises.join(', ')}) : même improvisés, ils ne sont PAS des figurants neutres qui exécutent des ordres. Donne à chacun, dès sa première apparition, UN trait de personnalité marquant et cohérent avec son rôle et ton histoire (ex: un employé peut être nerveux et bafouiller, ou au contraire froidement professionnel ; un ami peut être bavard et curieux, ou taquin) — et garde CE trait cohérent s'il réapparaît dans la même scène. Il peut avoir sa propre réaction, hésiter, poser une question en retour, ou même te contredire légèrement — il ne se contente jamais de répondre platement à ce qu'on lui demande.`
     if (sceneDetection.demandeParole) {
-      instructionImprovises += `\n\nIMPÉRATIF : le joueur demande explicitement que ce personnage parle. Tu DOIS écrire de VRAIES répliques entre guillemets pour lui.`
+      instructionImprovises += `\n\nIMPÉRATIF : le joueur demande explicitement que ce personnage parle. Tu DOIS écrire de VRAIES répliques entre guillemets pour lui, avec ce trait de personnalité visible dans sa façon de s'exprimer.`
     }
     blocs.push(instructionImprovises)
   }
