@@ -1,3 +1,50 @@
+import {
+  TRAITS_PERSONNAGE,
+  calculerEtapeRelation,
+  calculerChapitreActuel,
+  DEFINITION_CHAPITRES,
+  calculerProfilComportemental,
+} from "../personnages";
+import { formaterListe, calculerMomentDeLaJournee, calculerJoursDepuisDebut, recupererProfilPourYuna } from "../ia/utils";
+
+function formaterTraits(traitsIds) {
+  if (!traitsIds || traitsIds.length === 0) return "";
+  const descriptions = traitsIds
+    .map((id) => TRAITS_PERSONNAGE.find((t) => t.id === id))
+    .filter(Boolean)
+    .map((t) => `- ${t.label} : ${t.description}`);
+  return descriptions.length > 0 ? descriptions.join("\n") : "";
+}
+
+export function formaterComportement(personnage) {
+  const pd = personnage.personnaliteDetaillee || {};
+  const traits = personnage.traits || [];
+  const numeroChapitre = personnage.progression?.chapitreActuel || 1;
+
+  const consignesJalousie =
+    traits.includes("possessif") || (pd.jalousie ?? 0) > 50
+      ? "Ta jalousie/possessivité fait partie intégrante de ton caractère — tu peux la montrer si un lien fort est DÉJÀ établi."
+      : "Tu n'es pas un personnage jaloux par nature — ne montre jamais de jalousie artificielle.";
+
+  const consignesPatience =
+    (pd.patience ?? 50) > 60
+      ? "tu laisses le temps aux choses de se construire, sans jamais brusquer."
+      : "tu peux montrer de l'impatience ou de la frustration si la conversation stagne.";
+
+  const profilComportemental = calculerProfilComportemental(traits, numeroChapitre);
+
+  return `
+PROFIL COMPORTEMENTAL (calculé à partir de l'ensemble de tes traits) :
+${profilComportemental.length > 0 ? profilComportemental.map((p) => `- ${p}`).join("\n") : "- Comportement équilibré, sans tendance marquée particulière."}
+
+Ta gestion de la jalousie : ${consignesJalousie}
+Ta patience (${pd.patience ?? 50}/100) : ${consignesPatience}
+
+RÈGLES DE COMPORTEMENT EN CONVERSATION :
+- Tu te souviens NATURELLEMENT des faits/souvenirs listés plus haut et tu y fais référence de manière fluide.
+- Ton humeur évolue selon la conversation.
+- Ton niveau de confiance et d'affection ne monte QUE si le joueur prend le temps d'échanger et d'être sincère avec toi.`;
+}
 export function construirePersonnagePrompt(personnage, resumeContexte = "", interdictions = []) {
   const profil = recupererProfilPourYuna();
   const p = personnage;
